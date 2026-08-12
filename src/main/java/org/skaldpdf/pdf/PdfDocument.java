@@ -1,0 +1,131 @@
+package org.skaldpdf.pdf;
+
+import org.skaldpdf.event.AbstractPdfDocumentEventHandler;
+import org.skaldpdf.event.PdfDocumentEvent;
+import org.skaldpdf.geom.PageSize;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Mutable PDF document for generation, composition, and read-modify-write
+ * stamping. A document is thread-confined; separate documents may safely be
+ * generated on virtual threads.
+ */
+public final class PdfDocument implements AutoCloseable {
+    private final PdfWriter writer;
+    private final PdfReader reader;
+    private final PdfDocumentInfo documentInfo = new PdfDocumentInfo();
+    private final Map<String, List<AbstractPdfDocumentEventHandler>> eventHandlers = new LinkedHashMap<>();
+    private final List<PdfPage> pages = new ArrayList<>();
+    private boolean closed;
+    private boolean closing;
+
+    public PdfDocument(PdfWriter writer) {
+        this.writer = Objects.requireNonNull(writer, "writer");
+        reader = null;
+    }
+
+    public PdfDocument(PdfReader reader) {
+        this(reader, null);
+    }
+
+    public PdfDocument(PdfReader reader, PdfWriter writer) {
+        this.reader = Objects.requireNonNull(reader, "reader");
+        this.writer = writer;
+        try {
+            var parser = new NativePdfParser(reader.bytes());
+            parser.pages().forEach(page -> pages.add(new PdfPage(this, page)));
+        } catch (RuntimeException exception) {
+            reader.close();
+            throw exception;
+        }
+    }
+
+    public PdfDocumentInfo getDocumentInfo() {
+        return documentInfo;
+    }
+
+    public int getNumberOfPages() {
+        return pages.size();
+    }
+
+    public PdfPage getPage(int pageNumber) {
+        if (pageNumber < 1 || pageNumber > pages.size()) {
+            throw new IndexOutOfBoundsException("PDF page number is one-based: " + pageNumber);
+        }
+        return pages.get(pageNumber - 1);
+    }
+
+    public PdfPage addNewPage(PageSize pageSize) {
+        ensureOpen();
+        var page = new PdfPage(this, Objects.requireNonNull(pageSize, "pageSize"));
+        pages.add(page);
+        return page;
+    }
+
+    public void addEventHandler(String type, AbstractPdfDocumentEventHandler handler) {
+        ensureOpen();
+        eventHandlers.computeIfAbsent(Objects.requireNonNull(type, "type"), ignored -> new ArrayList<>())
+            .add(Objects.requireNonNull(handler, "handler"));
+    }
+
+    public void copyPagesFrom(PdfDocument source, int fromPage, int toPage) {
+        ensureOpen();
+        Objects.requireNonNull(source, "source");
+        if (fromPage < 1 || toPage < fromPage || toPage > source.getNumberOfPages()) {
+            throw new IllegalArgumentException("Invalid page range");
+        }
+        for (int pageNumber = fromPage; pageNumber <= toPage; pageNumber++) {
+            var imported = source.getPage(pageNumber).importedPage();
+            if (imported == null) {
+                throw new IllegalArgumentException(
+                    "Only parsed pages can be copied; close and reopen generated documents before merging");
+            }
+            pages.add(new PdfPage(this, imported));
+        }
+    }
+
+    public boolean isClosed() {
+        return closed;
+    }
+
+    @Override
+    public void close() {
+        if (closed || closing) {
+            return;
+        }
+        closing = true;
+        try {
+            var endPageHandlers = eventHandlers.getOrDefault(PdfDocumentEvent.END_PAGE, List.of());
+            for (var page : pages) {
+                var event = new PdfDocumentEvent(this, page);
+                endPageHandlers.forEach(handler -> handler.accept(event));
+            }
+            if (writer != null) {
+                try (writer) {
+                    new NativePdfWriter(writer.properties().compression().deflateLevel()).write(this, writer.output());
+                }
+            }
+        } finally {
+            if (reader != null) {
+                reader.close();
+            }
+            closed = true;
+            closing = false;
+        }
+    }
+
+    List<PdfPage> pages() {
+        return List.copyOf(pages);
+    }
+
+    public void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("PDF document is closed");
+        }
+    }
+}
