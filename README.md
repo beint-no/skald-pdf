@@ -1,87 +1,110 @@
 # Skald PDF
 
-Skald PDF is Beint's focused PDF generation and composition library for JDK 25 and
-newer. It replaces the entire iText surface used by ReAI and Ecomtools: flowing
-documents, tables, images, EAN-13 barcodes, custom page sizes, stamps, watermarks,
-page events, and PDF merging.
+Skald PDF is a focused PDF 2.0 generation and composition library for JDK 25+.
+It provides flowing text, repeating tables, images, EAN-13 barcodes, page events,
+watermarks, stamping, and merging with zero external runtime dependencies.
 
-The public API lives under `no.beint.skald`. Apache PDFBox supplies the maintained
-PDF object model; Skald owns the small deterministic layout engine and barcode
-implementation that are specific to our applications. Skald has no iText runtime
-or source dependency.
+The library deliberately targets current JVMs and the current PDF specification.
+It does not carry compatibility layers for old Java releases or obsolete PDF
+writer modes.
 
-## Use
+## Install
 
 ```kotlin
-implementation("no.beint:skald-pdf:0.1.0")
+implementation("org.skaldpdf:skald-pdf:0.2.0")
 ```
 
-Packages are published to GitHub Packages:
-
-```kotlin
-repositories {
-    maven {
-        url = uri("https://maven.pkg.github.com/beint-no/skald-pdf")
-        credentials {
-            username = System.getenv("GITHUB_ACTOR") ?: "beint-no"
-            password = System.getenv("GITHUB_TOKEN")
-        }
-    }
-}
-```
-
-A minimal document deliberately resembles the domain language used by the existing
-generators while remaining in the Skald namespace:
+Skald is a named Java module:
 
 ```java
-try (var pdf = new PdfDocument(new PdfWriter(output));
-     var document = new Document(pdf, PageSize.A4)) {
-    document.add(new Paragraph("Invoice").simulateBold().setFontSize(20));
-    document.add(new Table(UnitValue.createPercentArray(new float[] {3, 1}))
-        .useAllAvailableWidth()
-        .addHeaderCell(new Cell().add(new Paragraph("Description")))
-        .addHeaderCell(new Cell().add(new Paragraph("Amount")))
-        .addCell(new Cell().add(new Paragraph("Accounting")))
-        .addCell(new Cell().add(new Paragraph("1 250.00"))));
-}
+requires org.skaldpdf;
 ```
 
-## Design choices
+## Create a document
 
-- JDK 25 bytecode and APIs; there is intentionally no compatibility layer for old
-  JDKs or old iText package names.
-- Sealed types, records, pattern-matching switches, virtual-thread-safe document
-  isolation, and try-with-resources throughout the Java surface.
-- One compressed content stream per page during layout, so multipage tables stay
-  compact instead of creating a PDF object for every drawing operation.
-- Strict EAN-13 checksum validation and standards-compatible bar patterns.
-- Independent rendering, text-extraction, and barcode-scanning tests validate the
-  output rather than comparing implementation details.
-- Only features used by current Beint applications are implemented. Legacy PDF
-  signing, forms, pre-PDF-1.7 compatibility shims, and unused iText APIs are not
-  carried forward.
+```java
+import org.skaldpdf.Pdf;
+import org.skaldpdf.layout.element.Cell;
+import org.skaldpdf.layout.element.Paragraph;
+import org.skaldpdf.layout.element.Table;
+import org.skaldpdf.layout.properties.UnitValue;
 
-The complete migration and test mapping is in
-[`docs/use-case-inventory.md`](docs/use-case-inventory.md).
+byte[] bytes = Pdf.create(document -> {
+    document.setMargins(40, 40, 40, 40);
+    document.add(new Paragraph("Invoice 2026-1001").bold().setFontSize(20));
 
-## Build and inspect
+    var lines = new Table(UnitValue.createPercentArray(new float[] {3, 1}))
+        .useAllAvailableWidth()
+        .addHeaderCell(new Cell().add(new Paragraph("Description").bold()))
+        .addHeaderCell(new Cell().add(new Paragraph("Amount").bold()))
+        .addCell("Consulting")
+        .addCell("1 250.00");
+    document.add(lines);
+});
+```
+
+The facade also covers the common composition paths:
+
+```java
+byte[] joined = Pdf.merge(List.of(cover, attachment));
+
+byte[] stamped = Pdf.rewrite(joined, pdf -> {
+    var page = pdf.getPage(1);
+    new Canvas(page, page.getCropBox()).showTextAligned(
+        "Reviewed", 36, 24,
+        TextAlignment.LEFT, VerticalAlignment.BOTTOM, 0
+    );
+});
+```
+
+Use `PdfDocument`, `PdfWriter`, and `PdfReader` directly when page events or
+lower-level drawing are needed.
+
+## Design
+
+- Every new file is PDF 2.0. Input composition accepts structurally valid PDF
+  1.x and 2.0 files, but output is normalized to PDF 2.0.
+- The production module depends only on `java.base` and `java.desktop`.
+- Regular and bold Unicode TrueType fonts are bundled, subset once per document,
+  embedded, and mapped for reliable text extraction.
+- Layout consumes one top-level element at a time. Tables repeat headers and long
+  paragraphs or rows fragment across pages.
+- Content, metadata, font programs, lossless images, object streams, and xref
+  streams use Deflate compression. JPEG data passes through without a lossy
+  decode/re-encode cycle. Lossless images use adaptive PNG predictors; alpha is
+  represented by a soft mask.
+- Images and opacity states are deduplicated across pages by identity.
+- Mutable documents are thread-confined. Immutable fonts and image inputs can be
+  shared; separate documents work naturally on virtual threads.
+- Parsing is bounded by size, page, object, nesting, and decoded-stream limits.
+  Encrypted inputs are rejected rather than partially interpreted.
+
+See [standards](docs/standards.md), [capabilities](docs/capabilities.md),
+[security](docs/security.md), and [performance](docs/performance.md).
+
+## Build and verify
+
+JDK 25 or newer is required.
 
 ```shell
 ./gradlew clean build
+scripts/validate-pdf2.sh build/use-case-pdfs
 ```
 
-The test suite writes representative PDFs and rendered PNG previews to
-`build/use-case-pdfs`. It parses every result with an independent reader and scans
-the generated barcode with ZXing.
+The test suite creates a representative PDF corpus in `build/use-case-pdfs`,
+then parses, extracts text, renders pages, and scans the barcode with independent
+test tools. The validation script adds qpdf checks and Arlington PDF 2.0 rules.
 
-Requirements are JDK 25+ and the included Gradle 9.7 wrapper.
+## Scope
 
-## Clean-room boundary
-
-The checked-out iText repository was used to understand the public concepts already
-used by Beint applications. Skald is an independently written implementation in a
-new namespace, backed by Apache PDFBox; no iText source is copied or distributed.
+Skald is already suited to transactional documents, statements, receipts,
+agreements, reports, payslips, raster attachments, and page composition. The
+current intentional exclusions are interactive forms, encryption, signatures,
+rich text/HTML/SVG conversion, complex-script shaping, tagged PDF/PDF/UA, and
+PDF/A profiles. These require dedicated conformance work rather than superficial
+API coverage.
 
 ## License
 
-Copyright Beint AS. All rights reserved.
+Apache License 2.0. The bundled font programs are licensed separately under the
+SIL Open Font License 1.1; see `META-INF/licenses` in the published artifact.

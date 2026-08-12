@@ -1,0 +1,29 @@
+# Performance and compression
+
+Skald optimizes the creation path instead of running a second whole-document
+optimizer:
+
+- top-level layout elements are consumed incrementally;
+- page content uses one compressed stream per page;
+- fonts are subset and embedded once per font face per document;
+- small structural objects are grouped into PDF 2.0 object streams;
+- the cross-reference stream is compact and compressed;
+- lossless raster rows select the best PNG predictor before Deflate;
+- JPEG byte streams are embedded directly, avoiding quality loss and CPU cost;
+- repeated image instances and opacity states share indirect objects;
+- batched barcode rectangles reduce content operators;
+- bounded parsers reject decompression and object-count abuse early.
+
+Compression has four immutable policies: `NONE`, `FAST`, `BALANCED`, and
+`MAXIMUM`. `BALANCED` is the default. Deflate level changes CPU/size trade-offs;
+it does not alter image quality.
+
+Downsampling or recompressing photographs can reduce files further, but it is
+intentionally not automatic. The correct pixel density and quality depend on
+whether a document is for screens, office printers, archival storage, or evidence.
+Applications should make that policy explicit before passing image bytes.
+
+The current writer retains encoded page streams and the final object table until
+close. Incremental layout bounds the much larger semantic element graph, but
+extreme multi-gigabyte output should eventually spool encoded streams to bounded
+temporary storage.

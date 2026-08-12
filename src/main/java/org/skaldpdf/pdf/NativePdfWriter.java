@@ -1,0 +1,798 @@
+package org.skaldpdf.pdf;
+
+import static org.skaldpdf.pdf.CosValue.*;
+
+import org.skaldpdf.font.PdfFont;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+
+/** Writes the compact PDF 2.0 subset emitted by Skald. */
+final class NativePdfWriter {
+    private static final byte[] HEADER = "%PDF-2.0\n%\u00e2\u00e3\u00cf\u00d3\n"
+        .getBytes(StandardCharsets.ISO_8859_1);
+    private final int compressionLevel;
+
+    NativePdfWriter(int compressionLevel) {
+        this.compressionLevel = compressionLevel;
+    }
+
+    void write(PdfDocument document, OutputStream target) {
+        Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(target, "target");
+        try {
+            writeObjects(buildObjects(document), target);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Unable to write PDF", exception);
+        }
+    }
+
+    private ObjectStore buildObjects(PdfDocument document) {
+        var objects = new ObjectStore();
+        var fontUsage = collectFonts(document.pages());
+        var fontObjects = new IdentityHashMap<PdfFont, Integer>();
+        fontUsage.forEach((font, usage) -> fontObjects.put(font, addFont(objects, font, usage)));
+        var sharedImages = new IdentityHashMap<org.skaldpdf.image.ImageData, Integer>();
+        var sharedOpacities = new LinkedHashMap<Float, Integer>();
+
+        var pagesObject = objects.reserve();
+        var pageObjects = new ArrayList<Integer>(document.pages().size());
+        document.pages().forEach(ignored -> pageObjects.add(objects.reserve()));
+        var importers = new IdentityHashMap<NativePdfParser, ImportContext>();
+        for (int index = 0; index < document.pages().size(); index++) {
+            var imported = document.pages().get(index).importedPage();
+            if (imported != null) {
+                importers.computeIfAbsent(imported.source(), source -> new ImportContext(source, objects))
+                    .map(imported.reference(), pageObjects.get(index));
+            }
+        }
+
+        for (int index = 0; index < document.pages().size(); index++) {
+            var page = document.pages().get(index);
+            var contentObject = objects.add(stream("", ascii(page.content()), true));
+            var imageObjects = addImages(objects, page.images(), sharedImages);
+            var opacityObjects = addOpacities(objects, page.opacities(), sharedOpacities);
+            var imported = page.importedPage();
+            byte[] pageBody;
+            if (imported == null) {
+                var resources = resources(page, fontObjects, imageObjects, opacityObjects);
+                var media = rectangle(0, 0, page.getPageSize().getWidth(), page.getPageSize().getHeight());
+                var crop = rectangle(page.getCropBox().getLeft(), page.getCropBox().getBottom(),
+                    page.getCropBox().getWidth(), page.getCropBox().getHeight());
+                pageBody = ascii(format(
+                    "<< /Type /Page /Parent %d 0 R /MediaBox %s /CropBox %s /Resources %s /Contents %d 0 R >>",
+                    pagesObject, media, crop, resources, contentObject));
+            } else {
+                pageBody = importedPage(imported, page, pagesObject, contentObject, fontObjects,
+                    imageObjects, opacityObjects, importers.get(imported.source()));
+            }
+            objects.set(pageObjects.get(index), pageBody);
+        }
+        objects.set(pagesObject, ascii(format("<< /Type /Pages /Count %d /Kids [%s] >>",
+            pageObjects.size(), references(pageObjects))));
+
+        var metadataObject = objects.add(stream("/Type /Metadata /Subtype /XML",
+            xmp(document.getDocumentInfo()).getBytes(StandardCharsets.UTF_8), false));
+        var catalogObject = objects.add(ascii(
+            format("<< /Type /Catalog /Version /2.0 /Pages %d 0 R /Metadata %d 0 R >>",
+                pagesObject, metadataObject)));
+        objects.rootObject = catalogObject;
+        return objects;
+    }
+
+    private static byte[] importedPage(ImportedPage imported, PdfPage page, int pagesObject,
+                                       int overlayContentObject, Map<PdfFont, Integer> fonts,
+                                       Map<String, Integer> images, Map<String, Integer> opacities,
+                                       ImportContext importer) {
+        var dictionary = imported.dictionary();
+        var result = new StringBuilder("<< /Type /Page /Parent ").append(pagesObject).append(" 0 R");
+        dictionary.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            if (!Set.of("Type", "Parent", "MediaBox", "CropBox", "Resources", "Contents", "StructParents")
+                .contains(entry.getKey())) {
+                result.append(" /").append(name(entry.getKey())).append(' ')
+                    .append(importer.direct(entry.getValue()));
+            }
+        });
+        var media = dictionary.get("MediaBox");
+        result.append(" /MediaBox ").append(media == null
+            ? rectangle(0, 0, page.getPageSize().getWidth(), page.getPageSize().getHeight())
+            : importer.direct(media));
+        var crop = dictionary.get("CropBox");
+        if (crop != null) {
+            result.append(" /CropBox ").append(importer.direct(crop));
+        }
+        result.append(" /Resources ")
+            .append(importedResources(imported, page, fonts, images, opacities, importer));
+        var contents = dictionary.get("Contents");
+        if (page.content().isBlank()) {
+            if (contents != null) {
+                result.append(" /Contents ").append(importer.direct(contents));
+            }
+        } else if (contents instanceof CosArray array) {
+            result.append(" /Contents [");
+            array.values().forEach(value -> result.append(importer.direct(value)).append(' '));
+            result.append(overlayContentObject).append(" 0 R]");
+        } else if (contents != null) {
+            result.append(" /Contents [").append(importer.direct(contents)).append(' ')
+                .append(overlayContentObject).append(" 0 R]");
+        } else {
+            result.append(" /Contents ").append(overlayContentObject).append(" 0 R");
+        }
+        return ascii(result.append(" >>").toString());
+    }
+
+    private static String importedResources(ImportedPage imported, PdfPage page, Map<PdfFont, Integer> fonts,
+                                            Map<String, Integer> images, Map<String, Integer> opacities,
+                                            ImportContext importer) {
+        var resourcesValue = imported.dictionary().get("Resources");
+        var resources = resourcesValue == null
+            ? Map.<String, CosValue>of()
+            : importer.dictionary(resourcesValue, "page Resources").values();
+        var result = new StringBuilder("<<");
+        resources.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            if (!Set.of("Font", "XObject", "ExtGState").contains(entry.getKey())) {
+                result.append(" /").append(name(entry.getKey())).append(' ')
+                    .append(importer.direct(entry.getValue()));
+            }
+        });
+        var fontAdditions = new LinkedHashMap<String, Integer>();
+        page.fonts().forEach((font, resourceName) -> fontAdditions.put(resourceName, fonts.get(font)));
+        appendImportedResourceCategory(result, "Font", resources.get("Font"), fontAdditions, importer);
+        appendImportedResourceCategory(result, "XObject", resources.get("XObject"), images, importer);
+        appendImportedResourceCategory(result, "ExtGState", resources.get("ExtGState"), opacities, importer);
+        return result.append(" >>").toString();
+    }
+
+    private static void appendImportedResourceCategory(StringBuilder result, String category,
+                                                       CosValue existingValue, Map<String, Integer> additions,
+                                                       ImportContext importer) {
+        if (existingValue == null && additions.isEmpty()) {
+            return;
+        }
+        result.append(" /").append(category).append(" <<");
+        if (existingValue != null) {
+            var existing = importer.dictionary(existingValue, category + " resources");
+            existing.values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry ->
+                result.append(" /").append(name(entry.getKey())).append(' ')
+                    .append(importer.direct(entry.getValue())));
+        }
+        additions.forEach((resourceName, object) -> result.append(" /").append(resourceName).append(' ')
+            .append(object).append(" 0 R"));
+        result.append(" >>");
+    }
+
+    private int addFont(ObjectStore objects, PdfFont font, FontAggregate usage) {
+        var program = font.subsetProgram(usage.glyphs);
+        var fontFile = objects.add(stream("/Length1 " + program.length, program, true));
+        var metrics = font.metrics();
+        var postScriptName = subsetTag(usage.glyphs) + "+"
+            + (font.bold() ? "SkaldSans-Bold" : "SkaldSans-Regular");
+        var flags = 32 | (metrics.fixedPitch() ? 1 : 0)
+            | (metrics.italicAngle() != 0 ? 64 : 0)
+            | (font.bold() ? 262_144 : 0);
+        var descriptor = objects.add(ascii(format(
+            "<< /Type /FontDescriptor /FontName /%s /Flags %d /FontBBox [%d %d %d %d] "
+                + "/ItalicAngle %s /Ascent %d /Descent %d /CapHeight %d /StemV %d /FontFile2 %d 0 R >>",
+            postScriptName, flags,
+            metrics.pdfUnit(metrics.xMin()), metrics.pdfUnit(metrics.yMin()),
+            metrics.pdfUnit(metrics.xMax()), metrics.pdfUnit(metrics.yMax()),
+            number(metrics.italicAngle()), metrics.pdfUnit(metrics.ascent()),
+            metrics.pdfUnit(metrics.descent()), metrics.pdfUnit(metrics.capHeight()),
+            font.bold() ? 120 : 80, fontFile)));
+        var widths = widths(font.widths(usage.glyphs));
+        var cidFont = objects.add(ascii(format(
+            "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /%s "
+                + "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
+                + "/FontDescriptor %d 0 R /CIDToGIDMap /Identity /DW 1000 /W %s >>",
+            postScriptName, descriptor, widths)));
+        var toUnicode = objects.add(stream("", toUnicode(usage.unicodeByGlyph), true));
+        return objects.add(ascii(format(
+            "<< /Type /Font /Subtype /Type0 /BaseFont /%s /Encoding /Identity-H "
+                + "/DescendantFonts [%d 0 R] /ToUnicode %d 0 R >>",
+            postScriptName, cidFont, toUnicode)));
+    }
+
+    private Map<String, Integer> addImages(ObjectStore objects, List<PdfPage.ImageResource> images,
+                                           IdentityHashMap<org.skaldpdf.image.ImageData, Integer> shared) {
+        var result = new LinkedHashMap<String, Integer>();
+        for (var resource : images) {
+            var image = resource.image();
+            var existing = shared.get(image);
+            if (existing != null) {
+                result.put(resource.name(), existing);
+                continue;
+            }
+            var alpha = image.alpha();
+            var softMask = alpha == null ? null : objects.add(stream(
+                format("/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
+                    + "/BitsPerComponent 8 /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent 8 /Columns %d >>",
+                    image.width(), image.height(), image.width()),
+                pngPredictor(alpha, image.width(), image.height(), 1), true));
+            var dictionary = new StringBuilder("/Type /XObject /Subtype /Image")
+                .append(" /Width ").append(image.width())
+                .append(" /Height ").append(image.height())
+                .append(" /ColorSpace ").append(image.components() == 1 ? "/DeviceGray" : "/DeviceRGB")
+                .append(" /BitsPerComponent 8");
+            if (softMask != null) {
+                dictionary.append(" /SMask ").append(softMask).append(" 0 R");
+            }
+            if (image.jpeg()) {
+                result.put(resource.name(), objects.add(stream(
+                    dictionary.toString(), image.samples(), false, "/DCTDecode"
+                )));
+            } else {
+                dictionary.append(" /DecodeParms << /Predictor 15 /Colors ").append(image.components())
+                    .append(" /BitsPerComponent 8 /Columns ").append(image.width()).append(" >>");
+                result.put(resource.name(), objects.add(stream(dictionary.toString(),
+                    pngPredictor(image.samples(), image.width(), image.height(), image.components()), true)));
+            }
+            shared.put(image, result.get(resource.name()));
+        }
+        return result;
+    }
+
+    private static byte[] pngPredictor(byte[] samples, int width, int height, int components) {
+        var rowBytes = Math.multiplyExact(width, components);
+        if (samples.length != Math.multiplyExact(rowBytes, height)) {
+            throw new IllegalArgumentException("Raster sample length does not match its dimensions");
+        }
+        var result = new byte[Math.addExact(samples.length, height)];
+        var candidates = new byte[5][rowBytes];
+        for (int row = 0; row < height; row++) {
+            var sourceOffset = row * rowBytes;
+            var bestFilter = 0;
+            var bestScore = Long.MAX_VALUE;
+            for (int filter = 0; filter <= 4; filter++) {
+                var score = 0L;
+                var candidate = candidates[filter];
+                for (int column = 0; column < rowBytes; column++) {
+                    var current = samples[sourceOffset + column] & 0xff;
+                    var left = column >= components ? samples[sourceOffset + column - components] & 0xff : 0;
+                    var up = row > 0 ? samples[sourceOffset - rowBytes + column] & 0xff : 0;
+                    var upperLeft = row > 0 && column >= components
+                        ? samples[sourceOffset - rowBytes + column - components] & 0xff : 0;
+                    var prediction = switch (filter) {
+                        case 0 -> 0;
+                        case 1 -> left;
+                        case 2 -> up;
+                        case 3 -> (left + up) >>> 1;
+                        case 4 -> paeth(left, up, upperLeft);
+                        default -> throw new AssertionError();
+                    };
+                    candidate[column] = (byte) (current - prediction);
+                    score += Math.abs((int) candidate[column]);
+                }
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestFilter = filter;
+                }
+            }
+            var targetOffset = row * (rowBytes + 1);
+            result[targetOffset] = (byte) bestFilter;
+            System.arraycopy(candidates[bestFilter], 0, result, targetOffset + 1, rowBytes);
+        }
+        return result;
+    }
+
+    private static int paeth(int left, int up, int upperLeft) {
+        var prediction = left + up - upperLeft;
+        var leftDistance = Math.abs(prediction - left);
+        var upDistance = Math.abs(prediction - up);
+        var upperLeftDistance = Math.abs(prediction - upperLeft);
+        if (leftDistance <= upDistance && leftDistance <= upperLeftDistance) {
+            return left;
+        }
+        return upDistance <= upperLeftDistance ? up : upperLeft;
+    }
+
+    private static Map<String, Integer> addOpacities(ObjectStore objects, Map<Float, String> opacities,
+                                                     Map<Float, Integer> shared) {
+        var result = new LinkedHashMap<String, Integer>();
+        opacities.forEach((opacity, resourceName) -> result.put(resourceName,
+            shared.computeIfAbsent(opacity, value -> objects.add(ascii(
+                format("<< /Type /ExtGState /ca %s /CA %s >>", number(value), number(value)))))));
+        return result;
+    }
+
+    private static String resources(PdfPage page, Map<PdfFont, Integer> fonts,
+                                    Map<String, Integer> images, Map<String, Integer> opacities) {
+        var result = new StringBuilder("<<");
+        if (!page.fonts().isEmpty()) {
+            result.append(" /Font <<");
+            page.fonts().forEach((font, resourceName) -> result.append(" /").append(resourceName).append(' ')
+                .append(fonts.get(font)).append(" 0 R"));
+            result.append(" >>");
+        }
+        appendResourceMap(result, "XObject", images);
+        appendResourceMap(result, "ExtGState", opacities);
+        return result.append(" >>").toString();
+    }
+
+    private static void appendResourceMap(StringBuilder target, String type, Map<String, Integer> values) {
+        if (values.isEmpty()) {
+            return;
+        }
+        target.append(" /").append(type).append(" <<");
+        values.forEach((name, object) -> target.append(" /").append(name).append(' ')
+            .append(object).append(" 0 R"));
+        target.append(" >>");
+    }
+
+    private void writeObjects(ObjectStore objects, OutputStream output) throws IOException {
+        var packed = packSmallObjects(objects);
+        var target = new CountingOutputStream(output);
+        target.write(HEADER);
+        var offsets = new long[objects.size() + 2];
+        for (int number = 1; number <= objects.size(); number++) {
+            if (packed.containsKey(number)) {
+                continue;
+            }
+            offsets[number] = target.count();
+            writeIndirect(target, number, objects.get(number));
+        }
+        var xrefNumber = objects.size() + 1;
+        var xrefOffset = target.count();
+        offsets[xrefNumber] = xrefOffset;
+        var compressedXref = deflate(xref(offsets, packed, xrefNumber));
+        var identifier = fileIdentifier(objects);
+        var xrefDictionary = format(
+            "/Type /XRef /Size %d /Root %d 0 R /ID [<%s> <%s>] /W [1 8 4] /Index [0 %d] ",
+            xrefNumber + 1, objects.rootObject, identifier, identifier, xrefNumber + 1);
+        writeIndirect(target, xrefNumber, stream(xrefDictionary, compressedXref, false, "/FlateDecode"));
+        target.write(ascii(format("startxref\n%d\n%%%%EOF\n", xrefOffset)));
+        target.flush();
+    }
+
+    private Map<Integer, PackedLocation> packSmallObjects(ObjectStore objects) {
+        var candidates = new ArrayList<Integer>();
+        for (int number = 1; number <= objects.size(); number++) {
+            var body = objects.get(number);
+            if (number != objects.rootObject && body.length <= 4_096 && !isStream(body)) {
+                candidates.add(number);
+            }
+        }
+        var result = new LinkedHashMap<Integer, PackedLocation>();
+        for (int offset = 0; offset < candidates.size(); offset += 100) {
+            var group = candidates.subList(offset, Math.min(offset + 100, candidates.size()));
+            var header = new StringBuilder(group.size() * 10);
+            var bodies = new ByteArrayOutputStream();
+            for (int index = 0; index < group.size(); index++) {
+                var objectNumber = group.get(index);
+                header.append(objectNumber).append(' ').append(bodies.size()).append(' ');
+                try {
+                    bodies.write(objects.get(objectNumber));
+                    bodies.write('\n');
+                } catch (IOException impossible) {
+                    throw new AssertionError(impossible);
+                }
+            }
+            var headerBytes = ascii(header.toString());
+            var payload = new ByteArrayOutputStream(headerBytes.length + bodies.size());
+            try {
+                payload.write(headerBytes);
+                bodies.writeTo(payload);
+            } catch (IOException impossible) {
+                throw new AssertionError(impossible);
+            }
+            var objectStream = objects.add(stream(
+                format("/Type /ObjStm /N %d /First %d", group.size(), headerBytes.length),
+                payload.toByteArray(), true
+            ));
+            for (int index = 0; index < group.size(); index++) {
+                result.put(group.get(index), new PackedLocation(objectStream, index));
+            }
+        }
+        return Map.copyOf(result);
+    }
+
+    private static boolean isStream(byte[] body) {
+        var marker = "\nstream\n".getBytes(StandardCharsets.US_ASCII);
+        outer:
+        for (int offset = 0; offset <= body.length - marker.length; offset++) {
+            for (int index = 0; index < marker.length; index++) {
+                if (body[offset + index] != marker[index]) {
+                    continue outer;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private byte[] stream(String dictionary, byte[] bytes, boolean compress) {
+        return stream(dictionary, bytes, compress, null);
+    }
+
+    private byte[] stream(String dictionary, byte[] bytes, boolean compress, String explicitFilter) {
+        var payload = compress ? deflate(bytes) : bytes;
+        var filter = compress ? "/FlateDecode" : explicitFilter;
+        var header = new StringBuilder("<< ").append(dictionary);
+        if (filter != null) {
+            header.append(" /Filter ").append(filter);
+        }
+        header.append(" /Length ").append(payload.length).append(" >>\nstream\n");
+        var result = new ByteArrayOutputStream(header.length() + payload.length + 16);
+        try {
+            result.write(ascii(header.toString()));
+            result.write(payload);
+            result.write(ascii("\nendstream"));
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
+        return result.toByteArray();
+    }
+
+    private byte[] deflate(byte[] bytes) {
+        var output = new ByteArrayOutputStream(Math.max(64, bytes.length / 2));
+        var deflater = new Deflater(compressionLevel);
+        try (var compressed = new DeflaterOutputStream(output, deflater)) {
+            compressed.write(bytes);
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        } finally {
+            deflater.end();
+        }
+        return output.toByteArray();
+    }
+
+    private static void writeIndirect(OutputStream output, int number, byte[] body) throws IOException {
+        output.write(ascii(number + " 0 obj\n"));
+        output.write(body);
+        output.write(ascii("\nendobj\n"));
+    }
+
+    private static byte[] xref(long[] offsets, Map<Integer, PackedLocation> packed, int lastObject) {
+        var buffer = ByteBuffer.allocate((lastObject + 1) * 13);
+        buffer.put((byte) 0).putLong(0).putInt(0xffff);
+        for (int object = 1; object <= lastObject; object++) {
+            var location = packed.get(object);
+            if (location == null) {
+                buffer.put((byte) 1).putLong(offsets[object]).putInt(0);
+            } else {
+                buffer.put((byte) 2).putLong(location.objectStream()).putInt(location.index());
+            }
+        }
+        return buffer.array();
+    }
+
+    private static String fileIdentifier(ObjectStore objects) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(objects.rootObject).array());
+            for (int number = 1; number <= objects.size(); number++) {
+                digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(number).array());
+                digest.update(objects.get(number));
+            }
+            return hex(digest.digest(), 16);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
+    private static Map<PdfFont, FontAggregate> collectFonts(List<PdfPage> pages) {
+        var result = new IdentityHashMap<PdfFont, FontAggregate>();
+        pages.forEach(page -> page.fontUsage().forEach((font, usage) -> {
+            var aggregate = result.computeIfAbsent(font, ignored -> new FontAggregate());
+            aggregate.glyphs.addAll(usage.glyphs());
+            usage.unicodeByGlyph().forEach(aggregate.unicodeByGlyph::putIfAbsent);
+        }));
+        return result;
+    }
+
+    private static String widths(Map<Integer, Integer> values) {
+        var result = new StringBuilder("[");
+        values.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry ->
+            result.append(entry.getKey()).append(" [").append(entry.getValue()).append("] "));
+        return result.append(']').toString();
+    }
+
+    private static String subsetTag(Set<Integer> glyphs) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            glyphs.stream().sorted().forEach(glyph ->
+                digest.update(ByteBuffer.allocate(4).putInt(glyph).array()));
+            var hash = digest.digest();
+            var result = new StringBuilder(6);
+            for (int index = 0; index < 6; index++) {
+                result.append((char) ('A' + (hash[index] & 0xff) % 26));
+            }
+            return result.toString();
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
+    private static byte[] toUnicode(Map<Integer, Integer> mappings) {
+        var entries = mappings.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList();
+        var cmap = new StringBuilder("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n")
+            .append("/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n")
+            .append("/CMapName /SkaldUnicode def\n/CMapType 2 def\n")
+            .append("1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n");
+        for (int offset = 0; offset < entries.size(); offset += 100) {
+            var count = Math.min(100, entries.size() - offset);
+            cmap.append(count).append(" beginbfchar\n");
+            for (int index = offset; index < offset + count; index++) {
+                var entry = entries.get(index);
+                cmap.append('<').append(hex(entry.getKey(), 4)).append("> <")
+                    .append(utf16Hex(entry.getValue())).append(">\n");
+            }
+            cmap.append("endbfchar\n");
+        }
+        return ascii(cmap.append("endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n").toString());
+    }
+
+    private static String utf16Hex(int codePoint) {
+        var characters = Character.toChars(codePoint);
+        var result = new StringBuilder(characters.length * 4);
+        for (var character : characters) {
+            result.append(hex(character, 4));
+        }
+        return result.toString();
+    }
+
+    private static String xmp(PdfDocumentInfo information) {
+        var title = xml(information.getTitle() == null ? "" : information.getTitle());
+        var author = xml(information.getAuthor() == null ? "" : information.getAuthor());
+        return """
+            <?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
+            <x:xmpmeta xmlns:x="adobe:ns:meta/">
+              <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+                <rdf:Description rdf:about=""
+                    xmlns:dc="http://purl.org/dc/elements/1.1/"
+                    xmlns:xmp="http://ns.adobe.com/xap/1.0/">
+                  <dc:format>application/pdf</dc:format>
+                  <dc:title><rdf:Alt><rdf:li xml:lang="x-default">%s</rdf:li></rdf:Alt></dc:title>
+                  <dc:creator><rdf:Seq><rdf:li>%s</rdf:li></rdf:Seq></dc:creator>
+                  <xmp:CreatorTool>Skald PDF</xmp:CreatorTool>
+                </rdf:Description>
+              </rdf:RDF>
+            </x:xmpmeta>
+            <?xpacket end="w"?>
+            """.formatted(title, author);
+    }
+
+    private static String xml(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;");
+    }
+
+    private static String references(List<Integer> values) {
+        var result = new StringBuilder();
+        values.forEach(value -> result.append(value).append(" 0 R "));
+        return result.toString();
+    }
+
+    private static String rectangle(float x, float y, float width, float height) {
+        return format("[%s %s %s %s]", number(x), number(y), number(x + width), number(y + height));
+    }
+
+    static String number(float value) {
+        if (!Float.isFinite(value)) {
+            throw new IllegalArgumentException("PDF number must be finite");
+        }
+        if (value == Math.rint(value) && value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
+            return Integer.toString((int) value);
+        }
+        var result = String.format(Locale.ROOT, "%.5f", value);
+        return result.replaceFirst("0+$", "").replaceFirst("\\.$", "");
+    }
+
+    private static String hex(int value, int digits) {
+        return format("%0" + digits + "X", value);
+    }
+
+    private static String hex(byte[] bytes, int length) {
+        var result = new StringBuilder(length * 2);
+        for (int index = 0; index < length; index++) {
+            result.append(hex(bytes[index] & 0xff, 2));
+        }
+        return result.toString();
+    }
+
+    private static byte[] ascii(String value) {
+        return value.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static String format(String template, Object... arguments) {
+        return String.format(Locale.ROOT, template, arguments);
+    }
+
+    private static String name(String value) {
+        var bytes = value.getBytes(StandardCharsets.ISO_8859_1);
+        var result = new StringBuilder(bytes.length);
+        for (var item : bytes) {
+            var unsigned = item & 0xff;
+            if (unsigned >= 33 && unsigned <= 126 && "()<>[]{}/%#".indexOf(unsigned) < 0) {
+                result.append((char) unsigned);
+            } else {
+                result.append('#').append(format("%02X", unsigned));
+            }
+        }
+        return result.toString();
+    }
+
+    private static String hex(byte[] bytes) {
+        var result = new StringBuilder(bytes.length * 2);
+        for (var item : bytes) {
+            result.append(format("%02X", item & 0xff));
+        }
+        return result.toString();
+    }
+
+    private static final class FontAggregate {
+        private final Set<Integer> glyphs = new LinkedHashSet<>();
+        private final Map<Integer, Integer> unicodeByGlyph = new LinkedHashMap<>();
+    }
+
+    private record PackedLocation(int objectStream, int index) {
+    }
+
+    private static final class ImportContext {
+        private final NativePdfParser source;
+        private final ObjectStore target;
+        private final Map<CosReference, Integer> objects = new LinkedHashMap<>();
+
+        ImportContext(NativePdfParser source, ObjectStore target) {
+            this.source = source;
+            this.target = target;
+        }
+
+        void map(CosReference sourceReference, int targetObject) {
+            var previous = objects.putIfAbsent(sourceReference, targetObject);
+            if (previous != null && previous != targetObject) {
+                throw new IllegalStateException("Imported object was mapped twice");
+            }
+        }
+
+        CosDictionary dictionary(CosValue value, String description) {
+            var resolved = source.resolve(value);
+            if (resolved instanceof CosDictionary dictionary) {
+                return dictionary;
+            }
+            throw new IllegalArgumentException(description + " is not a dictionary");
+        }
+
+        String direct(CosValue value) {
+            return switch (value) {
+                case CosNull ignored -> "null";
+                case CosBoolean bool -> Boolean.toString(bool.value());
+                case CosNumber number -> number.lexicalValue();
+                case CosName pdfName -> "/" + name(pdfName.value());
+                case CosString string -> "<" + hex(string.bytes()) + ">";
+                case CosArray array -> {
+                    var result = new StringBuilder("[");
+                    array.values().forEach(item -> result.append(direct(item)).append(' '));
+                    yield result.append(']').toString();
+                }
+                case CosDictionary dictionary -> directDictionary(dictionary);
+                case CosStream ignored -> throw new IllegalArgumentException("A PDF stream cannot be a direct value");
+                case CosReference reference -> importReference(reference) + " 0 R";
+            };
+        }
+
+        private String directDictionary(CosDictionary dictionary) {
+            var result = new StringBuilder("<<");
+            dictionary.values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry ->
+                result.append(" /").append(name(entry.getKey())).append(' ')
+                    .append(direct(entry.getValue())));
+            return result.append(" >>").toString();
+        }
+
+        private int importReference(CosReference reference) {
+            var existing = objects.get(reference);
+            if (existing != null) {
+                return existing;
+            }
+            var object = target.reserve();
+            objects.put(reference, object);
+            var value = source.resolve(reference);
+            target.set(object, switch (value) {
+                case CosStream stream -> rawStream(stream);
+                default -> ascii(direct(value));
+            });
+            return object;
+        }
+
+        private byte[] rawStream(CosStream stream) {
+            var dictionary = new StringBuilder("<<");
+            stream.dictionary().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+                if (!entry.getKey().equals("Length")) {
+                    dictionary.append(" /").append(name(entry.getKey())).append(' ')
+                        .append(direct(entry.getValue()));
+                }
+            });
+            dictionary.append(" /Length ").append(stream.encodedBytes().length).append(" >>\nstream\n");
+            var output = new ByteArrayOutputStream(dictionary.length() + stream.encodedBytes().length + 16);
+            try {
+                output.write(ascii(dictionary.toString()));
+                output.write(stream.encodedBytes());
+                output.write(ascii("\nendstream"));
+            } catch (IOException impossible) {
+                throw new AssertionError(impossible);
+            }
+            return output.toByteArray();
+        }
+    }
+
+    private static final class ObjectStore {
+        private final List<byte[]> objects = new ArrayList<>();
+        private int rootObject;
+
+        int reserve() {
+            objects.add(null);
+            return objects.size();
+        }
+
+        int add(byte[] body) {
+            var number = reserve();
+            set(number, body);
+            return number;
+        }
+
+        void set(int number, byte[] body) {
+            Objects.requireNonNull(body, "body");
+            if (number < 1 || number > objects.size()) {
+                throw new IndexOutOfBoundsException("Invalid PDF object number: " + number);
+            }
+            objects.set(number - 1, body);
+        }
+
+        byte[] get(int number) {
+            var body = objects.get(number - 1);
+            if (body == null) {
+                throw new IllegalStateException("PDF object was reserved but never written: " + number);
+            }
+            return body;
+        }
+
+        int size() {
+            return objects.size();
+        }
+    }
+
+    private static final class CountingOutputStream extends OutputStream {
+        private final OutputStream target;
+        private long count;
+
+        CountingOutputStream(OutputStream target) {
+            this.target = target;
+        }
+
+        long count() {
+            return count;
+        }
+
+        @Override
+        public void write(int value) throws IOException {
+            target.write(value);
+            count++;
+        }
+
+        @Override
+        public void write(byte[] bytes, int offset, int length) throws IOException {
+            target.write(bytes, offset, length);
+            count += length;
+        }
+
+        @Override
+        public void flush() throws IOException {
+            target.flush();
+        }
+    }
+}
