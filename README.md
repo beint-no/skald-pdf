@@ -32,22 +32,21 @@ other generated documents that do not need historical PDF output modes.
 An application only pays for the capabilities it selects. The complete runtime
 still depends solely on the JDK.
 
-## Build and install locally
+## Build and install
 
-JDK 25 or newer is required. Until the Maven Central release, install a source
-checkout into your local Maven repository:
-
-```shell
-./gradlew clean build publishToMavenLocal
-```
-
-Then select the modules you need:
+JDK 25 or newer is required. Release `1.0.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("org.skaldpdf:skald-layout:0.3.0-SNAPSHOT")
-    implementation("org.skaldpdf:skald-barcode:0.3.0-SNAPSHOT") // optional
+    implementation("no.beint.skaldpdf:skald-layout:1.0.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.0.0") // optional
 }
+```
+
+To install a source checkout locally:
+
+```shell
+./gradlew clean build publishToMavenLocal
 ```
 
 For a modular application:

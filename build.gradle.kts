@@ -1,7 +1,6 @@
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.plugins.JavaPluginExtension
-import org.gradle.api.publish.PublishingExtension
-import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.testing.Test
@@ -10,9 +9,10 @@ import org.gradle.jvm.tasks.Jar
 
 plugins {
     base
+    id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = "0.3.0-SNAPSHOT"
+val releaseVersion = "1.0.0"
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-layout" to "Skald Layout",
@@ -25,13 +25,13 @@ val moduleDescriptions = mapOf(
 )
 
 allprojects {
-    group = "org.skaldpdf"
+    group = "no.beint.skaldpdf"
     version = releaseVersion
 }
 
 subprojects {
     apply(plugin = "java-library")
-    apply(plugin = "maven-publish")
+    apply(plugin = "com.vanniktech.maven.publish")
 
     description = moduleDescriptions.getValue(name)
 
@@ -42,8 +42,6 @@ subprojects {
     extensions.configure<JavaPluginExtension> {
         sourceCompatibility = JavaVersion.VERSION_25
         targetCompatibility = JavaVersion.VERSION_25
-        withSourcesJar()
-        withJavadocJar()
     }
 
     dependencies {
@@ -97,37 +95,43 @@ subprojects {
         }
     }
 
-    extensions.configure<PublishingExtension> {
-        publications {
-            create<MavenPublication>("library") {
-                from(components["java"])
-                pom {
-                    name = moduleTitles.getValue(project.name)
-                    description = moduleDescriptions.getValue(project.name)
-                    url = "https://github.com/beint-no/skald-pdf"
-                    licenses {
-                        license {
-                            name = "Apache License, Version 2.0"
-                            url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
-                            distribution = "repo"
-                        }
-                    }
-                    developers {
-                        developer {
-                            id = "contributors"
-                            name = "Skald PDF contributors"
-                            url = "https://github.com/beint-no/skald-pdf/graphs/contributors"
-                        }
-                    }
-                    scm {
-                        connection = "scm:git:https://github.com/beint-no/skald-pdf.git"
-                        developerConnection = "scm:git:ssh://git@github.com/beint-no/skald-pdf.git"
-                        url = "https://github.com/beint-no/skald-pdf"
-                    }
+    extensions.configure<MavenPublishBaseExtension>("mavenPublishing") {
+        publishToMavenCentral()
+        if (hasInMemorySigningKey()) {
+            signAllPublications()
+        }
+        pom {
+            name.set(moduleTitles.getValue(project.name))
+            description.set(moduleDescriptions.getValue(project.name))
+            inceptionYear.set("2026")
+            url.set("https://github.com/beint-no/skald-pdf")
+            licenses {
+                license {
+                    name.set("Apache License, Version 2.0")
+                    url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                    distribution.set("repo")
                 }
+            }
+            developers {
+                developer {
+                    id.set("beint-no")
+                    name.set("Beint")
+                    url.set("https://github.com/beint-no")
+                }
+            }
+            scm {
+                connection.set("scm:git:https://github.com/beint-no/skald-pdf.git")
+                developerConnection.set("scm:git:ssh://git@github.com/beint-no/skald-pdf.git")
+                url.set("https://github.com/beint-no/skald-pdf")
             }
         }
     }
+}
+
+fun Project.hasInMemorySigningKey(): Boolean {
+    return providers.gradleProperty("signingInMemoryKey").orNull?.isNotBlank() == true
+        || System.getenv("SIGNING_IN_MEMORY_KEY")?.isNotBlank() == true
+        || System.getenv("ORG_GRADLE_PROJECT_signingInMemoryKey")?.isNotBlank() == true
 }
 
 tasks.named("build") {
