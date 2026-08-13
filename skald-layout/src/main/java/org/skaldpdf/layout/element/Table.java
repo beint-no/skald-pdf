@@ -8,23 +8,54 @@ import java.util.Objects;
 
 public final class Table extends AbstractElement<Table> {
     private final float[] columnWidths;
+    private final UnitValue[] columnUnits;
     private final List<Cell> headerCells = new ArrayList<>();
+    private final List<Cell> footerCells = new ArrayList<>();
     private final List<Cell> cells = new ArrayList<>();
 
     public Table(int numberOfColumns) {
-        if (numberOfColumns < 1) {
-            throw new IllegalArgumentException("A table needs at least one column");
-        }
-        this.columnWidths = new float[numberOfColumns];
-        java.util.Arrays.fill(columnWidths, 1f);
+        this(filledWeights(numberOfColumns), null);
     }
 
     public Table(float[] columnWidths) {
-        this.columnWidths = validatedWidths(columnWidths);
+        this(validatedWidths(columnWidths), null);
     }
 
     public Table(UnitValue columnWidths) {
         this(columnWidths.values());
+    }
+
+    /** Mixed point and percent columns; percent columns share leftover width after fixed columns. */
+    public static Table withColumns(UnitValue... columns) {
+        Objects.requireNonNull(columns, "columns");
+        if (columns.length == 0) {
+            throw new IllegalArgumentException("A table needs at least one column");
+        }
+        var widths = new float[columns.length];
+        var units = new UnitValue[columns.length];
+        for (int index = 0; index < columns.length; index++) {
+            var unit = Objects.requireNonNull(columns[index], "column");
+            if (unit.unitType() != UnitValue.UnitType.POINT && unit.unitType() != UnitValue.UnitType.PERCENT) {
+                throw new IllegalArgumentException("Mixed columns must be point or percent values");
+            }
+            units[index] = unit;
+            widths[index] = unit.value();
+        }
+        return new Table(widths, units);
+    }
+
+    private Table(float[] columnWidths, UnitValue[] columnUnits) {
+        this.columnWidths = columnWidths;
+        this.columnUnits = columnUnits;
+    }
+
+    private static float[] filledWeights(int numberOfColumns) {
+        if (numberOfColumns < 1) {
+            throw new IllegalArgumentException("A table needs at least one column");
+        }
+        var widths = new float[numberOfColumns];
+        java.util.Arrays.fill(widths, 1f);
+        return widths;
     }
 
     private static float[] validatedWidths(float[] values) {
@@ -48,6 +79,23 @@ public final class Table extends AbstractElement<Table> {
 
     public Table addHeaderCell(String content) {
         return addHeaderCell(new Cell().add(new Paragraph(content)));
+    }
+
+    public Table addFooterCell(Cell cell) {
+        footerCells.add(Objects.requireNonNull(cell, "cell"));
+        return this;
+    }
+
+    public Table addFooterCell(String content) {
+        return addFooterCell(new Cell().add(new Paragraph(content)));
+    }
+
+    public Table addFooterRow(String... values) {
+        requireCompleteRow(values);
+        for (var value : values) {
+            addFooterCell(value);
+        }
+        return this;
     }
 
     public Table addCell(Cell cell) {
@@ -100,8 +148,16 @@ public final class Table extends AbstractElement<Table> {
         return columnWidths.clone();
     }
 
+    public UnitValue[] columnUnits() {
+        return columnUnits == null ? null : columnUnits.clone();
+    }
+
     public List<Cell> headerCells() {
         return List.copyOf(headerCells);
+    }
+
+    public List<Cell> footerCells() {
+        return List.copyOf(footerCells);
     }
 
     public List<Cell> cells() {

@@ -36,6 +36,7 @@ public final class Style {
     private float multipliedLeading = Float.NaN;
     private OverflowWrap overflowWrap = OverflowWrap.NORMAL;
     private boolean bold;
+    private boolean italic;
     private boolean underline;
     private boolean strikethrough;
     private boolean keepTogether;
@@ -43,6 +44,8 @@ public final class Style {
     private float borderRadius;
     private String destinationUri;
     private int destinationPage;
+    private String namedDestination;
+    private String localDestination;
     private LinearGradient backgroundGradient;
     private FixedPosition fixedPosition;
 
@@ -285,6 +288,22 @@ public final class Style {
         destinationPage = value;
     }
 
+    public String namedDestination() {
+        return namedDestination;
+    }
+
+    public void namedDestination(String value) {
+        namedDestination = value;
+    }
+
+    public String localDestination() {
+        return localDestination;
+    }
+
+    public void localDestination(String value) {
+        localDestination = value;
+    }
+
     public LinearGradient backgroundGradient() {
         return backgroundGradient;
     }
@@ -307,6 +326,14 @@ public final class Style {
 
     public void bold(boolean value) {
         bold = value;
+    }
+
+    public boolean italic() {
+        return italic;
+    }
+
+    public void italic(boolean value) {
+        italic = value;
     }
 
     public boolean underline() {

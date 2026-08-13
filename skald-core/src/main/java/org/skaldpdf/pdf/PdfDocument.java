@@ -22,6 +22,7 @@ public final class PdfDocument implements AutoCloseable {
     private final Map<String, List<AbstractPdfDocumentEventHandler>> eventHandlers = new LinkedHashMap<>();
     private final List<PdfPage> pages = new ArrayList<>();
     private final List<OutlineItem> outlines = new ArrayList<>();
+    private final Map<String, NamedDestination> namedDestinations = new LinkedHashMap<>();
     private String language;
     private boolean closed;
     private boolean closing;
@@ -72,6 +73,20 @@ public final class PdfDocument implements AutoCloseable {
 
     public List<OutlineItem> outlines() {
         return List.copyOf(outlines);
+    }
+
+    public PdfDocument addNamedDestination(String name, int pageNumber, float top) {
+        ensureOpen();
+        var dest = new NamedDestination(name, pageNumber, top);
+        var previous = namedDestinations.putIfAbsent(dest.name(), dest);
+        if (previous != null) {
+            throw new IllegalArgumentException("Named destination already exists: " + dest.name());
+        }
+        return this;
+    }
+
+    public List<NamedDestination> namedDestinations() {
+        return List.copyOf(namedDestinations.values());
     }
 
     public int getNumberOfPages() {

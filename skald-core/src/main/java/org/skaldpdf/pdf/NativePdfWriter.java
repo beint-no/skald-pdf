@@ -105,6 +105,10 @@ final class NativePdfWriter {
             catalog.append(" /Outlines ")
                 .append(addOutlines(objects, document, pageObjects)).append(" 0 R");
         }
+        if (!document.namedDestinations().isEmpty()) {
+            catalog.append(" /Names << /Dests ")
+                .append(addNamedDestinations(objects, document, pageObjects)).append(" 0 R >>");
+        }
         var catalogObject = objects.add(ascii(catalog.append(" >>").toString()));
         objects.rootObject = catalogObject;
         return objects;
@@ -383,7 +387,9 @@ final class NativePdfWriter {
             var bounds = link.bounds();
             var action = link.uri() != null
                 ? "<< /Type /Action /S /URI /URI " + literalString(link.uri()) + " >>"
-                : goToAction(link.destinationPage(), pageObjects, pages);
+                : link.namedDestination() != null
+                    ? "<< /Type /Action /S /GoTo /D " + literalString(link.namedDestination()) + " >>"
+                    : goToAction(link.destinationPage(), pageObjects, pages);
             result.add(objects.add(ascii(format(
                 "<< /Type /Annot /Subtype /Link /Rect [%s %s %s %s] /Border [0 0 0] /F 4 /H /N /A %s >>",
                 number(bounds.getLeft()), number(bounds.getBottom()),
@@ -408,6 +414,22 @@ final class NativePdfWriter {
         body.append(" /Annots [");
         links.forEach(object -> body.append(object).append(" 0 R "));
         body.append(']');
+    }
+
+    private static int addNamedDestinations(ObjectStore objects, PdfDocument document, List<Integer> pageObjects) {
+        var dests = document.namedDestinations().stream()
+            .sorted(java.util.Comparator.comparing(NamedDestination::name))
+            .toList();
+        var names = new StringBuilder("[");
+        for (var dest : dests) {
+            if (dest.pageNumber() > pageObjects.size()) {
+                throw new IllegalArgumentException("Named destination targets a missing page: " + dest.name());
+            }
+            names.append(literalString(dest.name())).append(" [")
+                .append(pageObjects.get(dest.pageNumber() - 1)).append(" 0 R /XYZ null ")
+                .append(number(dest.top())).append(" null] ");
+        }
+        return objects.add(ascii("<< /Names " + names.append("] >>")));
     }
 
     private static int addOutlines(ObjectStore objects, PdfDocument document, List<Integer> pageObjects) {

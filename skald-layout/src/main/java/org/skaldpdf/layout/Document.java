@@ -7,6 +7,8 @@ import org.skaldpdf.layout.element.LayoutElement;
 import org.skaldpdf.layout.internal.LayoutEngine;
 import org.skaldpdf.pdf.PdfDocument;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -18,6 +20,8 @@ public final class Document implements AutoCloseable {
     private float bottomMargin = 36f;
     private float leftMargin = 36f;
     private PdfFont font = PdfFontFactory.regular();
+    private final List<PdfFont> fallbacks = new ArrayList<>();
+    private boolean fallbacksExplicit;
     private float fontSize = 12f;
     private float headerHeight;
     private float firstHeaderHeight;
@@ -71,6 +75,19 @@ public final class Document implements AutoCloseable {
     public Document setFont(PdfFont value) {
         requireLayoutNotStarted();
         font = Objects.requireNonNull(value, "value");
+        if (!fallbacksExplicit && fallbacks.isEmpty() && !PdfFontFactory.bundled(font)) {
+            fallbacks.add(PdfFontFactory.regular());
+        }
+        return this;
+    }
+
+    public Document setFontFallbacks(PdfFont... fonts) {
+        requireLayoutNotStarted();
+        fallbacksExplicit = true;
+        fallbacks.clear();
+        for (var fallback : fonts) {
+            fallbacks.add(Objects.requireNonNull(fallback, "fallback"));
+        }
         return this;
     }
 
@@ -152,7 +169,7 @@ public final class Document implements AutoCloseable {
         } else if (pdfDocument.getNumberOfPages() == 0) {
             pdfDocument.addNewPage(pageSize);
         }
-        if (header != null || footer != null) {
+        if (header != null || firstHeader != null || footer != null) {
             layout().finishPages(header, firstHeader, footer);
         }
         pdfDocument.close();
@@ -167,7 +184,7 @@ public final class Document implements AutoCloseable {
             }
             layout = new LayoutEngine(
                 pdfDocument, pageSize, topMargin, rightMargin, bottomMargin, leftMargin, font, fontSize,
-                headerHeight, footerHeight, firstHeaderHeight
+                headerHeight, footerHeight, firstHeaderHeight, List.copyOf(fallbacks)
             );
         }
         return layout;

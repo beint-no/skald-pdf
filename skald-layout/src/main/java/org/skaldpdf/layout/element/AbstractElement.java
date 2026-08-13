@@ -44,6 +44,11 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
         return self();
     }
 
+    public final T italic() {
+        style.italic(true);
+        return self();
+    }
+
     public final T underline() {
         style.underline(true);
         return self();
@@ -211,6 +216,16 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
 
     public final T setDestinationPage(int pageNumber) {
         style.destinationPage(pageNumber);
+        return self();
+    }
+
+    public final T setNamedDestination(String name) {
+        style.namedDestination(name);
+        return self();
+    }
+
+    public final T setLocalDestination(String name) {
+        style.localDestination(name);
         return self();
     }
 

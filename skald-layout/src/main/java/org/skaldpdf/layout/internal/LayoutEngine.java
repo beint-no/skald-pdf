@@ -70,6 +70,14 @@ public final class LayoutEngine {
     public LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
                         float bottomMargin, float leftMargin, PdfFont defaultFont, float defaultFontSize,
                         float headerHeight, float footerHeight, float firstHeaderHeight) {
+        this(document, pageSize, topMargin, rightMargin, bottomMargin, leftMargin,
+            defaultFont, defaultFontSize, headerHeight, footerHeight, firstHeaderHeight, List.of());
+    }
+
+    public LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
+                        float bottomMargin, float leftMargin, PdfFont defaultFont, float defaultFontSize,
+                        float headerHeight, float footerHeight, float firstHeaderHeight,
+                        List<PdfFont> fallbacks) {
         this.document = document;
         this.pageSize = pageSize;
         this.topMargin = topMargin;
@@ -80,7 +88,8 @@ public final class LayoutEngine {
         this.firstHeaderHeight = firstHeaderHeight;
         this.footerHeight = footerHeight;
         this.defaultText = new TextContext(
-            defaultFont, defaultFontSize, ColorConstants.INK, TextAlignment.LEFT, DEFAULT_LEADING, false, false
+            defaultFont, defaultFontSize, ColorConstants.INK, TextAlignment.LEFT, DEFAULT_LEADING, false, false,
+            List.copyOf(fallbacks)
         );
     }
 
@@ -196,7 +205,7 @@ public final class LayoutEngine {
         var top = cursorTop - style.marginTop();
         drawBlockDecoration(style, blockX, top - blockHeight, blockWidth, blockHeight, 1f);
         renderLines(layout, blockX + style.paddingLeft(), top - style.paddingTop(), contentWidth, context.textAlignment(), 1f, context.underline(), context.strikethrough());
-        PdfDrawing.link(page, blockX, top - blockHeight, blockWidth, blockHeight, style.destinationUri(), style.destinationPage());
+        annotate(style, blockX, top - blockHeight, blockWidth, blockHeight);
         cursorTop = top - blockHeight - style.marginBottom();
     }
 
@@ -234,9 +243,8 @@ public final class LayoutEngine {
             var fragment = new ParagraphLayout(List.copyOf(layout.lines().subList(lineIndex, end)), lineHeight);
             renderLines(fragment, blockX + style.paddingLeft(), top - style.paddingTop(),
                 contentWidth, context.textAlignment(), 1f, context.underline(), context.strikethrough());
-            PdfDrawing.link(page, blockX, top - fragmentHeight,
-                contentWidth + style.paddingLeft() + style.paddingRight(), fragmentHeight,
-                style.destinationUri(), style.destinationPage());
+            annotate(style, blockX, top - fragmentHeight,
+                contentWidth + style.paddingLeft() + style.paddingRight(), fragmentHeight);
             cursorTop = top - fragmentHeight - bottomMarginForFragment;
             lineIndex = end;
             firstFragment = false;
@@ -346,8 +354,7 @@ public final class LayoutEngine {
         PdfDrawing.borders(document, page, style.borderTop(), style.borderRight(), style.borderBottom(),
             style.borderLeft(), x + style.marginLeft(), decorationTop - renderedHeight, width, renderedHeight,
             style.borderRadius());
-        PdfDrawing.link(page, x + style.marginLeft(), decorationTop - renderedHeight, width, renderedHeight,
-            style.destinationUri(), style.destinationPage());
+        annotate(style, x + style.marginLeft(), decorationTop - renderedHeight, width, renderedHeight);
         cursorTop -= style.marginBottom();
     }
 
@@ -367,69 +374,78 @@ public final class LayoutEngine {
             availableWidth - style.marginLeft() - style.marginRight());
         var tableX = alignedX(x + style.marginLeft(), availableWidth - style.marginLeft() - style.marginRight(),
             tableWidth, style.horizontalAlignment(HorizontalAlignment.LEFT));
-        var columnWidths = resolvedColumnWidths(table.columnWidths(), tableWidth);
+        var columnWidths = resolvedColumnWidths(table, tableWidth);
         var context = resolveTextContext(style, inherited);
         var headerRows = rows(table.headerCells(), table.numberOfColumns());
         var bodyRows = rows(table.cells(), table.numberOfColumns());
+        var footerRows = rows(table.footerCells(), table.numberOfColumns());
+        var headerHeights = rowHeights(headerRows, columnWidths, context);
+        var bodyHeights = rowHeights(bodyRows, columnWidths, context);
+        var footerHeights = rowHeights(footerRows, columnWidths, context);
         cursorTop -= style.marginTop();
-        var headerHeight = rowsHeight(headerRows, columnWidths, context);
-        if (headerHeight > contentHeight()) {
-            throw new IllegalArgumentException("Table headers are taller than the page content area");
+        var headerHeight = sum(headerHeights, 0, headerHeights.length);
+        var footerHeight = sum(footerHeights, 0, footerHeights.length);
+        if (headerHeight + footerHeight > contentHeight()) {
+            throw new IllegalArgumentException("Table headers and footers are taller than the page content area");
         }
         if (!headerRows.isEmpty()) {
             if (headerHeight > remainingHeight() && cursorTop < pageSize.getHeight() - topInset()) {
                 newPage();
             }
-            renderRows(headerRows, columnWidths, tableX, context, false, List.of());
+            renderRows(headerRows, headerHeights, columnWidths, tableX, context);
         }
-        for (var row : bodyRows) {
-            var rowHeight = rowHeight(row, columnWidths, context);
-            if (rowHeight <= remainingHeight()) {
-                renderRow(row, columnWidths, tableX, context, rowHeight);
-                continue;
-            }
-            if (cursorTop < pageSize.getHeight() - topInset() && rowHeight <= contentHeight() - headerHeight) {
+        for (int index = 0; index < bodyRows.size(); index++) {
+            var row = bodyRows.get(index);
+            var rowHeight = bodyHeights[index];
+            var spanHeight = rowSpanBlockHeight(row, index, bodyHeights);
+            var needed = spanHeight + footerHeight;
+            if (needed > remainingHeight()
+                && needed <= contentHeight() - headerHeight
+                && cursorTop < pageSize.getHeight() - topInset()) {
+                renderRows(footerRows, footerHeights, columnWidths, tableX, context);
                 newPage();
                 if (!headerRows.isEmpty()) {
-                    renderRows(headerRows, columnWidths, tableX, context, false, List.of());
+                    renderRows(headerRows, headerHeights, columnWidths, tableX, context);
                 }
             }
             if (rowHeight <= remainingHeight()) {
-                renderRow(row, columnWidths, tableX, context, rowHeight);
+                renderRow(row, columnWidths, tableX, context, rowHeight, index, bodyHeights);
             } else {
-                renderSplitRow(row, columnWidths, tableX, context, rowHeight, headerRows);
+                renderSplitRow(row, columnWidths, tableX, context, rowHeight, headerRows, headerHeights);
             }
         }
+        renderRows(footerRows, footerHeights, columnWidths, tableX, context);
         cursorTop -= style.marginBottom();
     }
 
-    private void renderRows(List<Row> rows, float[] columnWidths, float x, TextContext context,
-                            boolean repeat, List<Row> ignored) {
-        for (var row : rows) {
-            var height = rowHeight(row, columnWidths, context);
-            renderRow(row, columnWidths, x, context, height);
+    private void renderRows(List<Row> rows, float[] heights, float[] columnWidths, float x, TextContext context) {
+        for (int index = 0; index < rows.size(); index++) {
+            renderRow(rows.get(index), columnWidths, x, context, heights[index], index, heights);
         }
     }
 
-    private void renderRow(Row row, float[] columnWidths, float tableX, TextContext inherited, float height) {
+    private void renderRow(Row row, float[] columnWidths, float tableX, TextContext inherited, float height,
+                           int rowIndex, float[] rowHeights) {
         var bottom = cursorTop - height;
         for (var placed : row.cells()) {
             var cell = placed.cell();
             var cellX = tableX + sum(columnWidths, 0, placed.column());
             var cellWidth = sum(columnWidths, placed.column(), placed.column() + cell.columnSpan());
-            renderCell(cell, cellX, bottom, cellWidth, height, inherited);
+            var cellHeight = cell.rowSpan() <= 1 ? height
+                : sum(rowHeights, rowIndex, Math.min(rowHeights.length, rowIndex + cell.rowSpan()));
+            renderCell(cell, cellX, cursorTop - cellHeight, cellWidth, cellHeight, inherited);
         }
         cursorTop = bottom;
     }
 
     private void renderSplitRow(Row row, float[] columnWidths, float tableX, TextContext inherited,
-                                float totalHeight, List<Row> headerRows) {
+                                float totalHeight, List<Row> headerRows, float[] headerHeights) {
         var consumed = 0f;
         while (consumed < totalHeight) {
             if (remainingHeight() <= 0) {
                 newPage();
                 if (!headerRows.isEmpty()) {
-                    renderRows(headerRows, columnWidths, tableX, inherited, false, List.of());
+                    renderRows(headerRows, headerHeights, columnWidths, tableX, inherited);
                 }
             }
             var chunkHeight = Math.min(totalHeight - consumed, remainingHeight());
@@ -449,7 +465,7 @@ public final class LayoutEngine {
             if (consumed < totalHeight) {
                 newPage();
                 if (!headerRows.isEmpty()) {
-                    renderRows(headerRows, columnWidths, tableX, inherited, false, List.of());
+                    renderRows(headerRows, headerHeights, columnWidths, tableX, inherited);
                 }
             }
         }
@@ -547,31 +563,60 @@ public final class LayoutEngine {
             }
             case Table table -> {
                 var tableWidth = resolveWidth(style.width(), width, width);
-                var columns = resolvedColumnWidths(table.columnWidths(), tableWidth);
+                var columns = resolvedColumnWidths(table, tableWidth);
                 var context = resolveTextContext(style, inherited);
-                yield style.marginTop() + rowsHeight(rows(table.headerCells(), table.numberOfColumns()), columns, context)
-                    + rowsHeight(rows(table.cells(), table.numberOfColumns()), columns, context) + style.marginBottom();
+                yield style.marginTop()
+                    + sum(rowHeights(rows(table.headerCells(), table.numberOfColumns()), columns, context))
+                    + sum(rowHeights(rows(table.cells(), table.numberOfColumns()), columns, context))
+                    + sum(rowHeights(rows(table.footerCells(), table.numberOfColumns()), columns, context))
+                    + style.marginBottom();
             }
             case AreaBreak ignored -> 0f;
             default -> 0f;
         };
     }
 
-    private float rowsHeight(List<Row> rows, float[] widths, TextContext context) {
-        var height = 0f;
-        for (var row : rows) {
-            height += rowHeight(row, widths, context);
+    private float[] rowHeights(List<Row> rows, float[] columnWidths, TextContext inherited) {
+        var heights = new float[rows.size()];
+        for (int index = 0; index < rows.size(); index++) {
+            var height = 0f;
+            for (var placed : rows.get(index).cells()) {
+                if (placed.cell().rowSpan() > 1) {
+                    continue;
+                }
+                var width = sum(columnWidths, placed.column(), placed.column() + placed.cell().columnSpan());
+                height = Math.max(height, measureCell(placed.cell(), width, inherited));
+            }
+            heights[index] = Math.max(1f, height);
+        }
+        for (int index = 0; index < rows.size(); index++) {
+            for (var placed : rows.get(index).cells()) {
+                var span = Math.min(placed.cell().rowSpan(), rows.size() - index);
+                if (span <= 1) {
+                    continue;
+                }
+                var width = sum(columnWidths, placed.column(), placed.column() + placed.cell().columnSpan());
+                var needed = measureCell(placed.cell(), width, inherited);
+                var actual = sum(heights, index, index + span);
+                if (needed > actual) {
+                    heights[index + span - 1] += needed - actual;
+                }
+            }
+        }
+        return heights;
+    }
+
+    private static float rowSpanBlockHeight(Row row, int rowIndex, float[] heights) {
+        var height = heights[rowIndex];
+        for (var placed : row.cells()) {
+            var span = Math.min(placed.cell().rowSpan(), heights.length - rowIndex);
+            height = Math.max(height, sum(heights, rowIndex, rowIndex + span));
         }
         return height;
     }
 
-    private float rowHeight(Row row, float[] columnWidths, TextContext inherited) {
-        var height = 0f;
-        for (var placed : row.cells()) {
-            var width = sum(columnWidths, placed.column(), placed.column() + placed.cell().columnSpan());
-            height = Math.max(height, measureCell(placed.cell(), width, inherited));
-        }
-        return Math.max(1f, height);
+    private static float sum(float[] values) {
+        return sum(values, 0, values.length);
     }
 
     private float measureCell(Cell cell, float width, TextContext inherited) {
@@ -644,32 +689,34 @@ public final class LayoutEngine {
         var result = new ArrayList<ResolvedText>();
         for (var run : paragraph.textRuns()) {
             var context = resolveTextContext(run.style(), paragraphContext);
-            var value = run.value();
             var current = new StringBuilder();
             var whitespace = false;
-            for (int index = 0; index < value.length(); index++) {
-                var character = value.charAt(index);
-                if (character == '\n') {
-                    flushToken(result, current, context);
+            PdfFont tokenFont = context.font();
+            for (var codePoint : run.value().codePoints().toArray()) {
+                if (codePoint == '\n') {
+                    flushToken(result, current, tokenFont, context);
                     result.add(new ResolvedText("\n", context.font(), context.fontSize(), context.color()));
                     whitespace = false;
+                    tokenFont = context.font();
                     continue;
                 }
-                var nextWhitespace = Character.isWhitespace(character);
-                if (current.length() > 0 && nextWhitespace != whitespace) {
-                    flushToken(result, current, context);
+                var font = resolveFont(codePoint, context);
+                var nextWhitespace = Character.isWhitespace(codePoint);
+                if (current.length() > 0 && (nextWhitespace != whitespace || font != tokenFont)) {
+                    flushToken(result, current, tokenFont, context);
                 }
                 whitespace = nextWhitespace;
-                current.append(character);
+                tokenFont = font;
+                current.appendCodePoint(codePoint);
             }
-            flushToken(result, current, context);
+            flushToken(result, current, tokenFont, context);
         }
         return result;
     }
 
-    private static void flushToken(List<ResolvedText> target, StringBuilder value, TextContext context) {
+    private static void flushToken(List<ResolvedText> target, StringBuilder value, PdfFont font, TextContext context) {
         if (value.length() > 0) {
-            target.add(new ResolvedText(value.toString(), context.font(), context.fontSize(), context.color()));
+            target.add(new ResolvedText(value.toString(), font, context.fontSize(), context.color()));
             value.setLength(0);
         }
     }
@@ -735,7 +782,7 @@ public final class LayoutEngine {
                 drawBlockDecoration(style, x, y, width, height, opacity);
                 renderLines(layout, x + style.paddingLeft(), y + height - style.paddingTop(), contentWidth,
                     context.textAlignment(), opacity, context.underline(), context.strikethrough());
-                PdfDrawing.link(targetPage, x, y, width, height, style.destinationUri(), style.destinationPage());
+                annotate(style, x, y, width, height);
             }
             case Div div -> {
                 var style = div.style();
@@ -793,8 +840,8 @@ public final class LayoutEngine {
 
     private TextContext resolveTextContext(Style style, TextContext inherited) {
         var font = style.font() == null ? inherited.font() : style.font();
-        if (style.bold() && font == PdfFontFactory.regular()) {
-            font = PdfFontFactory.bold();
+        if (PdfFontFactory.bundled(font)) {
+            font = PdfFontFactory.create(style.bold() || font.bold(), style.italic() || font.italic());
         }
         return new TextContext(
             font,
@@ -803,32 +850,112 @@ public final class LayoutEngine {
             style.textAlignment(inherited.textAlignment()),
             style.resolvedLeading(inherited.multipliedLeading()),
             style.underline() || inherited.underline(),
-            style.strikethrough() || inherited.strikethrough()
+            style.strikethrough() || inherited.strikethrough(),
+            inherited.fallbacks()
         );
+    }
+
+    private PdfFont resolveFont(int codePoint, TextContext context) {
+        if (context.font().supports(codePoint) || Character.isWhitespace(codePoint)) {
+            return context.font();
+        }
+        for (var fallback : context.fallbacks()) {
+            if (fallback.supports(codePoint)) {
+                return fallback;
+            }
+        }
+        return context.font();
+    }
+
+    private void annotate(Style style, float x, float y, float width, float height) {
+        PdfDrawing.link(page, x, y, width, height, style.destinationUri(), style.destinationPage(),
+            style.namedDestination());
+        if (style.localDestination() != null) {
+            document.addNamedDestination(style.localDestination(), Math.max(1, document.getNumberOfPages()),
+                y + height);
+        }
     }
 
     private static List<Row> rows(List<Cell> cells, int numberOfColumns) {
         var rows = new ArrayList<Row>();
-        var current = new ArrayList<PlacedCell>();
-        var column = 0;
-        for (var cell : cells) {
-            if (column + cell.columnSpan() > numberOfColumns && !current.isEmpty()) {
-                rows.add(new Row(List.copyOf(current)));
-                current.clear();
-                column = 0;
+        var occupancy = new int[numberOfColumns];
+        var iterator = cells.iterator();
+        Cell pending = iterator.hasNext() ? iterator.next() : null;
+        while (pending != null || remainingOccupancy(occupancy)) {
+            var current = new ArrayList<PlacedCell>();
+            var column = 0;
+            while (column < numberOfColumns) {
+                if (occupancy[column] > 0) {
+                    column++;
+                    continue;
+                }
+                if (pending == null) {
+                    break;
+                }
+                if (column + pending.columnSpan() > numberOfColumns) {
+                    throw new IllegalArgumentException("Cell span exceeds the table width");
+                }
+                for (int occupied = column; occupied < column + pending.columnSpan(); occupied++) {
+                    if (occupancy[occupied] > 0) {
+                        throw new IllegalArgumentException("Cell overlaps a row-spanned column");
+                    }
+                    occupancy[occupied] = pending.rowSpan();
+                }
+                current.add(new PlacedCell(pending, column));
+                column += pending.columnSpan();
+                pending = iterator.hasNext() ? iterator.next() : null;
             }
-            current.add(new PlacedCell(cell, column));
-            column += cell.columnSpan();
-            if (column >= numberOfColumns) {
-                rows.add(new Row(List.copyOf(current)));
-                current.clear();
-                column = 0;
+            if (current.isEmpty() && !remainingOccupancy(occupancy)) {
+                break;
+            }
+            rows.add(new Row(List.copyOf(current)));
+            for (int index = 0; index < occupancy.length; index++) {
+                if (occupancy[index] > 0) {
+                    occupancy[index]--;
+                }
             }
         }
-        if (!current.isEmpty()) {
-            rows.add(new Row(List.copyOf(current)));
+        if (pending != null) {
+            throw new IllegalArgumentException("Table has leftover cells that do not fit the grid");
         }
         return List.copyOf(rows);
+    }
+
+    private static boolean remainingOccupancy(int[] occupancy) {
+        for (var value : occupancy) {
+            if (value > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static float[] resolvedColumnWidths(Table table, float tableWidth) {
+        var units = table.columnUnits();
+        if (units == null) {
+            return resolvedColumnWidths(table.columnWidths(), tableWidth);
+        }
+        var pointTotal = 0f;
+        var percentTotal = 0f;
+        for (var unit : units) {
+            if (unit.unitType() == UnitValue.UnitType.POINT) {
+                pointTotal += unit.value();
+            } else {
+                percentTotal += unit.value();
+            }
+        }
+        var percentBudget = percentTotal <= 0 ? 0f : tableWidth * percentTotal / 100f;
+        if (pointTotal + percentBudget > tableWidth && percentTotal > 0) {
+            percentBudget = Math.max(0f, tableWidth - pointTotal);
+        }
+        var result = new float[units.length];
+        for (int index = 0; index < units.length; index++) {
+            var unit = units[index];
+            result[index] = unit.unitType() == UnitValue.UnitType.POINT
+                ? unit.value()
+                : percentTotal == 0 ? 0f : percentBudget * unit.value() / percentTotal;
+        }
+        return result;
     }
 
     private static float[] resolvedColumnWidths(float[] weights, float tableWidth) {
@@ -932,7 +1059,8 @@ public final class LayoutEngine {
     }
 
     private record TextContext(PdfFont font, float fontSize, Color color, TextAlignment textAlignment,
-                               float multipliedLeading, boolean underline, boolean strikethrough) {
+                               float multipliedLeading, boolean underline, boolean strikethrough,
+                               List<PdfFont> fallbacks) {
     }
 
     private record ResolvedText(String value, PdfFont font, float fontSize, Color color) {

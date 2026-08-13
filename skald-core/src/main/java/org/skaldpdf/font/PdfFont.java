@@ -19,7 +19,11 @@ public final class PdfFont {
     }
 
     public boolean bold() {
-        return weight == FontWeight.BOLD;
+        return weight == FontWeight.BOLD || weight == FontWeight.BOLD_ITALIC;
+    }
+
+    public boolean italic() {
+        return weight == FontWeight.ITALIC || weight == FontWeight.BOLD_ITALIC;
     }
 
     public float getWidth(String text, float fontSize) {

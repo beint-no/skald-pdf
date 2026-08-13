@@ -4,6 +4,15 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.2.0
+
+- Real italic and bold-italic bundled faces (`italic()`, not a slanted regular).
+- Font fallback stack; a custom document face falls back to Skald Sans by default.
+- Table row spans, repeating footer rows, and mixed point/percent columns.
+- Named destinations (`setLocalDestination` / `setNamedDestination`) for TOCs.
+- GS1-128 in `skald-barcode`, verified by an independent decoder.
+- `Image.scaleInto` so small symbols such as QR codes can enlarge to a box.
+
 ## Shipped in 1.1.0
 
 Business-document work that was blocking invoices, labels, and composition:
@@ -45,19 +54,12 @@ Still ordered by what businesses hit next.
 
 ### Tables and type
 
-- Row spans, repeating footer rows, mixed point/percent columns.
-- Font fallback so one unsupported character can pick a second embedded face.
-- A real italic face (embedded, not slanted).
 - Split tall table rows at line boundaries, not through glyphs.
+- A second fallback face chosen per-script, not only per missing glyph.
 
 ### Core composition
 
 - CFF/OTF embedding so licensed retail faces work, still as PDF 2.0 CID fonts.
-- Named destinations bound to headings, not guessed page numbers.
-
-### Optional barcode additions
-
-- GS1-128 in `skald-barcode`, verified by an independent decoder.
 
 ### Still later
 

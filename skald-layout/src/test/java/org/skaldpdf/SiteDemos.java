@@ -97,7 +97,10 @@ public final class SiteDemos {
                     .setTextAlignment(TextAlignment.RIGHT).setFontColor(ColorConstants.ACCENT))
                 .add(new Paragraph("Scan to pay · Account 1503.45.67890")
                     .setFontSize(9).setTextAlignment(TextAlignment.RIGHT)
-                    .setFontColor(ColorConstants.MUTED).setMarginTop(6)));
+                    .setFontColor(ColorConstants.MUTED).setMarginTop(6))
+                .add(new Paragraph("Payment terms: net 14 days.").italic()
+                    .setFontSize(9).setTextAlignment(TextAlignment.RIGHT)
+                    .setFontColor(ColorConstants.MUTED).setMarginTop(4)));
             document.add(total);
         });
     }

@@ -9,6 +9,8 @@ import java.util.Objects;
 public final class PdfFontFactory {
     private static final PdfFont REGULAR = load("SkaldSans-Regular.ttf", FontWeight.REGULAR);
     private static final PdfFont BOLD = load("SkaldSans-Bold.ttf", FontWeight.BOLD);
+    private static final PdfFont ITALIC = load("SkaldSans-Italic.ttf", FontWeight.ITALIC);
+    private static final PdfFont BOLD_ITALIC = load("SkaldSans-BoldItalic.ttf", FontWeight.BOLD_ITALIC);
 
     private PdfFontFactory() {
     }
@@ -21,8 +23,35 @@ public final class PdfFontFactory {
         return BOLD;
     }
 
+    public static PdfFont italic() {
+        return ITALIC;
+    }
+
+    public static PdfFont boldItalic() {
+        return BOLD_ITALIC;
+    }
+
     public static PdfFont create(FontWeight weight) {
-        return Objects.requireNonNull(weight, "weight") == FontWeight.BOLD ? BOLD : REGULAR;
+        return switch (Objects.requireNonNull(weight, "weight")) {
+            case BOLD -> BOLD;
+            case ITALIC -> ITALIC;
+            case BOLD_ITALIC -> BOLD_ITALIC;
+            case REGULAR -> REGULAR;
+        };
+    }
+
+    public static PdfFont create(boolean bold, boolean italic) {
+        if (bold && italic) {
+            return BOLD_ITALIC;
+        }
+        if (bold) {
+            return BOLD;
+        }
+        return italic ? ITALIC : REGULAR;
+    }
+
+    public static boolean bundled(PdfFont font) {
+        return font == REGULAR || font == BOLD || font == ITALIC || font == BOLD_ITALIC;
     }
 
     public static PdfFont from(byte[] openTypeProgram, FontWeight weight) {

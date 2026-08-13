@@ -218,11 +218,18 @@ public final class PdfDrawing {
 
     public static void link(PdfPage page, float x, float y, float width, float height,
                             String uri, int destinationPage) {
+        link(page, x, y, width, height, uri, destinationPage, null);
+    }
+
+    public static void link(PdfPage page, float x, float y, float width, float height,
+                            String uri, int destinationPage, String namedDestination) {
         if (width <= 0 || height <= 0) {
             return;
         }
         if (uri != null && !uri.isBlank()) {
             page.addUriLink(new Rectangle(x, y, width, height), uri);
+        } else if (namedDestination != null && !namedDestination.isBlank()) {
+            page.addNamedGoToLink(new Rectangle(x, y, width, height), namedDestination);
         } else if (destinationPage > 0) {
             page.addGoToLink(new Rectangle(x, y, width, height), destinationPage);
         }

@@ -226,7 +226,9 @@ public final class ExampleGallery {
                 .add(new Paragraph("Total NOK " + money(amount + 1_200)).bold().setFontSize(14)
                     .setFontColor(theme.accent()).setTextAlignment(TextAlignment.RIGHT))
                 .add(new Paragraph("Scan to pay · Due 26 August 2026 · Account 1503.45.67890")
-                    .setFontSize(9).setFontColor(theme.muted()).setTextAlignment(TextAlignment.RIGHT).setMarginTop(6)));
+                    .setFontSize(9).setFontColor(theme.muted()).setTextAlignment(TextAlignment.RIGHT).setMarginTop(6))
+                .add(new Paragraph("Payment terms: net 14 days.").italic()
+                    .setFontSize(9).setFontColor(theme.muted()).setTextAlignment(TextAlignment.RIGHT).setMarginTop(4)));
             document.add(total);
         });
     }
@@ -1159,7 +1161,9 @@ public final class ExampleGallery {
             document.add(new Image(new Code128Barcode("SKALD-PACK")
                 .withBarHeight(36f)).scaleToFit(280, 80).setMarginTop(16));
             document.add(new Image(new QrCode("https://skaldpdf.org").withModuleSize(2.8f))
-                .scaleToFit(96, 96).setMarginTop(16));
+                .scaleInto(96, 96).setMarginTop(16));
+            document.add(new Image(new org.skaldpdf.barcode.Gs1128Barcode("(01)09501101530003")
+                .withBarHeight(28f)).scaleInto(320, 70).setMarginTop(16));
         });
     }
 
@@ -1175,11 +1179,13 @@ public final class ExampleGallery {
             document.addOutline("Detail", 2);
             heading(document, FOREST, "Operating report");
             document.add(new Paragraph("Contents").bold().setMarginTop(8));
-            document.add(new Paragraph("1. Summary").setDestinationPage(1).setFontColor(FOREST.accent()));
-            document.add(new Paragraph("2. Detail").setDestinationPage(2).setFontColor(FOREST.accent()));
+            document.add(new Paragraph("1. Summary").setNamedDestination("summary").setFontColor(FOREST.accent()));
+            document.add(new Paragraph("2. Detail").setNamedDestination("detail").setFontColor(FOREST.accent()));
+            document.add(new Paragraph("Summary").bold().setLocalDestination("summary").setMarginTop(10));
             document.add(new Paragraph(BODY).justify().setMarginTop(10));
             document.add(new AreaBreak());
-            heading(document, FOREST, "Detail");
+            document.add(new Paragraph("Detail").bold().setFontSize(20).setFontColor(FOREST.accent())
+                .setLocalDestination("detail").setMarginBottom(8));
             for (int index = 1; index <= 24; index++) {
                 document.add(new Paragraph("Observation " + index + ". " + BODY).setFontSize(10));
             }
@@ -1191,6 +1197,8 @@ public final class ExampleGallery {
             heading(document, FOREST, "Skald document style");
             document.add(new Paragraph("Ink, accent, muted, and surface. Prefer 10.5–11 pt body, 1.35 leading, "
                 + "and reserved running chrome.").justify());
+            document.add(new Paragraph("Italic is a real embedded face, not a slanted regular.")
+                .italic().setMarginTop(8));
             var swatches = new Table(4).useAllAvailableWidth().setBorder(Border.NO_BORDER).setMarginTop(16);
             for (var color : List.of(ColorConstants.INK, ColorConstants.ACCENT, ColorConstants.SURFACE, ColorConstants.LINE)) {
                 swatches.addCell(new Cell().setBorder(Border.NO_BORDER).setBackgroundColor(color)

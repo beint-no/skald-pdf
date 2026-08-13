@@ -10,10 +10,13 @@ import java.util.Objects;
 
 /** An immutable Code 128 subset B symbol with human-readable text. */
 public final class Code128Barcode implements ImageSource {
-    private static final int QUIET_MODULES = 10;
-    private static final int START_B = 104;
-    private static final int STOP = 106;
-    private static final String[] PATTERNS = {
+    static final int QUIET_MODULES = 10;
+    static final int FNC1 = 102;
+    static final int CODE_B = 100;
+    static final int START_B = 104;
+    static final int START_C = 105;
+    static final int STOP = 106;
+    static final String[] PATTERNS = {
         "11011001100", "11001101100", "11001100110", "10010011000", "10010001100",
         "10001001100", "10011001000", "10011000100", "10001100100", "11001001000",
         "11001000100", "11000100100", "10110011100", "10011011100", "10011001110",
@@ -176,6 +179,10 @@ public final class Code128Barcode implements ImageSource {
         }
         symbols[symbols.length - 2] = checksum % 103;
         symbols[symbols.length - 1] = STOP;
+        return modulesFor(symbols);
+    }
+
+    static byte[] modulesFor(int[] symbols) {
         var bits = new StringBuilder(symbols.length * 11 + 2);
         for (var symbol : symbols) {
             bits.append(PATTERNS[symbol]);
