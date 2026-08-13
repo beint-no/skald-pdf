@@ -18,10 +18,10 @@ and other generated documents that do not need historical PDF output modes.
 - Unicode TrueType fonts with compact embedding, real italic/bold-italic faces, and a fallback stack
 - Flowing paragraphs, lists, justified text, divisions, repeating tables, and automatic pagination
 - Nested blocks inside table cells, row spans, repeating footer rows, mixed point/percent columns
-- First-page vs continuing headers, named destinations, URI links, and internal GoTo links
+- First-page vs continuing headers, named destinations, URI links, internal GoTo links, and draft watermarks
 - JPEG pass-through, lossless raster compression, alpha, image allowlisting, and image deduplication
 - Rounded surfaces, dashed rules, underline, strikethrough, and axial gradients
-- EAN-13, Code 128, GS1-128, QR, clothing stickers, and A4 n-up sticker sheets
+- EAN-13, UPC-A, Code 128, GS1-128, QR, clothing stickers, and A4 n-up sticker sheets
 - Page events, drawing, watermarks, safer stamping, merging, and page import
 - Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
 - Independent rendering, extraction, barcode, syntax, and PDF 2.0 validation tests
@@ -32,7 +32,7 @@ and other generated documents that do not need historical PDF output modes.
 |---|---|---|
 | `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, and composition |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
-| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, Code 128, GS1-128, QR, and product stickers |
+| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, QR, and product stickers |
 
 `skald-layout` and `skald-barcode` each depend on core, but not on one another.
 An application only pays for the capabilities it selects. The complete runtime
@@ -40,12 +40,12 @@ still depends solely on the JDK.
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.2.0` is on Maven Central:
+JDK 25 or newer is required. Release `1.3.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.2.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.2.0") // optional
+    implementation("no.beint.skaldpdf:skald-layout:1.3.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.3.0") // optional
 }
 ```
 

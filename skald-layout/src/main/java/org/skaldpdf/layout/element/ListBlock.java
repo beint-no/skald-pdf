@@ -13,6 +13,7 @@ public final class ListBlock extends AbstractElement<ListBlock> {
     }
 
     private final Marker marker;
+    private int startAt = 1;
     private final List<LayoutElement> items = new ArrayList<>();
 
     public ListBlock() {
@@ -31,6 +32,18 @@ public final class ListBlock extends AbstractElement<ListBlock> {
     public ListBlock add(LayoutElement content) {
         items.add(Objects.requireNonNull(content, "content"));
         return this;
+    }
+
+    public ListBlock startAt(int value) {
+        if (value < 1) {
+            throw new IllegalArgumentException("List numbering must start at 1 or higher");
+        }
+        startAt = value;
+        return this;
+    }
+
+    public int startAt() {
+        return startAt;
     }
 
     public Marker marker() {

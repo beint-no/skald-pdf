@@ -4,6 +4,16 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.3.0
+
+- Tall table rows split at line boundaries when the row is paragraph-only.
+- Widow/orphan control when a paragraph fragments across pages.
+- Optional XMP CreateDate / ModifyDate (unset keeps output deterministic).
+- `Document.setWatermark`, `setMargins(all)`, and `addOutline(title)` for the current page.
+- `PageSize.ofMillimetres` / `ofInches` for label stock.
+- Numbered lists can start at an arbitrary index.
+- UPC-A barcodes (EAN-13 with a leading zero).
+
 ## Shipped in 1.2.0
 
 - Real italic and bold-italic bundled faces (`italic()`, not a slanted regular).
@@ -54,7 +64,6 @@ Still ordered by what businesses hit next.
 
 ### Tables and type
 
-- Split tall table rows at line boundaries, not through glyphs.
 - A second fallback face chosen per-script, not only per missing glyph.
 
 ### Core composition

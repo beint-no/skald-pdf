@@ -21,6 +21,14 @@ public final class PageSize extends Rectangle {
         }
     }
 
+    public static PageSize ofMillimetres(float width, float height) {
+        return new PageSize(width * 72f / 25.4f, height * 72f / 25.4f);
+    }
+
+    public static PageSize ofInches(float width, float height) {
+        return new PageSize(width * 72f, height * 72f);
+    }
+
     public PageSize rotate() {
         return new PageSize(getHeight(), getWidth());
     }

@@ -29,6 +29,7 @@ public final class Document implements AutoCloseable {
     private Function<PageNumbering, LayoutElement> header;
     private Function<PageNumbering, LayoutElement> firstHeader;
     private Function<PageNumbering, LayoutElement> footer;
+    private String watermark;
     private LayoutEngine layout;
     private LayoutElement pending;
     private boolean closed;
@@ -66,6 +67,10 @@ public final class Document implements AutoCloseable {
         this.bottomMargin = bottomMargin;
         this.leftMargin = leftMargin;
         return this;
+    }
+
+    public Document setMargins(float margin) {
+        return setMargins(margin, margin, margin, margin);
     }
 
     public PdfDocument getPdfDocument() {
@@ -120,6 +125,16 @@ public final class Document implements AutoCloseable {
         return this;
     }
 
+    public Document setCreationDate(java.time.Instant value) {
+        pdfDocument.getDocumentInfo().setCreationDate(value);
+        return this;
+    }
+
+    public Document setModificationDate(java.time.Instant value) {
+        pdfDocument.getDocumentInfo().setModificationDate(value);
+        return this;
+    }
+
     public Document setLanguage(String value) {
         pdfDocument.setLanguage(value);
         return this;
@@ -127,6 +142,19 @@ public final class Document implements AutoCloseable {
 
     public Document addOutline(String title, int pageNumber) {
         pdfDocument.addOutline(title, pageNumber);
+        return this;
+    }
+
+    public Document addOutline(String title) {
+        return addOutline(title, Math.max(1, pdfDocument.getNumberOfPages()));
+    }
+
+    public Document setWatermark(String value) {
+        requireLayoutNotStarted();
+        if (value != null && value.isBlank()) {
+            throw new IllegalArgumentException("Watermark text must not be blank");
+        }
+        watermark = value;
         return this;
     }
 
@@ -169,8 +197,8 @@ public final class Document implements AutoCloseable {
         } else if (pdfDocument.getNumberOfPages() == 0) {
             pdfDocument.addNewPage(pageSize);
         }
-        if (header != null || firstHeader != null || footer != null) {
-            layout().finishPages(header, firstHeader, footer);
+        if (header != null || firstHeader != null || footer != null || watermark != null) {
+            layout().finishPages(header, firstHeader, footer, watermark);
         }
         pdfDocument.close();
     }

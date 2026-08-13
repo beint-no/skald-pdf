@@ -1,11 +1,15 @@
 package org.skaldpdf.pdf;
 
+import java.time.Instant;
+
 /** Document metadata written to the XMP metadata stream. */
 public final class PdfDocumentInfo {
     private String title;
     private String author;
     private String subject;
     private String keywords;
+    private Instant creationDate;
+    private Instant modificationDate;
 
     PdfDocumentInfo() {
     }
@@ -44,5 +48,23 @@ public final class PdfDocumentInfo {
 
     public String getKeywords() {
         return keywords;
+    }
+
+    public PdfDocumentInfo setCreationDate(Instant value) {
+        creationDate = value;
+        return this;
+    }
+
+    public Instant getCreationDate() {
+        return creationDate;
+    }
+
+    public PdfDocumentInfo setModificationDate(Instant value) {
+        modificationDate = value;
+        return this;
+    }
+
+    public Instant getModificationDate() {
+        return modificationDate;
     }
 }

@@ -4,13 +4,13 @@
 
 | Area | Capability |
 |---|---|
-| Documents | PDF 2.0 output, XMP metadata, language, outlines, DisplayDocTitle, ISO/US pages, rotation, first/rest headers |
+| Documents | PDF 2.0 output, XMP metadata, optional Create/Modify dates, language, outlines, DisplayDocTitle, ISO/US/custom mm-in pages, rotation, first/rest headers, draft watermark |
 | Text | Unicode, embedded subset TrueType, PostScript font names, regular/bold/italic/bold-italic, fallback stack, color, left/center/right/justify, rotation, underline, strikethrough, `.notdef` for missing glyphs |
-| Layout | Paragraphs, lists, runs, margins, padding, backgrounds, gradients, rounded borders, dashed rules, divs, nested cell content, fixed position, `keepTogether`, fitted-image measure, `AreaBreak` page size, named destinations |
-| Tables | weighted or mixed point/percent columns, column and row spans, repeating headers and footers, page fragmentation, complete-row checks, nested blocks in cells |
+| Layout | Paragraphs, lists with custom start index, runs, margins, padding, backgrounds, gradients, rounded borders, dashed rules, divs, nested cell content, fixed position, `keepTogether`, widow/orphan control, fitted-image measure, `AreaBreak` page size, named destinations |
+| Tables | weighted or mixed point/percent columns, column and row spans, repeating headers and footers, line-boundary row splits, complete-row checks, nested blocks in cells |
 | Images | JPEG/PNG/GIF/BMP allowlist, encoded-size and pixel gates, JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction |
 | Drawing | fills, rounded paths, axial shadings, dashed lines, opacity, canvas overlays, end-page events, watermarks, URI and GoTo links |
-| Barcodes | validated EAN-13, Code 128, GS1-128, and QR (versions 1–16) with independent decode tests |
+| Barcodes | validated EAN-13, UPC-A, Code 128, GS1-128, and QR (versions 1–16) with independent decode tests |
 | Product stickers | 93 mm × 35 mm EAN-13 clothing labels; A4 n-up print sheets |
 | Composition | merge, copy pages, stamp existing pages, resolve indirect Contents/Annots, strip Launch/JS and other unsafe imported actions |
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |

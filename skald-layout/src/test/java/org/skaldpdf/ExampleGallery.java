@@ -1126,18 +1126,10 @@ public final class ExampleGallery {
     }
 
     private static byte[] watermarked() {
-        var source = create("Preview invoice", document -> {
+        return create("Preview invoice", document -> {
+            document.setWatermark("PREVIEW");
             heading(document, FOREST, "Invoice preview");
             document.add(new Paragraph("This file is stamped as a preview on close."));
-        });
-        return Pdf.rewrite(source, pdf -> {
-            var page = pdf.getPage(1);
-            new org.skaldpdf.layout.Canvas(page, page.getCropBox())
-                .setFontColor(ColorConstants.GRAY)
-                .setFontSize(64)
-                .showTextAligned("PREVIEW", page.getPageSize().getWidth() / 2, page.getPageSize().getHeight() / 2,
-                    TextAlignment.CENTER, org.skaldpdf.layout.properties.VerticalAlignment.MIDDLE,
-                    (float) Math.toRadians(32));
         });
     }
 
@@ -1164,6 +1156,8 @@ public final class ExampleGallery {
                 .scaleInto(96, 96).setMarginTop(16));
             document.add(new Image(new org.skaldpdf.barcode.Gs1128Barcode("(01)09501101530003")
                 .withBarHeight(28f)).scaleInto(320, 70).setMarginTop(16));
+            document.add(new Image(new org.skaldpdf.barcode.UpcABarcode("03600029145")
+                .withBarHeight(28f)).scaleInto(260, 70).setMarginTop(16));
         });
     }
 

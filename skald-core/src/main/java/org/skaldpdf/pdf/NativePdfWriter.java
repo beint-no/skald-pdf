@@ -750,6 +750,9 @@ final class NativePdfWriter {
         var languageTag = language == null ? "" : """
                   <dc:language><rdf:Bag><rdf:li>%s</rdf:li></rdf:Bag></dc:language>
             """.formatted(xml(language));
+        var created = xmpDate("xmp:CreateDate", information.getCreationDate());
+        var modified = xmpDate("xmp:ModifyDate", information.getModificationDate() != null
+            ? information.getModificationDate() : information.getCreationDate());
         return """
             <?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
             <x:xmpmeta xmlns:x="adobe:ns:meta/">
@@ -763,11 +766,20 @@ final class NativePdfWriter {
                   <dc:creator><rdf:Seq><rdf:li>%s</rdf:li></rdf:Seq></dc:creator>
                   <pdf:Producer>Skald PDF</pdf:Producer>
                   <xmp:CreatorTool>Skald PDF</xmp:CreatorTool>
-            %s%s%s                </rdf:Description>
+            %s%s%s%s%s                </rdf:Description>
               </rdf:RDF>
             </x:xmpmeta>
             <?xpacket end="w"?>
-            """.formatted(title, author, subject, keywords, languageTag);
+            """.formatted(title, author, subject, keywords, languageTag, created, modified);
+    }
+
+    private static String xmpDate(String tag, java.time.Instant instant) {
+        if (instant == null) {
+            return "";
+        }
+        return "                  <" + tag + ">"
+            + xml(instant.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString())
+            + "</" + tag + ">\n";
     }
 
     private static String xml(String value) {
