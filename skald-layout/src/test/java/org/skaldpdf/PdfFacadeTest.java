@@ -39,6 +39,15 @@ class PdfFacadeTest {
     }
 
     @Test
+    void embedsACompactFontSubset() {
+        var bytes = Pdf.create(document -> {
+            document.add(new Paragraph("Invoice 2026-1001").bold().setFontSize(18));
+            document.add(new Paragraph("Total NOK 1 250.00 due 26 August 2026."));
+        });
+        assertTrue(bytes.length < 45_000, "a short invoice should not carry unused OpenType tables: " + bytes.length);
+    }
+
+    @Test
     void supportsPathFirstCreationCompositionAndRewrite() throws Exception {
         var first = temporaryDirectory.resolve("first.pdf");
         var second = temporaryDirectory.resolve("second.pdf");

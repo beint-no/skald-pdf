@@ -34,12 +34,12 @@ still depends solely on the JDK.
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.0.0` is on Maven Central:
+JDK 25 or newer is required. Release `1.0.1` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.0.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.0.0") // optional
+    implementation("no.beint.skaldpdf:skald-layout:1.0.1")
+    implementation("no.beint.skaldpdf:skald-barcode:1.0.1") // optional
 }
 ```
 

@@ -53,6 +53,7 @@ class ProductStickerTest {
         assertTrue(text.contains("8"));
         assertTrue(text.contains("123613") || text.contains("1 2 3 6 1 3"));
         assertEquals("8123613319580", decode(bytes));
+        assertTrue(bytes.length < 28_000, "compact subset sticker should stay small, was " + bytes.length);
         PdfTestSupport.saveArtifacts("ecomtools-soja-ba-l", bytes);
     }
 

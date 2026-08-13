@@ -14,6 +14,10 @@ import java.util.Set;
 
 final class TrueTypeSubsetter {
     private static final long CHECKSUM_MAGIC = 0xB1B0AFBAL;
+    private static final Set<String> KEPT_TABLES = Set.of(
+        "head", "hhea", "maxp", "OS/2", "name", "cmap", "hmtx", "loca", "glyf",
+        "cvt ", "fpgm", "prep", "gasp"
+    );
     private final byte[] source;
     private final Map<String, TrueTypeFont.Table> tables;
     private final int glyphCount;
@@ -46,20 +50,31 @@ final class TrueTypeSubsetter {
         subsetLoca[glyphCount] = glyfOutput.size();
 
         var replacementTables = new LinkedHashMap<String, byte[]>();
-        for (var entry : tables.entrySet()) {
-            if (!entry.getKey().equals("DSIG")) {
-                replacementTables.put(entry.getKey(), Arrays.copyOfRange(source,
-                    entry.getValue().offset(), entry.getValue().offset() + entry.getValue().length()));
+        for (var name : KEPT_TABLES) {
+            var table = tables.get(name);
+            if (table != null) {
+                replacementTables.put(name, Arrays.copyOfRange(source, table.offset(), table.offset() + table.length()));
             }
         }
         replacementTables.put("glyf", glyfOutput.toByteArray());
         var longLoca = ByteBuffer.allocate(subsetLoca.length * Integer.BYTES).order(ByteOrder.BIG_ENDIAN);
         Arrays.stream(subsetLoca).forEach(longLoca::putInt);
         replacementTables.put("loca", longLoca.array());
+        replacementTables.put("post", format3Post());
         var head = replacementTables.get("head").clone();
         ByteBuffer.wrap(head).order(ByteOrder.BIG_ENDIAN).putShort(50, (short) 1).putInt(8, 0);
         replacementTables.put("head", head);
         return assemble(replacementTables);
+    }
+
+    private byte[] format3Post() {
+        var post = new byte[32];
+        var original = tables.get("post");
+        if (original != null && original.length() >= 32) {
+            System.arraycopy(source, original.offset(), post, 0, 32);
+        }
+        ByteBuffer.wrap(post).order(ByteOrder.BIG_ENDIAN).putInt(0, 0x0003_0000);
+        return post;
     }
 
     private Set<Integer> compositeClosure(Set<Integer> requested) {

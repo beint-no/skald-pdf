@@ -6,6 +6,8 @@ optimizer:
 - top-level layout elements are consumed incrementally;
 - page content uses one compressed stream per page;
 - fonts are subset and embedded once per font face per document;
+- unused OpenType layout tables are dropped from the subset so a Latin
+  invoice stays tens of kilobytes instead of carrying the whole face;
 - small structural objects are grouped into PDF 2.0 object streams;
 - the cross-reference stream is compact and compressed;
 - lossless raster rows select the best PNG predictor before Deflate;
