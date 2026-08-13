@@ -8,6 +8,7 @@ import org.skaldpdf.layout.internal.LayoutEngine;
 import org.skaldpdf.pdf.PdfDocument;
 
 import java.util.Objects;
+import java.util.function.Function;
 
 public final class Document implements AutoCloseable {
     private final PdfDocument pdfDocument;
@@ -18,6 +19,10 @@ public final class Document implements AutoCloseable {
     private float leftMargin = 36f;
     private PdfFont font = PdfFontFactory.regular();
     private float fontSize = 12f;
+    private float headerHeight;
+    private float footerHeight;
+    private Function<PageNumbering, LayoutElement> header;
+    private Function<PageNumbering, LayoutElement> footer;
     private LayoutEngine layout;
     private LayoutElement pending;
     private boolean closed;
@@ -43,7 +48,7 @@ public final class Document implements AutoCloseable {
         return this;
     }
 
-    public void setMargins(float topMargin, float rightMargin, float bottomMargin, float leftMargin) {
+    public Document setMargins(float topMargin, float rightMargin, float bottomMargin, float leftMargin) {
         requireLayoutNotStarted();
         if (topMargin < 0 || rightMargin < 0 || bottomMargin < 0 || leftMargin < 0
             || topMargin + bottomMargin >= pageSize.getHeight()
@@ -54,6 +59,7 @@ public final class Document implements AutoCloseable {
         this.rightMargin = rightMargin;
         this.bottomMargin = bottomMargin;
         this.leftMargin = leftMargin;
+        return this;
     }
 
     public PdfDocument getPdfDocument() {
@@ -75,6 +81,50 @@ public final class Document implements AutoCloseable {
         return this;
     }
 
+    public Document setTitle(String value) {
+        pdfDocument.getDocumentInfo().setTitle(value);
+        return this;
+    }
+
+    public Document setAuthor(String value) {
+        pdfDocument.getDocumentInfo().setAuthor(value);
+        return this;
+    }
+
+    public Document setSubject(String value) {
+        pdfDocument.getDocumentInfo().setSubject(value);
+        return this;
+    }
+
+    public Document setKeywords(String value) {
+        pdfDocument.getDocumentInfo().setKeywords(value);
+        return this;
+    }
+
+    public Document setLanguage(String value) {
+        pdfDocument.setLanguage(value);
+        return this;
+    }
+
+    public Document addOutline(String title, int pageNumber) {
+        pdfDocument.addOutline(title, pageNumber);
+        return this;
+    }
+
+    public Document setHeader(float height, Function<PageNumbering, LayoutElement> content) {
+        requireLayoutNotStarted();
+        headerHeight = nonNegativeBand(height, "Header height");
+        header = content;
+        return this;
+    }
+
+    public Document setFooter(float height, Function<PageNumbering, LayoutElement> content) {
+        requireLayoutNotStarted();
+        footerHeight = nonNegativeBand(height, "Footer height");
+        footer = content;
+        return this;
+    }
+
     @Override
     public void close() {
         if (closed) {
@@ -87,16 +137,31 @@ public final class Document implements AutoCloseable {
         } else if (pdfDocument.getNumberOfPages() == 0) {
             pdfDocument.addNewPage(pageSize);
         }
+        if (header != null || footer != null) {
+            layout().finishPages(header, footer);
+        }
         pdfDocument.close();
     }
 
     private LayoutEngine layout() {
         if (layout == null) {
+            if (topMargin + headerHeight + bottomMargin + footerHeight >= pageSize.getHeight()
+                || leftMargin + rightMargin >= pageSize.getWidth()) {
+                throw new IllegalArgumentException("Margins, header, and footer must leave a positive page content area");
+            }
             layout = new LayoutEngine(
-                pdfDocument, pageSize, topMargin, rightMargin, bottomMargin, leftMargin, font, fontSize
+                pdfDocument, pageSize, topMargin, rightMargin, bottomMargin, leftMargin, font, fontSize,
+                headerHeight, footerHeight
             );
         }
         return layout;
+    }
+
+    private static float nonNegativeBand(float value, String name) {
+        if (value < 0 || !Float.isFinite(value)) {
+            throw new IllegalArgumentException(name + " must be non-negative and finite");
+        }
+        return value;
     }
 
     private void requireLayoutNotStarted() {

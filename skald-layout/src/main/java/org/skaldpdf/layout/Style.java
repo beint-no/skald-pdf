@@ -1,7 +1,7 @@
 package org.skaldpdf.layout;
 
 import org.skaldpdf.colors.Color;
-import org.skaldpdf.colors.ColorConstants;
+import org.skaldpdf.colors.LinearGradient;
 import org.skaldpdf.font.PdfFont;
 import org.skaldpdf.layout.borders.Border;
 import org.skaldpdf.layout.properties.HorizontalAlignment;
@@ -33,11 +33,14 @@ public final class Style {
     private float paddingLeft;
     private UnitValue width;
     private float height = Float.NaN;
-    private float multipliedLeading = 1.2f;
+    private float multipliedLeading = Float.NaN;
     private OverflowWrap overflowWrap = OverflowWrap.NORMAL;
     private boolean bold;
     private boolean keepTogether;
     private boolean keepWithNext;
+    private float borderRadius;
+    private String destinationUri;
+    private LinearGradient backgroundGradient;
     private FixedPosition fixedPosition;
 
     public Style() {
@@ -242,9 +245,38 @@ public final class Style {
         return multipliedLeading;
     }
 
+    public float resolvedLeading(float fallback) {
+        return Float.isNaN(multipliedLeading) ? fallback : multipliedLeading;
+    }
+
     public void multipliedLeading(float value) {
         positive(value, "Leading multiplier");
         multipliedLeading = value;
+    }
+
+    public float borderRadius() {
+        return borderRadius;
+    }
+
+    public void borderRadius(float value) {
+        nonNegative(value, "Border radius");
+        borderRadius = value;
+    }
+
+    public String destinationUri() {
+        return destinationUri;
+    }
+
+    public void destinationUri(String value) {
+        destinationUri = value;
+    }
+
+    public LinearGradient backgroundGradient() {
+        return backgroundGradient;
+    }
+
+    public void backgroundGradient(LinearGradient value) {
+        backgroundGradient = value;
     }
 
     public OverflowWrap overflowWrap() {

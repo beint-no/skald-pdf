@@ -1,9 +1,11 @@
 package org.skaldpdf.pdf;
 
-/** Basic metadata written to the XMP metadata stream. */
+/** Document metadata written to the XMP metadata stream. */
 public final class PdfDocumentInfo {
     private String title;
     private String author;
+    private String subject;
+    private String keywords;
 
     PdfDocumentInfo() {
     }
@@ -24,5 +26,23 @@ public final class PdfDocumentInfo {
 
     public String getAuthor() {
         return author;
+    }
+
+    public PdfDocumentInfo setSubject(String value) {
+        subject = value;
+        return this;
+    }
+
+    public String getSubject() {
+        return subject;
+    }
+
+    public PdfDocumentInfo setKeywords(String value) {
+        keywords = value;
+        return this;
+    }
+
+    public String getKeywords() {
+        return keywords;
     }
 }

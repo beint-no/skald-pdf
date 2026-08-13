@@ -28,6 +28,10 @@ public final class Paragraph extends AbstractElement<Paragraph> {
         return this;
     }
 
+    public Paragraph justify() {
+        return setTextAlignment(org.skaldpdf.layout.properties.TextAlignment.JUSTIFY);
+    }
+
     public List<Text> textRuns() {
         return List.copyOf(textRuns);
     }

@@ -33,7 +33,7 @@ reverse dependency or runtime discovery mechanism.
 
 ## Barcode
 
-`skald-barcode` currently provides immutable, validated EAN-13 symbols. It
+`skald-barcode` currently provides immutable, validated EAN-13 and Code 128 symbols. It
 depends only on core and can be used without the layout module by drawing its
 `ImageSource` onto a page directly.
 

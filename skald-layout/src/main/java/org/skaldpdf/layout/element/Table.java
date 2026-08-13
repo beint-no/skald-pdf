@@ -63,6 +63,30 @@ public final class Table extends AbstractElement<Table> {
         return addCell(new Cell().add(element));
     }
 
+    public Table addHeaderRow(String... values) {
+        requireCompleteRow(values);
+        for (var value : values) {
+            addHeaderCell(value);
+        }
+        return this;
+    }
+
+    public Table addRow(String... values) {
+        requireCompleteRow(values);
+        for (var value : values) {
+            addCell(value);
+        }
+        return this;
+    }
+
+    private void requireCompleteRow(String[] values) {
+        Objects.requireNonNull(values, "values");
+        if (values.length != columnWidths.length) {
+            throw new IllegalArgumentException(
+                "Row has " + values.length + " values but the table has " + columnWidths.length + " columns");
+        }
+    }
+
     public Table useAllAvailableWidth() {
         setWidth(UnitValue.createPercentValue(100f));
         return this;

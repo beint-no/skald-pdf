@@ -1,5 +1,6 @@
 package org.skaldpdf.pdf;
 
+import org.skaldpdf.colors.Color;
 import org.skaldpdf.font.PdfFont;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.geom.Rectangle;
@@ -22,6 +23,8 @@ public final class PdfPage {
     private final IdentityHashMap<ImageData, String> imageNames = new IdentityHashMap<>();
     private final List<ImageResource> images = new ArrayList<>();
     private final Map<Float, String> opacities = new LinkedHashMap<>();
+    private final List<LinkAnnotation> links = new ArrayList<>();
+    private final List<ShadingResource> shadings = new ArrayList<>();
     private final ImportedPage importedPage;
     private PageSize pageSize;
     private Rectangle cropBox;
@@ -108,6 +111,19 @@ public final class PdfPage {
             ignored -> uniqueResourceName("SkGs", opacities.size() + 1));
     }
 
+    public String registerAxialShading(float x0, float y0, float x1, float y1, Color start, Color end) {
+        document.ensureOpen();
+        var name = uniqueResourceName("SkSh", shadings.size() + 1);
+        shadings.add(new ShadingResource(name, x0, y0, x1, y1, start, end));
+        return name;
+    }
+
+    public PdfPage addUriLink(Rectangle bounds, String uri) {
+        document.ensureOpen();
+        links.add(new LinkAnnotation(bounds, uri));
+        return this;
+    }
+
     String content() {
         return content.toString();
     }
@@ -126,6 +142,14 @@ public final class PdfPage {
 
     Map<Float, String> opacities() {
         return Map.copyOf(opacities);
+    }
+
+    List<LinkAnnotation> links() {
+        return List.copyOf(links);
+    }
+
+    List<ShadingResource> shadings() {
+        return List.copyOf(shadings);
     }
 
     ImportedPage importedPage() {
@@ -169,5 +193,18 @@ public final class PdfPage {
     }
 
     record ImageResource(String name, ImageData image) {
+    }
+
+    record ShadingResource(String name, float x0, float y0, float x1, float y1, Color start, Color end) {
+    }
+
+    record LinkAnnotation(Rectangle bounds, String uri) {
+        LinkAnnotation {
+            java.util.Objects.requireNonNull(bounds, "bounds");
+            java.util.Objects.requireNonNull(uri, "uri");
+            if (uri.isBlank() || uri.codePoints().anyMatch(code -> code < 0x20 || code > 0x7e)) {
+                throw new IllegalArgumentException("URI links must be printable ASCII");
+            }
+        }
     }
 }

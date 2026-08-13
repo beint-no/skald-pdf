@@ -20,12 +20,17 @@ practical document coverage it adds.
 ## 2. Complete common generated-document APIs
 
 - First-class page templates, running headers and footers, and page numbering.
+  Done for flow documents; keep extending chrome to imported/stamped pages.
 - Stronger table row/column constraints, diagnostics, and orphan/widow control.
+  Complete-row checks are in; orphan/widow control is next.
 - Font fallback and an optional modern OpenType shaping module for complex
   scripts.
 - More vector path, clipping, gradient, and reusable form APIs in core.
+  Axial gradients, rounded paths, and dashed strokes are in; reusable form
+  XObjects remain.
 - Additional barcode symbologies in the existing optional barcode module, each
   verified by an independent decoder and its governing standard.
+  EAN-13 and Code 128 are in.
 
 ## 3. Add modern conformance profiles
 

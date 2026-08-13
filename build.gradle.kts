@@ -21,7 +21,7 @@ val moduleTitles = mapOf(
 val moduleDescriptions = mapOf(
     "skald-core" to "Native PDF 2.0 writing, reading, fonts, images, and composition",
     "skald-layout" to "Flow layout and high-level document API for Skald PDF",
-    "skald-barcode" to "EAN-13 barcode generation for Skald PDF"
+    "skald-barcode" to "EAN-13 and Code 128 barcode generation for Skald PDF"
 )
 
 allprojects {

@@ -11,11 +11,13 @@ other generated documents that do not need historical PDF output modes.
 
 - Native PDF 2.0 writer and bounded parser
 - Unicode TrueType fonts with embedding and subsetting
-- Flowing paragraphs, divisions, repeating tables, and automatic pagination
+- Flowing paragraphs, lists, justified text, divisions, repeating tables, and automatic pagination
+- Running headers and footers with page numbers, outlines, and URI links
 - JPEG pass-through, lossless raster compression, alpha, and image deduplication
-- EAN-13 barcodes in an optional module
+- Rounded surfaces, dashed rules, and axial gradients
+- EAN-13 and Code 128 barcodes in an optional module
 - Page events, drawing, watermarks, stamping, merging, and page import
-- Object streams, xref streams, XMP metadata, and configurable Deflate compression
+- Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
 - Independent rendering, extraction, barcode, syntax, and PDF 2.0 validation tests
 
 ## Modules
@@ -24,7 +26,7 @@ other generated documents that do not need historical PDF output modes.
 |---|---|---|
 | `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, and composition |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
-| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13 image sources |
+| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13 and Code 128 image sources |
 
 `skald-layout` and `skald-barcode` each depend on core, but not on one another.
 An application only pays for the capabilities it selects. The complete runtime
@@ -62,10 +64,13 @@ import org.skaldpdf.Pdf;
 import org.skaldpdf.layout.element.Cell;
 import org.skaldpdf.layout.element.Paragraph;
 import org.skaldpdf.layout.element.Table;
+import org.skaldpdf.layout.properties.TextAlignment;
 import org.skaldpdf.layout.properties.UnitValue;
 
 byte[] invoice = Pdf.create(document -> {
     document.setMargins(40, 40, 40, 40);
+    document.setFooter(18, page -> new Paragraph(page.pageNumber() + " / " + page.pageCount())
+        .setTextAlignment(TextAlignment.CENTER));
     document.add(new Paragraph("Invoice 2026-1001").bold().setFontSize(20));
 
     var lines = new Table(UnitValue.createPercentArray(new float[] {3, 1}))

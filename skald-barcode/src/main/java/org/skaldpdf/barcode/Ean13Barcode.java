@@ -3,9 +3,9 @@ package org.skaldpdf.barcode;
 import org.skaldpdf.font.PdfFontFactory;
 import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.pdf.PdfDocument;
+import org.skaldpdf.pdf.PdfNumbers;
 import org.skaldpdf.pdf.PdfPage;
 
-import java.util.Locale;
 import java.util.Objects;
 
 /** An immutable, validated EAN-13 symbol with human-readable text. */
@@ -144,10 +144,7 @@ public final class Ean13Barcode implements ImageSource {
             .append(number(x + (width - textWidth) / 2f)).append(' ')
             .append(number(baseline)).append(" Tm\n<");
         for (var glyph : run.glyphs()) {
-            if (glyph < 0 || glyph > 0xffff) {
-                throw new IllegalArgumentException("Glyph index exceeds Identity-H encoding");
-            }
-            operators.append(String.format(Locale.ROOT, "%04X", glyph));
+            PdfNumbers.appendHex4(operators, glyph);
         }
         page.append(operators.append("> Tj\nET\nQ\n").toString());
     }
@@ -191,13 +188,6 @@ public final class Ean13Barcode implements ImageSource {
     }
 
     private static String number(float value) {
-        if (!Float.isFinite(value)) {
-            throw new IllegalArgumentException("PDF number must be finite");
-        }
-        if (value == Math.rint(value) && value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
-            return Integer.toString((int) value);
-        }
-        var result = String.format(Locale.ROOT, "%.5f", value);
-        return result.replaceFirst("0+$", "").replaceFirst("\\.$", "");
+        return PdfNumbers.format(value);
     }
 }

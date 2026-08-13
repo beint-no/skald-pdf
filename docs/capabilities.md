@@ -4,13 +4,13 @@
 
 | Area | Capability |
 |---|---|
-| Documents | PDF 2.0 output, metadata, A3/A4/Letter/custom pages, rotation |
-| Text | Unicode, embedded subset TrueType, regular/bold, color, alignment, rotation |
-| Layout | Paragraphs, runs, margins, padding, backgrounds, borders, divs, fixed position |
-| Tables | weighted columns, spans, repeating headers, page fragmentation, alignment |
+| Documents | PDF 2.0 output, XMP metadata, language, outlines, DisplayDocTitle, ISO/US pages, rotation |
+| Text | Unicode, embedded subset TrueType, regular/bold, color, left/center/right/justify, rotation |
+| Layout | Paragraphs, lists, runs, margins, padding, backgrounds, gradients, rounded borders, dashed rules, divs, fixed position, running headers/footers |
+| Tables | weighted columns, spans, repeating headers, page fragmentation, complete-row checks |
 | Images | JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction |
-| Drawing | fills, lines, opacity, canvas overlays, end-page events, watermarks |
-| Barcodes | validated EAN-13 with human-readable text |
+| Drawing | fills, rounded paths, axial shadings, dashed lines, opacity, canvas overlays, end-page events, watermarks, URI links |
+| Barcodes | validated EAN-13 and Code 128 with human-readable text |
 | Composition | merge, copy pages, stamp existing pages, preserve imported resources |
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |
 | Runtime | three focused JPMS modules, JDK 25+, zero third-party runtime dependencies |

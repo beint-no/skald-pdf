@@ -1,6 +1,7 @@
 package org.skaldpdf.layout.element;
 
 import org.skaldpdf.colors.Color;
+import org.skaldpdf.colors.LinearGradient;
 import org.skaldpdf.font.PdfFont;
 import org.skaldpdf.layout.Style;
 import org.skaldpdf.layout.borders.Border;
@@ -185,6 +186,21 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
 
     public final T setFixedPosition(int pageNumber, float x, float y, float width) {
         style.fixedPosition(new Style.FixedPosition(pageNumber, x, y, width));
+        return self();
+    }
+
+    public final T setBorderRadius(float value) {
+        style.borderRadius(value);
+        return self();
+    }
+
+    public final T setDestinationUri(String value) {
+        style.destinationUri(value);
+        return self();
+    }
+
+    public final T setBackground(LinearGradient value) {
+        style.backgroundGradient(value);
         return self();
     }
 

@@ -21,6 +21,8 @@ public final class PdfDocument implements AutoCloseable {
     private final PdfDocumentInfo documentInfo = new PdfDocumentInfo();
     private final Map<String, List<AbstractPdfDocumentEventHandler>> eventHandlers = new LinkedHashMap<>();
     private final List<PdfPage> pages = new ArrayList<>();
+    private final List<OutlineItem> outlines = new ArrayList<>();
+    private String language;
     private boolean closed;
     private boolean closing;
 
@@ -47,6 +49,29 @@ public final class PdfDocument implements AutoCloseable {
 
     public PdfDocumentInfo getDocumentInfo() {
         return documentInfo;
+    }
+
+    public PdfDocument setLanguage(String value) {
+        ensureOpen();
+        if (value == null || value.isBlank() || value.codePoints().anyMatch(code -> code < 0x20 || code > 0x7e)) {
+            throw new IllegalArgumentException("Document language must be a printable BCP 47 tag");
+        }
+        language = value.strip();
+        return this;
+    }
+
+    public String language() {
+        return language;
+    }
+
+    public PdfDocument addOutline(String title, int pageNumber) {
+        ensureOpen();
+        outlines.add(new OutlineItem(title, pageNumber));
+        return this;
+    }
+
+    public List<OutlineItem> outlines() {
+        return List.copyOf(outlines);
     }
 
     public int getNumberOfPages() {

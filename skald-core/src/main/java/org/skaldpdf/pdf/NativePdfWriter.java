@@ -68,19 +68,25 @@ final class NativePdfWriter {
             var contentObject = objects.add(stream("", ascii(page.content()), true));
             var imageObjects = addImages(objects, page.images(), sharedImages);
             var opacityObjects = addOpacities(objects, page.opacities(), sharedOpacities);
+            var shadingObjects = addShadings(objects, page.shadings());
+            var linkObjects = addLinks(objects, page.links());
             var imported = page.importedPage();
             byte[] pageBody;
             if (imported == null) {
-                var resources = resources(page, fontObjects, imageObjects, opacityObjects);
+                var resources = resources(page, fontObjects, imageObjects, opacityObjects, shadingObjects);
                 var media = rectangle(0, 0, page.getPageSize().getWidth(), page.getPageSize().getHeight());
                 var crop = rectangle(page.getCropBox().getLeft(), page.getCropBox().getBottom(),
                     page.getCropBox().getWidth(), page.getCropBox().getHeight());
-                pageBody = ascii(format(
-                    "<< /Type /Page /Parent %d 0 R /MediaBox %s /CropBox %s /Resources %s /Contents %d 0 R >>",
-                    pagesObject, media, crop, resources, contentObject));
+                var body = new StringBuilder("<< /Type /Page /Parent ").append(pagesObject)
+                    .append(" 0 R /MediaBox ").append(media)
+                    .append(" /CropBox ").append(crop)
+                    .append(" /Resources ").append(resources)
+                    .append(" /Contents ").append(contentObject).append(" 0 R");
+                appendAnnots(body, linkObjects);
+                pageBody = ascii(body.append(" >>").toString());
             } else {
                 pageBody = importedPage(imported, page, pagesObject, contentObject, fontObjects,
-                    imageObjects, opacityObjects, importers.get(imported.source()));
+                    imageObjects, opacityObjects, shadingObjects, linkObjects, importers.get(imported.source()));
             }
             objects.set(pageObjects.get(index), pageBody);
         }
@@ -88,10 +94,18 @@ final class NativePdfWriter {
             pageObjects.size(), references(pageObjects))));
 
         var metadataObject = objects.add(stream("/Type /Metadata /Subtype /XML",
-            xmp(document.getDocumentInfo()).getBytes(StandardCharsets.UTF_8), false));
-        var catalogObject = objects.add(ascii(
-            format("<< /Type /Catalog /Version /2.0 /Pages %d 0 R /Metadata %d 0 R >>",
-                pagesObject, metadataObject)));
+            xmp(document.getDocumentInfo(), document.language()).getBytes(StandardCharsets.UTF_8), false));
+        var catalog = new StringBuilder("<< /Type /Catalog /Version /2.0 /Pages ")
+            .append(pagesObject).append(" 0 R /Metadata ").append(metadataObject)
+            .append(" 0 R /ViewerPreferences << /DisplayDocTitle true >>");
+        if (document.language() != null) {
+            catalog.append(" /Lang ").append(literalString(document.language()));
+        }
+        if (!document.outlines().isEmpty()) {
+            catalog.append(" /Outlines ")
+                .append(addOutlines(objects, document, pageObjects)).append(" 0 R");
+        }
+        var catalogObject = objects.add(ascii(catalog.append(" >>").toString()));
         objects.rootObject = catalogObject;
         return objects;
     }
@@ -99,11 +113,13 @@ final class NativePdfWriter {
     private static byte[] importedPage(ImportedPage imported, PdfPage page, int pagesObject,
                                        int overlayContentObject, Map<PdfFont, Integer> fonts,
                                        Map<String, Integer> images, Map<String, Integer> opacities,
+                                       Map<String, Integer> shadings, List<Integer> links,
                                        ImportContext importer) {
         var dictionary = imported.dictionary();
         var result = new StringBuilder("<< /Type /Page /Parent ").append(pagesObject).append(" 0 R");
         dictionary.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
-            if (!Set.of("Type", "Parent", "MediaBox", "CropBox", "Resources", "Contents", "StructParents")
+            if (!Set.of("Type", "Parent", "MediaBox", "CropBox", "Resources", "Contents",
+                    "StructParents", "Annots")
                 .contains(entry.getKey())) {
                 result.append(" /").append(name(entry.getKey())).append(' ')
                     .append(importer.direct(entry.getValue()));
@@ -118,7 +134,7 @@ final class NativePdfWriter {
             result.append(" /CropBox ").append(importer.direct(crop));
         }
         result.append(" /Resources ")
-            .append(importedResources(imported, page, fonts, images, opacities, importer));
+            .append(importedResources(imported, page, fonts, images, opacities, shadings, importer));
         var contents = dictionary.get("Contents");
         if (page.content().isBlank()) {
             if (contents != null) {
@@ -134,19 +150,30 @@ final class NativePdfWriter {
         } else {
             result.append(" /Contents ").append(overlayContentObject).append(" 0 R");
         }
+        var existingAnnots = dictionary.get("Annots");
+        if (existingAnnots != null || !links.isEmpty()) {
+            result.append(" /Annots [");
+            if (existingAnnots instanceof CosArray array) {
+                array.values().forEach(value -> result.append(importer.direct(value)).append(' '));
+            } else if (existingAnnots != null) {
+                result.append(importer.direct(existingAnnots)).append(' ');
+            }
+            links.forEach(object -> result.append(object).append(" 0 R "));
+            result.append(']');
+        }
         return ascii(result.append(" >>").toString());
     }
 
     private static String importedResources(ImportedPage imported, PdfPage page, Map<PdfFont, Integer> fonts,
                                             Map<String, Integer> images, Map<String, Integer> opacities,
-                                            ImportContext importer) {
+                                            Map<String, Integer> shadings, ImportContext importer) {
         var resourcesValue = imported.dictionary().get("Resources");
         var resources = resourcesValue == null
             ? Map.<String, CosValue>of()
             : importer.dictionary(resourcesValue, "page Resources").values();
         var result = new StringBuilder("<<");
         resources.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
-            if (!Set.of("Font", "XObject", "ExtGState").contains(entry.getKey())) {
+            if (!Set.of("Font", "XObject", "ExtGState", "Shading").contains(entry.getKey())) {
                 result.append(" /").append(name(entry.getKey())).append(' ')
                     .append(importer.direct(entry.getValue()));
             }
@@ -156,6 +183,7 @@ final class NativePdfWriter {
         appendImportedResourceCategory(result, "Font", resources.get("Font"), fontAdditions, importer);
         appendImportedResourceCategory(result, "XObject", resources.get("XObject"), images, importer);
         appendImportedResourceCategory(result, "ExtGState", resources.get("ExtGState"), opacities, importer);
+        appendImportedResourceCategory(result, "Shading", resources.get("Shading"), shadings, importer);
         return result.append(" >>").toString();
     }
 
@@ -311,7 +339,8 @@ final class NativePdfWriter {
     }
 
     private static String resources(PdfPage page, Map<PdfFont, Integer> fonts,
-                                    Map<String, Integer> images, Map<String, Integer> opacities) {
+                                    Map<String, Integer> images, Map<String, Integer> opacities,
+                                    Map<String, Integer> shadings) {
         var result = new StringBuilder("<<");
         if (!page.fonts().isEmpty()) {
             result.append(" /Font <<");
@@ -321,7 +350,73 @@ final class NativePdfWriter {
         }
         appendResourceMap(result, "XObject", images);
         appendResourceMap(result, "ExtGState", opacities);
+        appendResourceMap(result, "Shading", shadings);
         return result.append(" >>").toString();
+    }
+
+    private static Map<String, Integer> addShadings(ObjectStore objects, List<PdfPage.ShadingResource> shadings) {
+        var result = new LinkedHashMap<String, Integer>();
+        for (var shading : shadings) {
+            var function = objects.add(ascii(format(
+                "<< /FunctionType 2 /Domain [0 1] /C0 [%s %s %s] /C1 [%s %s %s] /N 1 >>",
+                number(shading.start().red()), number(shading.start().green()), number(shading.start().blue()),
+                number(shading.end().red()), number(shading.end().green()), number(shading.end().blue()))));
+            result.put(shading.name(), objects.add(ascii(format(
+                "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [%s %s %s %s] /Function %d 0 R /Extend [true true] >>",
+                number(shading.x0()), number(shading.y0()), number(shading.x1()), number(shading.y1()), function))));
+        }
+        return result;
+    }
+
+    private static List<Integer> addLinks(ObjectStore objects, List<PdfPage.LinkAnnotation> links) {
+        var result = new ArrayList<Integer>(links.size());
+        for (var link : links) {
+            var bounds = link.bounds();
+            result.add(objects.add(ascii(format(
+                "<< /Type /Annot /Subtype /Link /Rect [%s %s %s %s] /Border [0 0 0] /F 4 /H /N "
+                    + "/A << /Type /Action /S /URI /URI %s >> >>",
+                number(bounds.getLeft()), number(bounds.getBottom()),
+                number(bounds.getRight()), number(bounds.getTop()),
+                literalString(link.uri())))));
+        }
+        return result;
+    }
+
+    private static void appendAnnots(StringBuilder body, List<Integer> links) {
+        if (links.isEmpty()) {
+            return;
+        }
+        body.append(" /Annots [");
+        links.forEach(object -> body.append(object).append(" 0 R "));
+        body.append(']');
+    }
+
+    private static int addOutlines(ObjectStore objects, PdfDocument document, List<Integer> pageObjects) {
+        var items = document.outlines();
+        var root = objects.reserve();
+        var itemObjects = new ArrayList<Integer>(items.size());
+        items.forEach(ignored -> itemObjects.add(objects.reserve()));
+        for (int index = 0; index < items.size(); index++) {
+            var item = items.get(index);
+            if (item.pageNumber() > pageObjects.size()) {
+                throw new IllegalArgumentException("Outline targets a page that does not exist: " + item.pageNumber());
+            }
+            var page = document.pages().get(item.pageNumber() - 1);
+            var body = new StringBuilder("<< /Title ").append(textString(item.title()))
+                .append(" /Parent ").append(root).append(" 0 R");
+            if (index > 0) {
+                body.append(" /Prev ").append(itemObjects.get(index - 1)).append(" 0 R");
+            }
+            if (index + 1 < items.size()) {
+                body.append(" /Next ").append(itemObjects.get(index + 1)).append(" 0 R");
+            }
+            body.append(" /Dest [").append(pageObjects.get(item.pageNumber() - 1)).append(" 0 R /XYZ null ")
+                .append(number(page.getPageSize().getHeight())).append(" null] >>");
+            objects.set(itemObjects.get(index), ascii(body.toString()));
+        }
+        objects.set(root, ascii(format("<< /Type /Outlines /First %d 0 R /Last %d 0 R /Count %d >>",
+            itemObjects.getFirst(), itemObjects.getLast(), itemObjects.size())));
+        return root;
     }
 
     private static void appendResourceMap(StringBuilder target, String type, Map<String, Integer> values) {
@@ -496,9 +591,47 @@ final class NativePdfWriter {
     }
 
     private static String widths(Map<Integer, Integer> values) {
+        var entries = values.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList();
         var result = new StringBuilder("[");
-        values.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry ->
-            result.append(entry.getKey()).append(" [").append(entry.getValue()).append("] "));
+        var index = 0;
+        while (index < entries.size()) {
+            var startCid = entries.get(index).getKey();
+            var width = entries.get(index).getValue();
+            var sameWidthEnd = index + 1;
+            while (sameWidthEnd < entries.size()
+                && entries.get(sameWidthEnd).getKey() == entries.get(sameWidthEnd - 1).getKey() + 1
+                && entries.get(sameWidthEnd).getValue().equals(width)) {
+                sameWidthEnd++;
+            }
+            if (sameWidthEnd - index >= 3) {
+                result.append(startCid).append(' ').append(entries.get(sameWidthEnd - 1).getKey())
+                    .append(' ').append(width).append(' ');
+                index = sameWidthEnd;
+                continue;
+            }
+            var runEnd = index + 1;
+            while (runEnd < entries.size()
+                && entries.get(runEnd).getKey() == entries.get(runEnd - 1).getKey() + 1) {
+                var nextSameWidth = 1;
+                while (runEnd + nextSameWidth < entries.size()
+                    && entries.get(runEnd + nextSameWidth).getKey()
+                    == entries.get(runEnd + nextSameWidth - 1).getKey() + 1
+                    && entries.get(runEnd + nextSameWidth).getValue()
+                    .equals(entries.get(runEnd).getValue())) {
+                    nextSameWidth++;
+                }
+                if (nextSameWidth >= 3) {
+                    break;
+                }
+                runEnd++;
+            }
+            result.append(startCid).append(" [");
+            for (int item = index; item < runEnd; item++) {
+                result.append(entries.get(item).getValue()).append(' ');
+            }
+            result.append("] ");
+            index = runEnd;
+        }
         return result.append(']').toString();
     }
 
@@ -546,25 +679,36 @@ final class NativePdfWriter {
         return result.toString();
     }
 
-    private static String xmp(PdfDocumentInfo information) {
+    private static String xmp(PdfDocumentInfo information, String language) {
         var title = xml(information.getTitle() == null ? "" : information.getTitle());
         var author = xml(information.getAuthor() == null ? "" : information.getAuthor());
+        var subject = information.getSubject() == null ? "" : """
+                  <dc:description><rdf:Alt><rdf:li xml:lang="x-default">%s</rdf:li></rdf:Alt></dc:description>
+            """.formatted(xml(information.getSubject()));
+        var keywords = information.getKeywords() == null ? "" : """
+                  <pdf:Keywords>%s</pdf:Keywords>
+            """.formatted(xml(information.getKeywords()));
+        var languageTag = language == null ? "" : """
+                  <dc:language><rdf:Bag><rdf:li>%s</rdf:li></rdf:Bag></dc:language>
+            """.formatted(xml(language));
         return """
             <?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
             <x:xmpmeta xmlns:x="adobe:ns:meta/">
               <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
                 <rdf:Description rdf:about=""
                     xmlns:dc="http://purl.org/dc/elements/1.1/"
+                    xmlns:pdf="http://ns.adobe.com/pdf/1.3/"
                     xmlns:xmp="http://ns.adobe.com/xap/1.0/">
                   <dc:format>application/pdf</dc:format>
                   <dc:title><rdf:Alt><rdf:li xml:lang="x-default">%s</rdf:li></rdf:Alt></dc:title>
                   <dc:creator><rdf:Seq><rdf:li>%s</rdf:li></rdf:Seq></dc:creator>
+                  <pdf:Producer>Skald PDF</pdf:Producer>
                   <xmp:CreatorTool>Skald PDF</xmp:CreatorTool>
-                </rdf:Description>
+            %s%s%s                </rdf:Description>
               </rdf:RDF>
             </x:xmpmeta>
             <?xpacket end="w"?>
-            """.formatted(title, author);
+            """.formatted(title, author, subject, keywords, languageTag);
     }
 
     private static String xml(String value) {
@@ -583,14 +727,27 @@ final class NativePdfWriter {
     }
 
     static String number(float value) {
-        if (!Float.isFinite(value)) {
-            throw new IllegalArgumentException("PDF number must be finite");
+        return PdfNumbers.format(value);
+    }
+
+    private static String literalString(String value) {
+        var result = new StringBuilder("(");
+        for (int index = 0; index < value.length(); index++) {
+            var character = value.charAt(index);
+            if (character == '(' || character == ')' || character == '\\') {
+                result.append('\\');
+            }
+            result.append(character);
         }
-        if (value == Math.rint(value) && value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
-            return Integer.toString((int) value);
+        return result.append(')').toString();
+    }
+
+    private static String textString(String value) {
+        var result = new StringBuilder("<FEFF");
+        for (var character : value.toCharArray()) {
+            PdfNumbers.appendHex4(result, character);
         }
-        var result = String.format(Locale.ROOT, "%.5f", value);
-        return result.replaceFirst("0+$", "").replaceFirst("\\.$", "");
+        return result.append('>').toString();
     }
 
     private static String hex(int value, int digits) {

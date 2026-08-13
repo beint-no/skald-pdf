@@ -63,7 +63,7 @@ public final class Canvas implements AutoCloseable {
                                   VerticalAlignment vertical, float rotation) {
         var textWidth = font.getWidth(text, fontSize);
         var left = switch (horizontal) {
-            case LEFT -> x;
+            case LEFT, JUSTIFY -> x;
             case CENTER -> x - textWidth / 2f;
             case RIGHT -> x - textWidth;
         };

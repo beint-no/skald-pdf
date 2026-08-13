@@ -26,6 +26,16 @@ public final class PdfFont {
         return glyphRun(text).advance() * fontSize / 1_000f;
     }
 
+    public float ascent(float fontSize) {
+        var metrics = metrics();
+        return metrics.pdfUnit(metrics.ascent()) * fontSize / 1_000f;
+    }
+
+    public float descent(float fontSize) {
+        var metrics = metrics();
+        return metrics.pdfUnit(metrics.descent()) * fontSize / 1_000f;
+    }
+
     public boolean supports(int codePoint) {
         return program.glyph(codePoint) != 0 || codePoint == 0;
     }
