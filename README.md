@@ -1,22 +1,28 @@
 # Skald PDF
 
+[Website](https://beint-no.github.io/skald-pdf/) ·
+[Capability matrix](docs/capabilities.md) ·
+[Roadmap](ROADMAP.md) ·
+[Maven Central](https://central.sonatype.com/search?q=no.beint.skaldpdf)
+
 Skald PDF is a modern Java library for creating and composing PDF 2.0 documents.
 It targets JDK 25+, uses named Java modules, and has no third-party runtime
 dependencies.
 
-Use it for invoices, statements, reports, receipts, agreements, labels, and
-other generated documents that do not need historical PDF output modes.
+Use it for invoices, statements, reports, receipts, agreements, labels, tickets,
+and other generated documents that do not need historical PDF output modes.
 
 ## Highlights
 
 - Native PDF 2.0 writer and bounded parser
-- Unicode TrueType fonts with embedding and subsetting
+- Unicode TrueType fonts with compact embedding and subsetting
 - Flowing paragraphs, lists, justified text, divisions, repeating tables, and automatic pagination
-- Running headers and footers with page numbers, outlines, and URI links
-- JPEG pass-through, lossless raster compression, alpha, and image deduplication
-- Rounded surfaces, dashed rules, and axial gradients
-- EAN-13 and Code 128 barcodes in an optional module
-- Page events, drawing, watermarks, stamping, merging, and page import
+- Nested blocks inside table cells, `keepTogether`, and fitted-image measurement
+- First-page vs continuing headers, footers with page numbers, outlines, URI links, and internal GoTo links
+- JPEG pass-through, lossless raster compression, alpha, image allowlisting, and image deduplication
+- Rounded surfaces, dashed rules, underline, strikethrough, and axial gradients
+- EAN-13, Code 128, QR, clothing stickers, and A4 n-up sticker sheets
+- Page events, drawing, watermarks, safer stamping, merging, and page import
 - Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
 - Independent rendering, extraction, barcode, syntax, and PDF 2.0 validation tests
 
@@ -26,7 +32,7 @@ other generated documents that do not need historical PDF output modes.
 |---|---|---|
 | `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, and composition |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
-| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13 and Code 128 image sources |
+| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, Code 128, QR, and product stickers |
 
 `skald-layout` and `skald-barcode` each depend on core, but not on one another.
 An application only pays for the capabilities it selects. The complete runtime
@@ -34,12 +40,12 @@ still depends solely on the JDK.
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.0.1` is on Maven Central:
+JDK 25 or newer is required. Release `1.1.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.0.1")
-    implementation("no.beint.skaldpdf:skald-barcode:1.0.1") // optional
+    implementation("no.beint.skaldpdf:skald-layout:1.1.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.1.0") // optional
 }
 ```
 
@@ -68,6 +74,7 @@ import org.skaldpdf.layout.properties.UnitValue;
 
 byte[] invoice = Pdf.create(document -> {
     document.setMargins(40, 40, 40, 40);
+    document.setFirstHeader(page -> new Paragraph("Northstar Ledger · original"));
     document.setFooter(18, page -> new Paragraph(page.pageNumber() + " / " + page.pageCount())
         .setTextAlignment(TextAlignment.CENTER));
     document.add(new Paragraph("Invoice 2026-1001").bold().setFontSize(20));
@@ -82,11 +89,14 @@ byte[] invoice = Pdf.create(document -> {
 });
 ```
 
-Add an EAN-13 barcode without coupling layout to the barcode implementation:
+Add a payment QR or an EAN-13 without coupling layout to the barcode implementation:
 
 ```java
 import org.skaldpdf.barcode.Ean13Barcode;
+import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.layout.element.Image;
+
+document.add(new Image(new QrCode("https://pay.example/inv/2026-1001")).scaleToFit(72, 72));
 
 var barcode = new Ean13Barcode("590123412345")
     .withModuleWidth(1.2f)
@@ -94,7 +104,8 @@ var barcode = new Ean13Barcode("590123412345")
 document.add(new Image(barcode).scaleToFit(260, 110));
 ```
 
-Clothing / product stickers (the ecomtools 93 mm × 35 mm label) are a single call:
+Clothing / product stickers (the ecomtools 93 mm × 35 mm label) are a single call.
+`ProductSticker.sheet` tiles the same labels onto A4 for warehouse printing:
 
 ```java
 import org.skaldpdf.barcode.ProductSticker;
@@ -132,7 +143,8 @@ Mutable documents are thread-confined. Immutable inputs can be shared, and
 separate documents work naturally on virtual threads. Encrypted input and
 unsupported structural features fail closed instead of being partially read.
 
-See the [capability matrix](docs/capabilities.md), [architecture](docs/architecture.md),
+See the [website](https://beint-no.github.io/skald-pdf/),
+[capability matrix](docs/capabilities.md), [architecture](docs/architecture.md),
 [standards policy](docs/standards.md), [security model](docs/security.md),
 [performance notes](docs/performance.md), and [roadmap](ROADMAP.md).
 
@@ -147,6 +159,12 @@ The test suite produces a representative corpus in `build/use-case-pdfs` and
 checks parsing, text extraction, rendering, font embedding, pagination,
 composition, compression, and barcode decoding. The validation script adds qpdf
 syntax checks and the Arlington PDF 2.0 rules.
+
+Website demos are generated with:
+
+```shell
+./gradlew :skald-layout:writeSiteDemos
+```
 
 ## Contributing and license
 

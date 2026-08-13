@@ -3,3 +3,5 @@ build/
 out/
 .idea/
 *.iml
+site/demos/*.pdf
+site/demos/*.png

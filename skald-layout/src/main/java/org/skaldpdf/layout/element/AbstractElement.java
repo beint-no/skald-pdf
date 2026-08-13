@@ -44,6 +44,16 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
         return self();
     }
 
+    public final T underline() {
+        style.underline(true);
+        return self();
+    }
+
+    public final T strikethrough() {
+        style.strikethrough(true);
+        return self();
+    }
+
     public final T setTextAlignment(TextAlignment value) {
         style.setTextAlignment(value);
         return self();
@@ -196,6 +206,11 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
 
     public final T setDestinationUri(String value) {
         style.destinationUri(value);
+        return self();
+    }
+
+    public final T setDestinationPage(int pageNumber) {
+        style.destinationPage(pageNumber);
         return self();
     }
 

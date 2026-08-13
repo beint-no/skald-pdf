@@ -120,7 +120,13 @@ public final class PdfPage {
 
     public PdfPage addUriLink(Rectangle bounds, String uri) {
         document.ensureOpen();
-        links.add(new LinkAnnotation(bounds, uri));
+        links.add(LinkAnnotation.uri(bounds, uri));
+        return this;
+    }
+
+    public PdfPage addGoToLink(Rectangle bounds, int pageNumber) {
+        document.ensureOpen();
+        links.add(LinkAnnotation.goTo(bounds, pageNumber));
         return this;
     }
 
@@ -198,13 +204,28 @@ public final class PdfPage {
     record ShadingResource(String name, float x0, float y0, float x1, float y1, Color start, Color end) {
     }
 
-    record LinkAnnotation(Rectangle bounds, String uri) {
+    record LinkAnnotation(Rectangle bounds, String uri, int destinationPage) {
         LinkAnnotation {
             java.util.Objects.requireNonNull(bounds, "bounds");
-            java.util.Objects.requireNonNull(uri, "uri");
-            if (uri.isBlank() || uri.codePoints().anyMatch(code -> code < 0x20 || code > 0x7e)) {
+            var hasUri = uri != null;
+            var hasPage = destinationPage > 0;
+            if (hasUri == hasPage) {
+                throw new IllegalArgumentException("A link must target either a URI or a page");
+            }
+            if (hasUri && (uri.isBlank() || uri.codePoints().anyMatch(code -> code < 0x20 || code > 0x7e))) {
                 throw new IllegalArgumentException("URI links must be printable ASCII");
             }
+        }
+
+        static LinkAnnotation uri(Rectangle bounds, String uri) {
+            return new LinkAnnotation(bounds, uri, 0);
+        }
+
+        static LinkAnnotation goTo(Rectangle bounds, int pageNumber) {
+            if (pageNumber < 1) {
+                throw new IllegalArgumentException("GoTo links require a 1-based page number");
+            }
+            return new LinkAnnotation(bounds, null, pageNumber);
         }
     }
 }

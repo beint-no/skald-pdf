@@ -24,6 +24,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -86,6 +87,26 @@ class PdfCompositionTest {
     }
 
     @Test
+    void stripsLaunchAndJavascriptWhenImporting() throws Exception {
+        var source = dangerousPdf();
+        var asciiSource = new String(source, java.nio.charset.StandardCharsets.ISO_8859_1);
+        assertTrue(asciiSource.contains("/JavaScript") || asciiSource.contains("/Launch"));
+        var rewritten = Pdf.rewrite(source, document -> {
+            var page = document.getPage(1);
+            new Canvas(page, page.getCropBox()).setFontSize(9).showTextAligned(
+                "Reviewed", 36, 24, TextAlignment.LEFT, VerticalAlignment.BOTTOM, 0
+            );
+        });
+        var ascii = new String(rewritten, java.nio.charset.StandardCharsets.ISO_8859_1);
+        assertTrue(ascii.startsWith("%PDF-2.0"));
+        assertFalse(ascii.contains("/JavaScript"));
+        assertFalse(ascii.contains("/Launch"));
+        assertFalse(ascii.contains("app.alert"));
+        assertFalse(ascii.contains("evil.exe"));
+        assertTrue(PdfTestSupport.text(rewritten).contains("Reviewed"));
+    }
+
+    @Test
     void rejectsEncryptedInputBeforeComposition() throws Exception {
         var source = classicPdf14("Confidential");
         var encrypted = new ByteArrayOutputStream();
@@ -103,6 +124,38 @@ class PdfCompositionTest {
         var document = new Document(new PdfDocument(new PdfWriter(output)), PageSize.A4);
         document.add(new Paragraph(title).bold().setFontSize(20));
         document.close();
+        return output.toByteArray();
+    }
+
+    private static byte[] dangerousPdf() throws Exception {
+        var content = "BT 72 720 Td (Supplier attachment) Tj ET\n";
+        var objects = java.util.List.of(
+            "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+            "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n",
+            """
+            3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
+            /AA << /O << /S /JavaScript /JS (app.alert('x')) >> >> /Annots [5 0 R] >> endobj
+            """,
+            "4 0 obj << /Length " + content.length() + " >> stream\n" + content + "endstream endobj\n",
+            "5 0 obj << /Type /Annot /Subtype /Link /Rect [72 700 192 720] /Border [0 0 0] "
+                + "/A << /S /Launch /F (evil.exe) >> >> endobj\n"
+        );
+        var output = new ByteArrayOutputStream();
+        output.write("%PDF-1.4\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        var offsets = new int[objects.size() + 1];
+        for (int index = 0; index < objects.size(); index++) {
+            offsets[index + 1] = output.size();
+            output.write(objects.get(index).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        }
+        var xrefStart = output.size();
+        var xref = new StringBuilder("xref\n0 ").append(objects.size() + 1).append('\n');
+        xref.append("0000000000 65535 f \n");
+        for (int index = 1; index <= objects.size(); index++) {
+            xref.append("%010d 00000 n \n".formatted(offsets[index]));
+        }
+        xref.append("trailer << /Size ").append(objects.size() + 1)
+            .append(" /Root 1 0 R >>\nstartxref\n").append(xrefStart).append("\n%%EOF\n");
+        output.write(xref.toString().getBytes(java.nio.charset.StandardCharsets.US_ASCII));
         return output.toByteArray();
     }
 

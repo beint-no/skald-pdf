@@ -15,7 +15,7 @@ optimizer:
 - repeated image instances and opacity states share indirect objects;
 - compact CID width ranges reduce font dictionaries;
 - content-stream numbers are encoded without temporary formatted strings;
-- batched barcode rectangles reduce content operators;
+- batched barcode and QR rectangles reduce content operators;
 - bounded parsers reject decompression and object-count abuse early.
 
 Compression has four immutable policies: `NONE`, `FAST`, `BALANCED`, and

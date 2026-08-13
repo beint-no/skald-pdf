@@ -45,13 +45,8 @@ public final class PdfFont {
         var glyphs = new int[codePoints.length];
         var advance = 0;
         for (int index = 0; index < codePoints.length; index++) {
-            var glyph = program.glyph(codePoints[index]);
-            if (glyph == 0 && codePoints[index] != 0 && !Character.isWhitespace(codePoints[index])) {
-                throw new IllegalArgumentException(
-                    "The bundled font cannot represent U+%04X".formatted(codePoints[index]));
-            }
-            glyphs[index] = glyph;
-            advance += program.pdfWidth(glyph);
+            glyphs[index] = program.glyph(codePoints[index]);
+            advance += program.pdfWidth(glyphs[index]);
         }
         return new GlyphRun(glyphs, codePoints, advance);
     }
@@ -68,6 +63,10 @@ public final class PdfFont {
 
     public Metrics metrics() {
         return program.metrics();
+    }
+
+    public String postScriptName() {
+        return program.postScriptName();
     }
 
     public record GlyphRun(int[] glyphs, int[] codePoints, int advance) {

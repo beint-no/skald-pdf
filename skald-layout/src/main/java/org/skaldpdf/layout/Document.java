@@ -20,8 +20,10 @@ public final class Document implements AutoCloseable {
     private PdfFont font = PdfFontFactory.regular();
     private float fontSize = 12f;
     private float headerHeight;
+    private float firstHeaderHeight;
     private float footerHeight;
     private Function<PageNumbering, LayoutElement> header;
+    private Function<PageNumbering, LayoutElement> firstHeader;
     private Function<PageNumbering, LayoutElement> footer;
     private LayoutEngine layout;
     private LayoutElement pending;
@@ -125,6 +127,19 @@ public final class Document implements AutoCloseable {
         return this;
     }
 
+    public Document setFirstHeader(Function<PageNumbering, LayoutElement> content) {
+        requireLayoutNotStarted();
+        firstHeader = content;
+        return this;
+    }
+
+    public Document setFirstHeader(float height, Function<PageNumbering, LayoutElement> content) {
+        requireLayoutNotStarted();
+        firstHeaderHeight = nonNegativeBand(height, "First header height");
+        firstHeader = content;
+        return this;
+    }
+
     @Override
     public void close() {
         if (closed) {
@@ -138,20 +153,21 @@ public final class Document implements AutoCloseable {
             pdfDocument.addNewPage(pageSize);
         }
         if (header != null || footer != null) {
-            layout().finishPages(header, footer);
+            layout().finishPages(header, firstHeader, footer);
         }
         pdfDocument.close();
     }
 
     private LayoutEngine layout() {
         if (layout == null) {
-            if (topMargin + headerHeight + bottomMargin + footerHeight >= pageSize.getHeight()
+            if (topMargin + Math.max(headerHeight, firstHeaderHeight) + bottomMargin + footerHeight
+                >= pageSize.getHeight()
                 || leftMargin + rightMargin >= pageSize.getWidth()) {
                 throw new IllegalArgumentException("Margins, header, and footer must leave a positive page content area");
             }
             layout = new LayoutEngine(
                 pdfDocument, pageSize, topMargin, rightMargin, bottomMargin, leftMargin, font, fontSize,
-                headerHeight, footerHeight
+                headerHeight, footerHeight, firstHeaderHeight
             );
         }
         return layout;

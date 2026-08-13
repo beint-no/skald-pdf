@@ -4,6 +4,28 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.1.0
+
+Business-document work that was blocking invoices, labels, and composition:
+
+- Nested `Div` / `Table` / `ListBlock` inside cells, and children of
+  fixed-position / header `Div`s, now paint instead of only being measured.
+- `keepTogether` on paragraphs, tables, and lists; header/footer painters cannot
+  call `newPage()`.
+- Images are measured after they are fitted to the content width.
+- First-page headers can use a different painter and a different reserved height.
+- Underline and strikethrough.
+- Internal GoTo links (`setDestinationPage`) for tables of contents.
+- `AreaBreak` can switch the next page size (portrait report, landscape appendix).
+- Indirect `/Contents` and `/Annots` resolve when stamping received files.
+- Launch, JavaScript, and other unsafe imported actions are dropped.
+- Fonts use the face’s PostScript name in `/BaseFont`.
+- Images are allowlisted and size-gated before `ImageIO` allocates a raster.
+- Missing characters use `.notdef` instead of aborting the file.
+- QR codes in `skald-barcode`, verified by ZXing after rendering.
+- N-up `ProductSticker.sheet` for warehouse printing.
+- Public site at <https://beint-no.github.io/skald-pdf/> with generated demos.
+
 ## 1. Harden the foundation
 
 - Expand malformed-input, font, image, parser, and layout fuzzing.
@@ -17,43 +39,25 @@ practical document coverage it adds.
   limited by heap, while keeping the default in-memory path fast for ordinary
   documents.
 
-## 2. Complete common generated-document APIs
+## 2. Complete remaining generated-document APIs
 
-Work is ordered by what blocks invoices, statements, labels, and reports today.
-
-### Make layout honest
-
-- Paint nested `Div` / `Table` / `ListBlock` inside cells, and children of
-  fixed-position / header `Div`s. Estimation without drawing is a bug.
-- Honour `keepTogether` on paragraphs and tables; stop header/footer painters
-  from calling `newPage()`.
-- Split tall table rows at line boundaries, not through glyphs.
-- Measure images after fitting them to the content width.
-
-### Document chrome and navigation
-
-- First-page vs continuing headers; `AreaBreak` with a next page size.
-- Named destinations and outlines bound to headings, not guessed page numbers.
-- Internal GoTo links for TOCs and “see appendix”.
+Still ordered by what businesses hit next.
 
 ### Tables and type
 
 - Row spans, repeating footer rows, mixed point/percent columns.
-- Font fallback so one unsupported character does not abort the file.
-- Underline, strikethrough, and a real italic face (embedded, not slanted).
+- Font fallback so one unsupported character can pick a second embedded face.
+- A real italic face (embedded, not slanted).
+- Split tall table rows at line boundaries, not through glyphs.
 
 ### Core composition
 
-- Resolve indirect `/Contents` and `/Annots` when stamping received files.
-- Use the font’s PostScript name in `/BaseFont` (not always `SkaldSans`).
-- Allowlist and size-gate images before `ImageIO` allocates a raster.
-- Strip launch/JS/page-open actions when importing supplier PDFs.
 - CFF/OTF embedding so licensed retail faces work, still as PDF 2.0 CID fonts.
+- Named destinations bound to headings, not guessed page numbers.
 
 ### Optional barcode additions
 
-- QR and GS1-128 in `skald-barcode`, each verified by an independent decoder.
-- N-up sticker sheets for warehouse printing.
+- GS1-128 in `skald-barcode`, verified by an independent decoder.
 
 ### Still later
 

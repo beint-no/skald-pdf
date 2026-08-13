@@ -24,6 +24,13 @@ Changes that affect rendering should include a focused test and a generated
 fixture. Parser changes should include a minimal input that demonstrates both the
 accepted and rejected boundary. Keep test-only validators independent of Skald.
 
+Website copy and demo documents live in `site/`. Preview images are generated,
+not committed:
+
+```shell
+./gradlew :skald-layout:writeSiteDemos
+```
+
 The build treats Java compiler warnings as errors, runs Javadoc checks, verifies
 that published modules have no third-party runtime dependencies, and compiles
 explicit JPMS descriptors.

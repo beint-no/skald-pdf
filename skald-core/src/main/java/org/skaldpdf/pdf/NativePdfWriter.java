@@ -69,7 +69,7 @@ final class NativePdfWriter {
             var imageObjects = addImages(objects, page.images(), sharedImages);
             var opacityObjects = addOpacities(objects, page.opacities(), sharedOpacities);
             var shadingObjects = addShadings(objects, page.shadings());
-            var linkObjects = addLinks(objects, page.links());
+            var linkObjects = addLinks(objects, page.links(), pageObjects, document.pages());
             var imported = page.importedPage();
             byte[] pageBody;
             if (imported == null) {
@@ -119,7 +119,7 @@ final class NativePdfWriter {
         var result = new StringBuilder("<< /Type /Page /Parent ").append(pagesObject).append(" 0 R");
         dictionary.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
             if (!Set.of("Type", "Parent", "MediaBox", "CropBox", "Resources", "Contents",
-                    "StructParents", "Annots")
+                    "StructParents", "Annots", "AA", "JS", "PresSteps")
                 .contains(entry.getKey())) {
                 result.append(" /").append(name(entry.getKey())).append(' ')
                     .append(importer.direct(entry.getValue()));
@@ -135,28 +135,37 @@ final class NativePdfWriter {
         }
         result.append(" /Resources ")
             .append(importedResources(imported, page, fonts, images, opacities, shadings, importer));
-        var contents = dictionary.get("Contents");
+        var rawContents = dictionary.get("Contents");
+        var contents = importer.resolve(rawContents);
         if (page.content().isBlank()) {
-            if (contents != null) {
-                result.append(" /Contents ").append(importer.direct(contents));
+            if (rawContents != null) {
+                result.append(" /Contents ").append(importer.direct(rawContents));
             }
         } else if (contents instanceof CosArray array) {
             result.append(" /Contents [");
             array.values().forEach(value -> result.append(importer.direct(value)).append(' '));
             result.append(overlayContentObject).append(" 0 R]");
-        } else if (contents != null) {
-            result.append(" /Contents [").append(importer.direct(contents)).append(' ')
+        } else if (rawContents != null) {
+            result.append(" /Contents [").append(importer.direct(rawContents)).append(' ')
                 .append(overlayContentObject).append(" 0 R]");
         } else {
             result.append(" /Contents ").append(overlayContentObject).append(" 0 R");
         }
-        var existingAnnots = dictionary.get("Annots");
+        var existingAnnots = importer.resolve(dictionary.get("Annots"));
         if (existingAnnots != null || !links.isEmpty()) {
             result.append(" /Annots [");
             if (existingAnnots instanceof CosArray array) {
-                array.values().forEach(value -> result.append(importer.direct(value)).append(' '));
+                array.values().forEach(value -> {
+                    var sanitized = importer.sanitizedAnnotation(value);
+                    if (sanitized != null) {
+                        result.append(sanitized).append(' ');
+                    }
+                });
             } else if (existingAnnots != null) {
-                result.append(importer.direct(existingAnnots)).append(' ');
+                var sanitized = importer.sanitizedAnnotation(existingAnnots);
+                if (sanitized != null) {
+                    result.append(sanitized).append(' ');
+                }
             }
             links.forEach(object -> result.append(object).append(" 0 R "));
             result.append(']');
@@ -209,8 +218,7 @@ final class NativePdfWriter {
         var program = font.subsetProgram(usage.glyphs);
         var fontFile = objects.add(stream("/Length1 " + program.length, program, true));
         var metrics = font.metrics();
-        var postScriptName = subsetTag(usage.glyphs) + "+"
-            + (font.bold() ? "SkaldSans-Bold" : "SkaldSans-Regular");
+        var postScriptName = subsetTag(font, usage.glyphs) + "+" + pdfFontName(font);
         var flags = 32 | (metrics.fixedPitch() ? 1 : 0)
             | (metrics.italicAngle() != 0 ? 64 : 0)
             | (font.bold() ? 262_144 : 0);
@@ -368,18 +376,29 @@ final class NativePdfWriter {
         return result;
     }
 
-    private static List<Integer> addLinks(ObjectStore objects, List<PdfPage.LinkAnnotation> links) {
+    private static List<Integer> addLinks(ObjectStore objects, List<PdfPage.LinkAnnotation> links,
+                                          List<Integer> pageObjects, List<PdfPage> pages) {
         var result = new ArrayList<Integer>(links.size());
         for (var link : links) {
             var bounds = link.bounds();
+            var action = link.uri() != null
+                ? "<< /Type /Action /S /URI /URI " + literalString(link.uri()) + " >>"
+                : goToAction(link.destinationPage(), pageObjects, pages);
             result.add(objects.add(ascii(format(
-                "<< /Type /Annot /Subtype /Link /Rect [%s %s %s %s] /Border [0 0 0] /F 4 /H /N "
-                    + "/A << /Type /Action /S /URI /URI %s >> >>",
+                "<< /Type /Annot /Subtype /Link /Rect [%s %s %s %s] /Border [0 0 0] /F 4 /H /N /A %s >>",
                 number(bounds.getLeft()), number(bounds.getBottom()),
                 number(bounds.getRight()), number(bounds.getTop()),
-                literalString(link.uri())))));
+                action))));
         }
         return result;
+    }
+
+    private static String goToAction(int pageNumber, List<Integer> pageObjects, List<PdfPage> pages) {
+        if (pageNumber < 1 || pageNumber > pageObjects.size()) {
+            throw new IllegalArgumentException("Link targets a page that does not exist: " + pageNumber);
+        }
+        return format("<< /Type /Action /S /GoTo /D [%d 0 R /XYZ null %s null] >>",
+            pageObjects.get(pageNumber - 1), number(pages.get(pageNumber - 1).getPageSize().getHeight()));
     }
 
     private static void appendAnnots(StringBuilder body, List<Integer> links) {
@@ -635,9 +654,27 @@ final class NativePdfWriter {
         return result.append(']').toString();
     }
 
-    private static String subsetTag(Set<Integer> glyphs) {
+    private static String pdfFontName(PdfFont font) {
+        var raw = font.postScriptName();
+        if (raw == null || raw.isBlank()) {
+            return font.bold() ? "SkaldSans-Bold" : "SkaldSans-Regular";
+        }
+        var result = new StringBuilder(raw.length());
+        for (int index = 0; index < raw.length(); index++) {
+            var character = raw.charAt(index);
+            if (character > 32 && character < 127 && "()<>[]{}/%#".indexOf(character) < 0) {
+                result.append(character);
+            } else {
+                result.append('-');
+            }
+        }
+        return result.isEmpty() ? "Embedded" : result.toString();
+    }
+
+    private static String subsetTag(PdfFont font, Set<Integer> glyphs) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
+            digest.update(font.postScriptName().getBytes(StandardCharsets.UTF_8));
             glyphs.stream().sorted().forEach(glyph ->
                 digest.update(ByteBuffer.allocate(4).putInt(glyph).array()));
             var hash = digest.digest();
@@ -817,12 +854,41 @@ final class NativePdfWriter {
             }
         }
 
+        CosValue resolve(CosValue value) {
+            return source.resolve(value);
+        }
+
         CosDictionary dictionary(CosValue value, String description) {
             var resolved = source.resolve(value);
             if (resolved instanceof CosDictionary dictionary) {
                 return dictionary;
             }
             throw new IllegalArgumentException(description + " is not a dictionary");
+        }
+
+        String sanitizedAnnotation(CosValue value) {
+            var resolved = source.resolve(value);
+            if (!(resolved instanceof CosDictionary dictionary)) {
+                return null;
+            }
+            var cleaned = new LinkedHashMap<String, CosValue>();
+            dictionary.values().forEach((key, item) -> {
+                if (Set.of("AA", "JS", "OpenAction").contains(key)) {
+                    return;
+                }
+                if ("A".equals(key) && isUnsafeAction(source.resolve(item))) {
+                    return;
+                }
+                cleaned.put(key, item);
+            });
+            return direct(new CosDictionary(cleaned));
+        }
+
+        private static boolean isUnsafeAction(CosValue value) {
+            if (!(value instanceof CosDictionary dictionary) || !(dictionary.get("S") instanceof CosName name)) {
+                return true;
+            }
+            return !Set.of("URI", "GoTo").contains(name.value());
         }
 
         String direct(CosValue value) {

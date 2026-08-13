@@ -15,6 +15,15 @@ public final class Image extends AbstractElement<Image> {
         imageScaledHeight = source.intrinsicHeight();
     }
 
+    public Image scale(float width, float height) {
+        if (!(width > 0) || !(height > 0) || !Float.isFinite(width) || !Float.isFinite(height)) {
+            throw new IllegalArgumentException("Image dimensions must be positive and finite");
+        }
+        imageScaledWidth = width;
+        imageScaledHeight = height;
+        return this;
+    }
+
     public Image scaleToFit(float maximumWidth, float maximumHeight) {
         if (!(maximumWidth > 0) || !(maximumHeight > 0)
             || !Float.isFinite(maximumWidth) || !Float.isFinite(maximumHeight)) {

@@ -35,16 +35,18 @@ public final class LayoutEngine {
     private static final float MINIMUM_LINE_HEIGHT = 1f;
 
     private final PdfDocument document;
-    private final PageSize pageSize;
+    private PageSize pageSize;
     private final float topMargin;
     private final float rightMargin;
     private final float bottomMargin;
     private final float leftMargin;
     private final float headerHeight;
+    private final float firstHeaderHeight;
     private final float footerHeight;
     private final TextContext defaultText;
     private PdfPage page;
     private float cursorTop;
+    private boolean allowPageBreaks = true;
 
     public LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
                         float bottomMargin, float leftMargin) {
@@ -55,12 +57,19 @@ public final class LayoutEngine {
     public LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
                         float bottomMargin, float leftMargin, PdfFont defaultFont, float defaultFontSize) {
         this(document, pageSize, topMargin, rightMargin, bottomMargin, leftMargin,
-            defaultFont, defaultFontSize, 0, 0);
+            defaultFont, defaultFontSize, 0, 0, 0);
     }
 
     public LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
                         float bottomMargin, float leftMargin, PdfFont defaultFont, float defaultFontSize,
                         float headerHeight, float footerHeight) {
+        this(document, pageSize, topMargin, rightMargin, bottomMargin, leftMargin,
+            defaultFont, defaultFontSize, headerHeight, footerHeight, 0);
+    }
+
+    public LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
+                        float bottomMargin, float leftMargin, PdfFont defaultFont, float defaultFontSize,
+                        float headerHeight, float footerHeight, float firstHeaderHeight) {
         this.document = document;
         this.pageSize = pageSize;
         this.topMargin = topMargin;
@@ -68,9 +77,10 @@ public final class LayoutEngine {
         this.bottomMargin = bottomMargin;
         this.leftMargin = leftMargin;
         this.headerHeight = headerHeight;
+        this.firstHeaderHeight = firstHeaderHeight;
         this.footerHeight = footerHeight;
         this.defaultText = new TextContext(
-            defaultFont, defaultFontSize, ColorConstants.INK, TextAlignment.LEFT, DEFAULT_LEADING
+            defaultFont, defaultFontSize, ColorConstants.INK, TextAlignment.LEFT, DEFAULT_LEADING, false, false
         );
     }
 
@@ -97,29 +107,38 @@ public final class LayoutEngine {
     }
 
     public void finishPages(java.util.function.Function<PageNumbering, LayoutElement> header,
+                            java.util.function.Function<PageNumbering, LayoutElement> firstHeader,
                             java.util.function.Function<PageNumbering, LayoutElement> footer) {
         var count = document.getNumberOfPages();
         if (count == 0) {
             return;
         }
-        for (int pageNumber = 1; pageNumber <= count; pageNumber++) {
-            var numbering = new PageNumbering(pageNumber, count);
-            var target = document.getPage(pageNumber);
-            if (header != null && headerHeight > 0) {
-                var element = header.apply(numbering);
-                if (element != null) {
-                    var estimated = Math.min(headerHeight,
-                        Math.max(8f, estimate(element, contentWidth(), defaultText)));
-                    renderFixedOnPage(element, target, leftMargin,
-                        pageSize.getHeight() - topMargin - estimated, contentWidth(), 1f);
+        var previousBreaks = allowPageBreaks;
+        allowPageBreaks = false;
+        try {
+            for (int pageNumber = 1; pageNumber <= count; pageNumber++) {
+                var numbering = new PageNumbering(pageNumber, count);
+                var target = document.getPage(pageNumber);
+                var chrome = pageNumber == 1 && firstHeader != null ? firstHeader : header;
+                var band = pageNumber == 1 && firstHeaderHeight > 0 ? firstHeaderHeight : headerHeight;
+                if (chrome != null && band > 0) {
+                    var element = chrome.apply(numbering);
+                    if (element != null) {
+                        var estimated = Math.min(band,
+                            Math.max(8f, estimate(element, contentWidth(), defaultText)));
+                        renderFixedOnPage(element, target, leftMargin,
+                            target.getPageSize().getHeight() - topMargin - estimated, contentWidth(), 1f);
+                    }
+                }
+                if (footer != null && footerHeight > 0) {
+                    var element = footer.apply(numbering);
+                    if (element != null) {
+                        renderFixedOnPage(element, target, leftMargin, bottomMargin, contentWidth(), 1f);
+                    }
                 }
             }
-            if (footer != null && footerHeight > 0) {
-                var element = footer.apply(numbering);
-                if (element != null) {
-                    renderFixedOnPage(element, target, leftMargin, bottomMargin, contentWidth(), 1f);
-                }
-            }
+        } finally {
+            allowPageBreaks = previousBreaks;
         }
     }
 
@@ -137,7 +156,12 @@ public final class LayoutEngine {
 
     private void renderFlow(LayoutElement element, TextContext inherited, float x, float availableWidth) {
         switch (element) {
-            case AreaBreak ignored -> newPage();
+            case AreaBreak areaBreak -> {
+                if (areaBreak.nextPageSize() != null) {
+                    pageSize = areaBreak.nextPageSize();
+                }
+                newPage();
+            }
             case Paragraph paragraph -> renderFlowParagraph(paragraph, inherited, x, availableWidth);
             case Table table -> renderFlowTable(table, inherited, x, availableWidth);
             case Image image -> renderFlowImage(image, x, availableWidth);
@@ -160,7 +184,8 @@ public final class LayoutEngine {
         var blockHeight = Math.max(floatOr(style.height(), 0),
             layout.height() + style.paddingTop() + style.paddingBottom());
         var required = style.marginTop() + blockHeight + style.marginBottom();
-        if (required > remainingHeight() && required <= contentHeight()
+        if ((style.keepTogether() || required > remainingHeight()) && required <= contentHeight()
+            && required > remainingHeight()
             && cursorTop < pageSize.getHeight() - topInset()) {
             newPage();
         }
@@ -170,8 +195,8 @@ public final class LayoutEngine {
         }
         var top = cursorTop - style.marginTop();
         drawBlockDecoration(style, blockX, top - blockHeight, blockWidth, blockHeight, 1f);
-        renderLines(layout, blockX + style.paddingLeft(), top - style.paddingTop(), contentWidth, context.textAlignment(), 1f);
-        PdfDrawing.uriLink(page, blockX, top - blockHeight, blockWidth, blockHeight, style.destinationUri());
+        renderLines(layout, blockX + style.paddingLeft(), top - style.paddingTop(), contentWidth, context.textAlignment(), 1f, context.underline(), context.strikethrough());
+        PdfDrawing.link(page, blockX, top - blockHeight, blockWidth, blockHeight, style.destinationUri(), style.destinationPage());
         cursorTop = top - blockHeight - style.marginBottom();
     }
 
@@ -208,9 +233,10 @@ public final class LayoutEngine {
                 contentWidth + style.paddingLeft() + style.paddingRight(), fragmentHeight, 1f);
             var fragment = new ParagraphLayout(List.copyOf(layout.lines().subList(lineIndex, end)), lineHeight);
             renderLines(fragment, blockX + style.paddingLeft(), top - style.paddingTop(),
-                contentWidth, context.textAlignment(), 1f);
-            PdfDrawing.uriLink(page, blockX, top - fragmentHeight,
-                contentWidth + style.paddingLeft() + style.paddingRight(), fragmentHeight, style.destinationUri());
+                contentWidth, context.textAlignment(), 1f, context.underline(), context.strikethrough());
+            PdfDrawing.link(page, blockX, top - fragmentHeight,
+                contentWidth + style.paddingLeft() + style.paddingRight(), fragmentHeight,
+                style.destinationUri(), style.destinationPage());
             cursorTop = top - fragmentHeight - bottomMarginForFragment;
             lineIndex = end;
             firstFragment = false;
@@ -320,8 +346,8 @@ public final class LayoutEngine {
         PdfDrawing.borders(document, page, style.borderTop(), style.borderRight(), style.borderBottom(),
             style.borderLeft(), x + style.marginLeft(), decorationTop - renderedHeight, width, renderedHeight,
             style.borderRadius());
-        PdfDrawing.uriLink(page, x + style.marginLeft(), decorationTop - renderedHeight, width, renderedHeight,
-            style.destinationUri());
+        PdfDrawing.link(page, x + style.marginLeft(), decorationTop - renderedHeight, width, renderedHeight,
+            style.destinationUri(), style.destinationPage());
         cursorTop -= style.marginBottom();
     }
 
@@ -333,6 +359,10 @@ public final class LayoutEngine {
 
     private void renderFlowTable(Table table, TextContext inherited, float x, float availableWidth) {
         var style = table.style();
+        var estimated = estimate(table, availableWidth, inherited);
+        if (style.keepTogether() && estimated > remainingHeight() && estimated <= contentHeight()) {
+            newPage();
+        }
         var tableWidth = resolveWidth(style.width(), availableWidth,
             availableWidth - style.marginLeft() - style.marginRight());
         var tableX = alignedX(x + style.marginLeft(), availableWidth - style.marginLeft() - style.marginRight(),
@@ -457,7 +487,8 @@ public final class LayoutEngine {
                     var paragraphWidth = Math.max(1f, innerWidth - childStyle.marginLeft() - childStyle.marginRight());
                     var layout = layoutParagraph(paragraph, paragraphWidth, paragraphContext);
                     renderLines(layout, x + style.paddingLeft() + childStyle.marginLeft(), top,
-                        paragraphWidth, paragraphContext.textAlignment(), 1f);
+                        paragraphWidth, paragraphContext.textAlignment(), 1f,
+                        paragraphContext.underline(), paragraphContext.strikethrough());
                     top -= layout.height() + childStyle.marginBottom();
                 }
                 case Image image -> {
@@ -473,8 +504,9 @@ public final class LayoutEngine {
                         x + style.paddingLeft(), top, x + width - style.paddingRight(), top);
                     top -= separator.line().lineWidth();
                 }
-                case Div div -> top -= estimate(div, innerWidth, context);
-                case Table table -> top -= estimate(table, innerWidth, context);
+                case Div div -> top = renderNested(div, context, x + style.paddingLeft(), top, innerWidth);
+                case Table nested -> top = renderNested(nested, context, x + style.paddingLeft(), top, innerWidth);
+                case ListBlock list -> top = renderNested(list, context, x + style.paddingLeft(), top, innerWidth);
                 default -> throw new IllegalArgumentException("Unsupported cell child: " + child.getClass().getName());
             }
         }
@@ -489,7 +521,10 @@ public final class LayoutEngine {
                 var layout = layoutParagraph(paragraph, innerWidth, resolveTextContext(style, inherited));
                 yield style.marginTop() + style.paddingTop() + layout.height() + style.paddingBottom() + style.marginBottom();
             }
-            case Image image -> style.marginTop() + image.getImageScaledHeight() + style.marginBottom();
+            case Image image -> {
+                var fitted = fittedImageSize(image, width - style.marginLeft() - style.marginRight());
+                yield style.marginTop() + fitted[1] + style.marginBottom();
+            }
             case LineSeparator separator -> style.marginTop() + separator.line().lineWidth() + style.marginBottom();
             case ListBlock list -> {
                 var childWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight()
@@ -640,7 +675,7 @@ public final class LayoutEngine {
     }
 
     private void renderLines(ParagraphLayout layout, float x, float top, float width, TextAlignment alignment,
-                             float opacity) {
+                             float opacity, boolean underline, boolean strikethrough) {
         var lineTop = top;
         for (int lineIndex = 0; lineIndex < layout.lines().size(); lineIndex++) {
             var line = layout.lines().get(lineIndex);
@@ -659,6 +694,15 @@ public final class LayoutEngine {
                 var baseline = lineTop - fragment.font().ascent(fragment.fontSize());
                 PdfDrawing.text(document, page, fragment.value(), fragment.font(), fragment.fontSize(), fragment.color(),
                     fragmentX, baseline, fragment.width(), TextAlignment.LEFT, 0, opacity);
+                if (underline && !fragment.value().isBlank()) {
+                    PdfDrawing.line(document, page, fragment.color(), Math.max(0.6f, fragment.fontSize() / 14f),
+                        fragmentX, baseline - 1.2f, fragmentX + fragment.width(), baseline - 1.2f);
+                }
+                if (strikethrough && !fragment.value().isBlank()) {
+                    var mid = baseline + fragment.fontSize() * 0.28f;
+                    PdfDrawing.line(document, page, fragment.color(), Math.max(0.6f, fragment.fontSize() / 16f),
+                        fragmentX, mid, fragmentX + fragment.width(), mid);
+                }
                 fragmentX += fragment.width();
                 if (justify && fragment.value().isBlank()) {
                     fragmentX += extra;
@@ -690,13 +734,25 @@ public final class LayoutEngine {
                 var height = Math.max(floatOr(style.height(), 0), layout.height() + style.paddingTop() + style.paddingBottom());
                 drawBlockDecoration(style, x, y, width, height, opacity);
                 renderLines(layout, x + style.paddingLeft(), y + height - style.paddingTop(), contentWidth,
-                    context.textAlignment(), opacity);
-                PdfDrawing.uriLink(targetPage, x, y, width, height, style.destinationUri());
+                    context.textAlignment(), opacity, context.underline(), context.strikethrough());
+                PdfDrawing.link(targetPage, x, y, width, height, style.destinationUri(), style.destinationPage());
             }
             case Div div -> {
                 var style = div.style();
                 var height = Math.max(floatOr(style.height(), 0), estimate(div, width, defaultText));
                 drawBlockDecoration(style, x, y, width, height, opacity);
+                var previousBreaks = allowPageBreaks;
+                var savedTop = cursorTop;
+                allowPageBreaks = false;
+                cursorTop = y + height - style.paddingTop();
+                var context = resolveTextContext(style, defaultText);
+                var childX = x + style.paddingLeft();
+                var childWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight());
+                for (var child : div.children()) {
+                    renderFlow(child, context, childX, childWidth);
+                }
+                cursorTop = savedTop;
+                allowPageBreaks = previousBreaks;
             }
             case Image image -> PdfDrawing.image(document, targetPage, image.source(), x, y,
                 image.getImageScaledWidth(), image.getImageScaledHeight());
@@ -737,7 +793,7 @@ public final class LayoutEngine {
 
     private TextContext resolveTextContext(Style style, TextContext inherited) {
         var font = style.font() == null ? inherited.font() : style.font();
-        if (style.bold()) {
+        if (style.bold() && font == PdfFontFactory.regular()) {
             font = PdfFontFactory.bold();
         }
         return new TextContext(
@@ -745,7 +801,9 @@ public final class LayoutEngine {
             style.fontSize(inherited.fontSize()),
             style.fontColor(inherited.color()),
             style.textAlignment(inherited.textAlignment()),
-            style.resolvedLeading(inherited.multipliedLeading())
+            style.resolvedLeading(inherited.multipliedLeading()),
+            style.underline() || inherited.underline(),
+            style.strikethrough() || inherited.strikethrough()
         );
     }
 
@@ -824,8 +882,29 @@ public final class LayoutEngine {
     }
 
     private void newPage() {
+        if (!allowPageBreaks) {
+            return;
+        }
         page = document.addNewPage(pageSize);
         cursorTop = pageSize.getHeight() - topInset();
+    }
+
+    private float renderNested(LayoutElement element, TextContext inherited, float x, float top, float width) {
+        var previousBreaks = allowPageBreaks;
+        var savedTop = cursorTop;
+        allowPageBreaks = false;
+        cursorTop = top;
+        renderFlow(element, inherited, x, width);
+        var bottom = cursorTop;
+        cursorTop = savedTop;
+        allowPageBreaks = previousBreaks;
+        return bottom;
+    }
+
+    private static float[] fittedImageSize(Image image, float availableWidth) {
+        var width = Math.min(image.getImageScaledWidth(), Math.max(1f, availableWidth));
+        var scale = width / Math.max(image.getImageScaledWidth(), 0.01f);
+        return new float[] {width, image.getImageScaledHeight() * scale};
     }
 
     private float contentWidth() {
@@ -841,7 +920,11 @@ public final class LayoutEngine {
     }
 
     private float topInset() {
-        return topMargin + headerHeight;
+        return topMargin + headerBand(document.getNumberOfPages());
+    }
+
+    private float headerBand(int pageNumber) {
+        return pageNumber <= 1 && firstHeaderHeight > 0 ? firstHeaderHeight : headerHeight;
     }
 
     private float bottomInset() {
@@ -849,7 +932,7 @@ public final class LayoutEngine {
     }
 
     private record TextContext(PdfFont font, float fontSize, Color color, TextAlignment textAlignment,
-                               float multipliedLeading) {
+                               float multipliedLeading, boolean underline, boolean strikethrough) {
     }
 
     private record ResolvedText(String value, PdfFont font, float fontSize, Color color) {

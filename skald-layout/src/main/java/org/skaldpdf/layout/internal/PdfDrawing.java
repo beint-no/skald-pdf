@@ -213,10 +213,19 @@ public final class PdfDrawing {
     }
 
     public static void uriLink(PdfPage page, float x, float y, float width, float height, String uri) {
-        if (uri == null || uri.isBlank() || width <= 0 || height <= 0) {
+        link(page, x, y, width, height, uri, 0);
+    }
+
+    public static void link(PdfPage page, float x, float y, float width, float height,
+                            String uri, int destinationPage) {
+        if (width <= 0 || height <= 0) {
             return;
         }
-        page.addUriLink(new Rectangle(x, y, width, height), uri);
+        if (uri != null && !uri.isBlank()) {
+            page.addUriLink(new Rectangle(x, y, width, height), uri);
+        } else if (destinationPage > 0) {
+            page.addGoToLink(new Rectangle(x, y, width, height), destinationPage);
+        }
     }
 
     private static boolean sameStroke(Border top, Border right, Border bottom, Border left) {

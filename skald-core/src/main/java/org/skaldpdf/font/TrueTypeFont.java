@@ -16,6 +16,7 @@ final class TrueTypeFont {
     private final int[] advances;
     private final Cmap cmap;
     private final PdfFont.Metrics metrics;
+    private final String postScriptName;
 
     TrueTypeFont(byte[] source) {
         this.source = Objects.requireNonNull(source, "source").clone();
@@ -59,6 +60,7 @@ final class TrueTypeFont {
             signedShort(buffer, head.offset + 40), signedShort(buffer, head.offset + 42),
             signedShort(buffer, hhea.offset + 4), signedShort(buffer, hhea.offset + 6),
             capHeight, italicAngle, fixedPitch);
+        postScriptName = readPostScriptName();
     }
 
     int glyph(int codePoint) {
@@ -72,6 +74,10 @@ final class TrueTypeFont {
 
     PdfFont.Metrics metrics() {
         return metrics;
+    }
+
+    String postScriptName() {
+        return postScriptName;
     }
 
     byte[] subset(Set<Integer> requestedGlyphs) {
@@ -124,6 +130,57 @@ final class TrueTypeFont {
             var glyph = full == null ? 0 : full.glyph(codePoint);
             return glyph != 0 || bmp == null ? glyph : bmp.glyph(codePoint);
         };
+    }
+
+    private String readPostScriptName() {
+        var nameTable = tables.get("name");
+        if (nameTable == null || nameTable.length < 6) {
+            return "Embedded";
+        }
+        var buffer = buffer(source);
+        var count = unsignedShort(buffer, nameTable.offset + 2);
+        var stringOffset = unsignedShort(buffer, nameTable.offset + 4);
+        String fallback = null;
+        for (int index = 0; index < count; index++) {
+            var record = nameTable.offset + 6 + index * 12;
+            if (record + 12 > nameTable.offset + nameTable.length) {
+                break;
+            }
+            var nameId = unsignedShort(buffer, record + 6);
+            if (nameId != 6) {
+                continue;
+            }
+            var platform = unsignedShort(buffer, record);
+            var encoding = unsignedShort(buffer, record + 2);
+            var length = unsignedShort(buffer, record + 8);
+            var offset = nameTable.offset + stringOffset + unsignedShort(buffer, record + 10);
+            if (offset < 0 || offset + length > nameTable.offset + nameTable.length) {
+                continue;
+            }
+            var decoded = decodeName(platform, encoding, offset, length);
+            if (decoded.isBlank()) {
+                continue;
+            }
+            if (platform == 3 && encoding == 1) {
+                return decoded;
+            }
+            fallback = decoded;
+        }
+        return fallback == null ? "Embedded" : fallback;
+    }
+
+    private String decodeName(int platform, int encoding, int offset, int length) {
+        if (platform == 0 || platform == 3) {
+            var characters = new StringBuilder(length / 2);
+            for (int index = 0; index + 1 < length; index += 2) {
+                var code = ((source[offset + index] & 0xff) << 8) | (source[offset + index + 1] & 0xff);
+                if (code != 0) {
+                    characters.append((char) code);
+                }
+            }
+            return characters.toString();
+        }
+        return new String(source, offset, length, java.nio.charset.StandardCharsets.ISO_8859_1);
     }
 
     private Table table(String name) {

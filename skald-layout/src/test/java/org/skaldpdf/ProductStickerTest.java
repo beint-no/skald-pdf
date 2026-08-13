@@ -82,6 +82,21 @@ class ProductStickerTest {
         assertEquals("SOJA-BA-L_8123613319580_ean_sticker.pdf", ProductSticker.fileName(SOJA_BA_L));
     }
 
+    @Test
+    void tilesAnA4PrintSheet() throws Exception {
+        var specs = java.util.List.of(SOJA_BA_L, SOJA_BA_L, SOJA_BA_L, SOJA_BA_L, SOJA_BA_L);
+        var bytes = ProductSticker.sheet(specs);
+        try (var parsed = PdfTestSupport.load(bytes)) {
+            assertEquals(1, parsed.getNumberOfPages());
+            var box = parsed.getPage(0).getMediaBox();
+            assertEquals(org.skaldpdf.geom.PageSize.A4.getWidth(), box.getWidth(), 0.05);
+            assertEquals(org.skaldpdf.geom.PageSize.A4.getHeight(), box.getHeight(), 0.05);
+        }
+        var text = PdfTestSupport.text(bytes);
+        assertEquals(5, text.split("SOJA-BA-L", -1).length - 1);
+        PdfTestSupport.saveArtifacts("sticker-sheet", bytes);
+    }
+
     static String decode(byte[] pdf) throws Exception {
         var rendered = PdfTestSupport.renderFirstPage(pdf);
         var pixels = rendered.getRGB(0, 0, rendered.getWidth(), rendered.getHeight(), null, 0, rendered.getWidth());

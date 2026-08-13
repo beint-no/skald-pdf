@@ -33,8 +33,9 @@ reverse dependency or runtime discovery mechanism.
 
 ## Barcode
 
-`skald-barcode` currently provides immutable, validated EAN-13 and Code 128 symbols. It
-depends only on core and can be used without the layout module by drawing its
+`skald-barcode` provides immutable, validated EAN-13, Code 128, and QR symbols,
+plus the 93 mm × 35 mm clothing sticker used in warehouse printing. It depends
+only on core and can be used without the layout module by drawing its
 `ImageSource` onto a page directly.
 
 ## Dependency policy

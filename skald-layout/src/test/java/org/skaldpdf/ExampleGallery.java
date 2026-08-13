@@ -2,6 +2,7 @@ package org.skaldpdf;
 
 import org.skaldpdf.barcode.Code128Barcode;
 import org.skaldpdf.barcode.Ean13Barcode;
+import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.colors.DeviceRgb;
 import org.skaldpdf.colors.LinearGradient;
@@ -208,15 +209,25 @@ public final class ExampleGallery {
 
     private static byte[] invoice(Theme theme, String number, String description, int amount) {
         return create(PageSize.A4, theme, 44, "Invoice " + number, document -> {
+            document.setFirstHeader(page -> new Paragraph("Northstar Ledger AS · original invoice")
+                .setFontSize(8).setFontColor(theme.accent()));
             banner(document, theme, "Invoice", number);
             parties(document, theme);
             var lines = styledTable(theme, new float[] {4, 1, 1.4f, 1.4f}, "Description", "Qty", "Rate", "Amount");
             lines.addRow(description, "1", money(amount), money(amount));
             lines.addRow("Platform access", "1", "1 200.00", "1 200.00");
             document.add(lines.setMarginTop(18));
-            document.add(new Paragraph("Total NOK " + money(amount + 1_200)).bold().setFontSize(14)
-                .setFontColor(theme.accent()).setTextAlignment(TextAlignment.RIGHT).setMarginTop(12));
-            document.add(muted("Due 26 August 2026 · Account 1503.45.67890"));
+            var total = new Table(UnitValue.createPercentArray(new float[] {1, 3})).useAllAvailableWidth()
+                .setBorder(Border.NO_BORDER).setMarginTop(14);
+            total.addCell(new Cell().setBorder(Border.NO_BORDER)
+                .add(new Image(new QrCode("https://pay.skaldpdf.org/inv/" + number).withModuleSize(2.4f))
+                    .scaleToFit(72, 72)));
+            total.addCell(new Cell().setBorder(Border.NO_BORDER)
+                .add(new Paragraph("Total NOK " + money(amount + 1_200)).bold().setFontSize(14)
+                    .setFontColor(theme.accent()).setTextAlignment(TextAlignment.RIGHT))
+                .add(new Paragraph("Scan to pay · Due 26 August 2026 · Account 1503.45.67890")
+                    .setFontSize(9).setFontColor(theme.muted()).setTextAlignment(TextAlignment.RIGHT).setMarginTop(6)));
+            document.add(total);
         });
     }
 
@@ -273,6 +284,9 @@ public final class ExampleGallery {
             table.addRow("SKU-018", "Oak tray", "3");
             table.addRow("SKU-044", "Linen napkin set", "6");
             document.add(table.setMarginTop(12));
+            document.add(new Image(new QrCode("https://track.skaldpdf.org/4412").withModuleSize(2.2f))
+                .scaleToFit(64, 64).setMarginTop(16));
+            document.add(muted("Scan for live tracking"));
         });
     }
 
@@ -919,7 +933,9 @@ public final class ExampleGallery {
             document.add(new Paragraph("NORTHSTAR SESSIONS").bold().setFontSize(16).setFontColor(EMBER.accent()));
             document.add(new Paragraph("13 August 2026 · Door 19:00 · Seat C14"));
             document.add(new Image(new Code128Barcode("TICKET-C14")
-                .withBarHeight(28f)).scaleToFit(280, 50).setMarginTop(10));
+                .withBarHeight(28f)).scaleToFit(220, 46).setMarginTop(10));
+            document.add(new Image(new QrCode("https://tickets.skaldpdf.org/C14").withModuleSize(2.2f))
+                .scaleToFit(56, 56).setFixedPosition(340, 40, 56));
         });
     }
 
@@ -1142,6 +1158,8 @@ public final class ExampleGallery {
             document.add(new Image(new Ean13Barcode("5901234123457").withBarHeight(40f)).scaleToFit(260, 90));
             document.add(new Image(new Code128Barcode("SKALD-PACK")
                 .withBarHeight(36f)).scaleToFit(280, 80).setMarginTop(16));
+            document.add(new Image(new QrCode("https://skaldpdf.org").withModuleSize(2.8f))
+                .scaleToFit(96, 96).setMarginTop(16));
         });
     }
 
@@ -1156,7 +1174,10 @@ public final class ExampleGallery {
             document.addOutline("Summary", 1);
             document.addOutline("Detail", 2);
             heading(document, FOREST, "Operating report");
-            document.add(new Paragraph(BODY).justify());
+            document.add(new Paragraph("Contents").bold().setMarginTop(8));
+            document.add(new Paragraph("1. Summary").setDestinationPage(1).setFontColor(FOREST.accent()));
+            document.add(new Paragraph("2. Detail").setDestinationPage(2).setFontColor(FOREST.accent()));
+            document.add(new Paragraph(BODY).justify().setMarginTop(10));
             document.add(new AreaBreak());
             heading(document, FOREST, "Detail");
             for (int index = 1; index <= 24; index++) {

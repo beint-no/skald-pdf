@@ -36,10 +36,13 @@ public final class Style {
     private float multipliedLeading = Float.NaN;
     private OverflowWrap overflowWrap = OverflowWrap.NORMAL;
     private boolean bold;
+    private boolean underline;
+    private boolean strikethrough;
     private boolean keepTogether;
     private boolean keepWithNext;
     private float borderRadius;
     private String destinationUri;
+    private int destinationPage;
     private LinearGradient backgroundGradient;
     private FixedPosition fixedPosition;
 
@@ -271,6 +274,17 @@ public final class Style {
         destinationUri = value;
     }
 
+    public int destinationPage() {
+        return destinationPage;
+    }
+
+    public void destinationPage(int value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("Destination page must be non-negative");
+        }
+        destinationPage = value;
+    }
+
     public LinearGradient backgroundGradient() {
         return backgroundGradient;
     }
@@ -293,6 +307,22 @@ public final class Style {
 
     public void bold(boolean value) {
         bold = value;
+    }
+
+    public boolean underline() {
+        return underline;
+    }
+
+    public void underline(boolean value) {
+        underline = value;
+    }
+
+    public boolean strikethrough() {
+        return strikethrough;
+    }
+
+    public void strikethrough(boolean value) {
+        strikethrough = value;
     }
 
     public boolean keepTogether() {

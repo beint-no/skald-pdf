@@ -86,6 +86,51 @@ public final class ProductSticker {
         }
     }
 
+    /** Tiles clothing labels onto a print sheet, 16-up on A4 by default. */
+    public static byte[] sheet(List<Spec> specs) {
+        return sheet(PageSize.A4, specs);
+    }
+
+    public static byte[] sheet(PageSize pageSize, List<Spec> specs) {
+        Objects.requireNonNull(pageSize, "pageSize");
+        Objects.requireNonNull(specs, "specs");
+        if (specs.isEmpty()) {
+            throw new IllegalArgumentException("Sticker sheet needs at least one label");
+        }
+        var output = new ByteArrayOutputStream();
+        try (var document = new PdfDocument(new PdfWriter(output))) {
+            drawSheet(document, pageSize, specs);
+        }
+        return output.toByteArray();
+    }
+
+    private static void drawSheet(PdfDocument document, PageSize pageSize, List<Spec> specs) {
+        var gap = 10f;
+        var stickerWidth = PAGE_SIZE.getWidth();
+        var stickerHeight = PAGE_SIZE.getHeight();
+        var columns = Math.max(1, (int) ((pageSize.getWidth() + gap) / (stickerWidth + gap)));
+        var rows = Math.max(1, (int) ((pageSize.getHeight() + gap) / (stickerHeight + gap)));
+        var perPage = columns * rows;
+        var gridWidth = columns * stickerWidth + (columns - 1) * gap;
+        var gridHeight = rows * stickerHeight + (rows - 1) * gap;
+        var left = (pageSize.getWidth() - gridWidth) / 2f;
+        var top = (pageSize.getHeight() + gridHeight) / 2f;
+        PdfPage page = null;
+        for (int index = 0; index < specs.size(); index++) {
+            var slot = index % perPage;
+            if (slot == 0) {
+                page = document.addNewPage(pageSize);
+            }
+            var column = slot % columns;
+            var row = slot / columns;
+            var x = left + column * (stickerWidth + gap);
+            var y = top - (row + 1) * stickerHeight - row * gap;
+            page.append("q\n1 0 0 1 " + PdfNumbers.format(x) + " " + PdfNumbers.format(y) + " cm\n");
+            draw(page, specs.get(index));
+            page.append("Q\n");
+        }
+    }
+
     public static String fileName(Spec spec) {
         return spec.sku() + "_" + new Ean13Barcode(spec.ean13()).value() + "_ean_sticker.pdf";
     }

@@ -32,7 +32,7 @@ Generated fixtures are checked at several independent layers:
    virtual-thread isolation, and compact large reports.
 2. Apache PDFBox is test-only and checks independent parsing, rendering, text
    extraction, font embedding, and page counts.
-3. ZXing is test-only and decodes the rendered EAN-13 barcode.
+3. ZXing is test-only and decodes the rendered EAN-13, Code 128, and QR symbols.
 4. qpdf checks syntax and stream encodings.
 5. veraPDF's Arlington PDF 2.0 profile checks the machine-readable object model
    derived from ISO 32000-2 and its resolved errata.
