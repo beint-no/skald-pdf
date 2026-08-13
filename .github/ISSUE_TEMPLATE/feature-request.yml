@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a focused PDF capability or API improvement
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Document use case
+      description: Explain the generated or composed document and why existing APIs are insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: standard
+    attributes:
+      label: Standard or interoperability requirements
+      description: Cite the relevant PDF 2.0 or domain standard when applicable.
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Suggested scope
+      options:
+        - skald-core
+        - skald-layout
+        - skald-barcode
+        - New optional module
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: API and dependency considerations
+      description: Describe the smallest useful API and any dependency implications.

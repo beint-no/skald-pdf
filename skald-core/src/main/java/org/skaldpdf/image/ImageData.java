@@ -1,8 +1,12 @@
 package org.skaldpdf.image;
 
+import org.skaldpdf.pdf.PdfDocument;
+import org.skaldpdf.pdf.PdfPage;
+
 import javax.imageio.ImageIO;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Objects;
 
 /** Immutable raster image prepared for direct PDF embedding. */
@@ -105,5 +109,30 @@ public final class ImageData implements ImageSource {
     @Override
     public float intrinsicHeight() {
         return height;
+    }
+
+    @Override
+    public void drawOn(PdfDocument document, PdfPage page, float x, float y, float width, float height) {
+        Objects.requireNonNull(document, "document").ensureOpen();
+        Objects.requireNonNull(page, "page");
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("Image dimensions must be positive");
+        }
+        var imageName = page.registerImage(this);
+        page.append(new StringBuilder("q\n")
+            .append(number(width)).append(" 0 0 ").append(number(height)).append(' ')
+            .append(number(x)).append(' ').append(number(y)).append(" cm\n/")
+            .append(imageName).append(" Do\nQ\n").toString());
+    }
+
+    private static String number(float value) {
+        if (!Float.isFinite(value)) {
+            throw new IllegalArgumentException("PDF number must be finite");
+        }
+        if (value == Math.rint(value) && value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE) {
+            return Integer.toString((int) value);
+        }
+        var result = String.format(Locale.ROOT, "%.5f", value);
+        return result.replaceFirst("0+$", "").replaceFirst("\\.$", "");
     }
 }

@@ -4,7 +4,7 @@ import com.google.zxing.BinaryBitmap;
 import com.google.zxing.MultiFormatReader;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
-import org.skaldpdf.barcode.BarcodeEAN;
+import org.skaldpdf.barcode.Ean13Barcode;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.element.Image;
@@ -17,24 +17,26 @@ import java.io.ByteArrayOutputStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class BarcodeEANTest {
+class Ean13BarcodeTest {
     @Test
     void calculatesAndValidatesChecksum() {
-        assertEquals(5, BarcodeEAN.calculateEANParity("1234567890"));
-        assertEquals(95, BarcodeEAN.getBarsEAN13("5901234123457").length);
-        assertThrows(IllegalArgumentException.class, () -> BarcodeEAN.getBarsEAN13("5901234123458"));
+        assertEquals(7, Ean13Barcode.checkDigit("590123412345"));
+        var barcode = new Ean13Barcode("590123412345");
+        assertEquals("5901234123457", barcode.value());
+        assertEquals(95, barcode.encodedModules().length);
+        assertEquals(113 * barcode.moduleWidth(), barcode.intrinsicWidth());
+        assertThrows(IllegalArgumentException.class, () -> new Ean13Barcode("5901234123458"));
     }
 
     @Test
     void renderedLabelIsMachineReadable() throws Exception {
         var output = new ByteArrayOutputStream();
         var pdf = new PdfDocument(new PdfWriter(output));
-        var barcode = new BarcodeEAN(pdf);
-        barcode.setCode("5901234123457");
-        barcode.setBarHeight(48f);
-        barcode.setSize(9f);
-        barcode.setX(1.4f);
-        var image = new Image(barcode.createFormXObject(pdf)).scaleToFit(260, 110);
+        var barcode = new Ean13Barcode("5901234123457")
+            .withBarHeight(48f)
+            .withFontSize(9f)
+            .withModuleWidth(1.4f);
+        var image = new Image(barcode).scaleToFit(260, 110);
         var document = new Document(pdf, new PageSize(320, 150));
         document.setMargins(20, 20, 20, 20);
         document.add(image);

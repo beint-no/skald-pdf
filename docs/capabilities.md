@@ -13,7 +13,7 @@
 | Barcodes | validated EAN-13 with human-readable text |
 | Composition | merge, copy pages, stamp existing pages, preserve imported resources |
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |
-| Runtime | named JPMS module, JDK 25, zero external runtime dependencies |
+| Runtime | three focused JPMS modules, JDK 25+, zero third-party runtime dependencies |
 
 ## Deliberately deferred
 
@@ -28,6 +28,5 @@
 | Optimizing arbitrary PDFs | rewriting received content is distinct from efficient generation |
 | Lossy image optimization | quality and DPI policy belongs at the application boundary |
 
-The next standards priority is tagged document structure and PDF/UA-2. The next
-writer priority is bounded temporary-file spooling for extremely large documents,
-followed by optional linearization for byte-range web delivery.
+Priorities and the boundary between planned modules are documented in the
+[roadmap](../ROADMAP.md).
