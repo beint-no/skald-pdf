@@ -44,7 +44,7 @@ implementation and not a substitute for standards review.
 
 ## References
 
-- ISO 32000-2:2020, Portable document format — Part 2: PDF 2.0
-- PDF Association ISO 32000-2 errata collections
-- Arlington PDF Model and its PDF 2.0 validation profile
+- [ISO 32000-2:2020, Portable document format — Part 2: PDF 2.0](https://pdfa.org/resource/iso-32000-2/)
+- [PDF Association ISO 32000-2 errata collections](https://pdf-issues.pdfa.org/32000-2-2020/)
+- [Arlington PDF Model and its PDF 2.0 validation profile](https://pdfa.org/resource/arlington-pdf-model/)
 - ISO/IEC 15420 for EAN/UPC symbol encoding

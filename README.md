@@ -1,23 +1,58 @@
 # Skald PDF
 
-Skald PDF is a focused PDF 2.0 generation and composition library for JDK 25+.
-It provides flowing text, repeating tables, images, EAN-13 barcodes, page events,
-watermarks, stamping, and merging with zero external runtime dependencies.
+Skald PDF is a modern Java library for creating and composing PDF 2.0 documents.
+It targets JDK 25+, uses named Java modules, and has no third-party runtime
+dependencies.
 
-The library deliberately targets current JVMs and the current PDF specification.
-It does not carry compatibility layers for old Java releases or obsolete PDF
-writer modes.
+Use it for invoices, statements, reports, receipts, agreements, labels, and
+other generated documents that do not need historical PDF output modes.
 
-## Install
+## Highlights
 
-```kotlin
-implementation("org.skaldpdf:skald-pdf:0.2.0")
+- Native PDF 2.0 writer and bounded parser
+- Unicode TrueType fonts with embedding and subsetting
+- Flowing paragraphs, divisions, repeating tables, and automatic pagination
+- JPEG pass-through, lossless raster compression, alpha, and image deduplication
+- EAN-13 barcodes in an optional module
+- Page events, drawing, watermarks, stamping, merging, and page import
+- Object streams, xref streams, XMP metadata, and configurable Deflate compression
+- Independent rendering, extraction, barcode, syntax, and PDF 2.0 validation tests
+
+## Modules
+
+| Artifact | Java module | Use it for |
+|---|---|---|
+| `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, and composition |
+| `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
+| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13 image sources |
+
+`skald-layout` and `skald-barcode` each depend on core, but not on one another.
+An application only pays for the capabilities it selects. The complete runtime
+still depends solely on the JDK.
+
+## Build and install locally
+
+JDK 25 or newer is required. Until the Maven Central release, install a source
+checkout into your local Maven repository:
+
+```shell
+./gradlew clean build publishToMavenLocal
 ```
 
-Skald is a named Java module:
+Then select the modules you need:
+
+```kotlin
+dependencies {
+    implementation("org.skaldpdf:skald-layout:0.3.0-SNAPSHOT")
+    implementation("org.skaldpdf:skald-barcode:0.3.0-SNAPSHOT") // optional
+}
+```
+
+For a modular application:
 
 ```java
-requires org.skaldpdf;
+requires org.skaldpdf.layout;
+requires org.skaldpdf.barcode; // optional
 ```
 
 ## Create a document
@@ -29,7 +64,7 @@ import org.skaldpdf.layout.element.Paragraph;
 import org.skaldpdf.layout.element.Table;
 import org.skaldpdf.layout.properties.UnitValue;
 
-byte[] bytes = Pdf.create(document -> {
+byte[] invoice = Pdf.create(document -> {
     document.setMargins(40, 40, 40, 40);
     document.add(new Paragraph("Invoice 2026-1001").bold().setFontSize(20));
 
@@ -43,7 +78,19 @@ byte[] bytes = Pdf.create(document -> {
 });
 ```
 
-The facade also covers the common composition paths:
+Add an EAN-13 barcode without coupling layout to the barcode implementation:
+
+```java
+import org.skaldpdf.barcode.Ean13Barcode;
+import org.skaldpdf.layout.element.Image;
+
+var barcode = new Ean13Barcode("590123412345")
+    .withModuleWidth(1.2f)
+    .withBarHeight(48f);
+document.add(new Image(barcode).scaleToFit(260, 110));
+```
+
+The high-level facade also handles common composition paths:
 
 ```java
 byte[] joined = Pdf.merge(List.of(cover, attachment));
@@ -57,54 +104,37 @@ byte[] stamped = Pdf.rewrite(joined, pdf -> {
 });
 ```
 
-Use `PdfDocument`, `PdfWriter`, and `PdfReader` directly when page events or
-lower-level drawing are needed.
+Use `PdfDocument`, `PdfWriter`, and `PdfReader` directly for page events or
+low-level drawing.
 
-## Design
+## PDF policy
 
-- Every new file is PDF 2.0. Input composition accepts structurally valid PDF
-  1.x and 2.0 files, but output is normalized to PDF 2.0.
-- The production module depends only on `java.base` and `java.desktop`.
-- Regular and bold Unicode TrueType fonts are bundled, subset once per document,
-  embedded, and mapped for reliable text extraction.
-- Layout consumes one top-level element at a time. Tables repeat headers and long
-  paragraphs or rows fragment across pages.
-- Content, metadata, font programs, lossless images, object streams, and xref
-  streams use Deflate compression. JPEG data passes through without a lossy
-  decode/re-encode cycle. Lossless images use adaptive PNG predictors; alpha is
-  represented by a soft mask.
-- Images and opacity states are deduplicated across pages by identity.
-- Mutable documents are thread-confined. Immutable fonts and image inputs can be
-  shared; separate documents work naturally on virtual threads.
-- Parsing is bounded by size, page, object, nesting, and decoded-stream limits.
-  Encrypted inputs are rejected rather than partially interpreted.
+Every new file is PDF 2.0. There is no PDF 1.x output switch. Composition accepts
+unencrypted PDF 1.x and 2.0 input because received files are not under the
+application's control; newly saved output is normalized to PDF 2.0.
 
-See [standards](docs/standards.md), [capabilities](docs/capabilities.md),
-[security](docs/security.md), and [performance](docs/performance.md).
+Mutable documents are thread-confined. Immutable inputs can be shared, and
+separate documents work naturally on virtual threads. Encrypted input and
+unsupported structural features fail closed instead of being partially read.
 
-## Build and verify
+See the [capability matrix](docs/capabilities.md), [architecture](docs/architecture.md),
+[standards policy](docs/standards.md), [security model](docs/security.md),
+[performance notes](docs/performance.md), and [roadmap](ROADMAP.md).
 
-JDK 25 or newer is required.
+## Verify generated PDFs
 
 ```shell
 ./gradlew clean build
 scripts/validate-pdf2.sh build/use-case-pdfs
 ```
 
-The test suite creates a representative PDF corpus in `build/use-case-pdfs`,
-then parses, extracts text, renders pages, and scans the barcode with independent
-test tools. The validation script adds qpdf checks and Arlington PDF 2.0 rules.
+The test suite produces a representative corpus in `build/use-case-pdfs` and
+checks parsing, text extraction, rendering, font embedding, pagination,
+composition, compression, and barcode decoding. The validation script adds qpdf
+syntax checks and the Arlington PDF 2.0 rules.
 
-## Scope
+## Contributing and license
 
-Skald is already suited to transactional documents, statements, receipts,
-agreements, reports, payslips, raster attachments, and page composition. The
-current intentional exclusions are interactive forms, encryption, signatures,
-rich text/HTML/SVG conversion, complex-script shaping, tagged PDF/PDF/UA, and
-PDF/A profiles. These require dedicated conformance work rather than superficial
-API coverage.
-
-## License
-
-Apache License 2.0. The bundled font programs are licensed separately under the
-SIL Open Font License 1.1; see `META-INF/licenses` in the published artifact.
+Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md).
+Skald PDF is licensed under the [Apache License 2.0](LICENSE). Bundled IBM Plex
+font programs are separately available under the SIL Open Font License 1.1.

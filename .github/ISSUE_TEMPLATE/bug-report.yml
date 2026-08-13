@@ -1,0 +1,45 @@
+name: Bug report
+description: Report incorrect output, parsing, rendering, or API behavior
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve Skald. Remove confidential data from PDF fixtures before attaching them.
+  - type: input
+    id: version
+    attributes:
+      label: Revision or version
+      placeholder: Commit SHA or version
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - skald-core
+        - skald-layout
+        - skald-barcode
+        - Build or documentation
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include code, input characteristics, expected behavior, and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Independent evidence
+      description: Share validator output or renderer names when relevant.
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Security check
+      options:
+        - label: This is not a vulnerability report. I will use GitHub Security Advisories for vulnerabilities.
+          required: true

@@ -18,7 +18,8 @@ jobs:
           distribution: temurin
           java-version: 25
       - uses: gradle/actions/setup-gradle@v5
-      - run: ./gradlew clean build
+      - name: Build, test, and verify Maven publications
+        run: ./gradlew clean build publishToMavenLocal
       - name: Check PDF syntax
         run: |
           sudo apt-get update
@@ -27,3 +28,11 @@ jobs:
       - name: Validate PDF 2.0 object model
         if: github.event_name == 'pull_request'
         run: scripts/validate-pdf2.sh build/use-case-pdfs
+      - name: Upload generated PDF corpus
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: use-case-pdfs
+          path: build/use-case-pdfs/
+          if-no-files-found: error
+          retention-days: 14

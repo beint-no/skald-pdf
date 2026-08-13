@@ -1,11 +1,7 @@
 package org.skaldpdf.layout.internal;
 
-import org.skaldpdf.barcode.BarcodeForm;
 import org.skaldpdf.colors.Color;
-import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.font.PdfFont;
-import org.skaldpdf.font.PdfFontFactory;
-import org.skaldpdf.image.ImageData;
 import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.layout.borders.Border;
 import org.skaldpdf.layout.properties.TextAlignment;
@@ -115,49 +111,7 @@ public final class PdfDrawing {
 
     public static void image(PdfDocument document, PdfPage page, ImageSource source, float x, float y,
                              float width, float height) {
-        switch (source) {
-            case ImageData raster -> raster(document, page, raster, x, y, width, height);
-            case BarcodeForm barcode -> barcode(document, page, barcode, x, y, width, height);
-            default -> throw new IllegalArgumentException("Unsupported image source: " + source.getClass().getName());
-        }
-    }
-
-    private static void raster(PdfDocument document, PdfPage page, ImageData image, float x, float y,
-                               float width, float height) {
-        document.ensureOpen();
-        var imageName = page.registerImage(image);
-        page.append(new StringBuilder("q\n")
-            .append(number(width)).append(" 0 0 ").append(number(height)).append(' ')
-            .append(number(x)).append(' ').append(number(y)).append(" cm\n/")
-            .append(imageName).append(" Do\nQ\n").toString());
-    }
-
-    private static void barcode(PdfDocument document, PdfPage page, BarcodeForm barcode, float x, float y,
-                                float width, float height) {
-        document.ensureOpen();
-        var scaleX = width / barcode.intrinsicWidth();
-        var scaleY = height / barcode.intrinsicHeight();
-        var textHeight = barcode.fontSize() * scaleY + 2f;
-        var barBottom = y + textHeight;
-        var moduleWidth = barcode.moduleWidth() * scaleX;
-        var modules = barcode.modules();
-        var operators = new StringBuilder("q\n0 0 0 rg\n");
-        var runStart = -1;
-        for (int index = 0; index <= modules.length; index++) {
-            var black = index < modules.length && modules[index] == 1;
-            if (black && runStart < 0) {
-                runStart = index;
-            } else if (!black && runStart >= 0) {
-                operators.append(number(x + runStart * moduleWidth)).append(' ').append(number(barBottom)).append(' ')
-                    .append(number((index - runStart) * moduleWidth)).append(' ')
-                    .append(number(barcode.barHeight() * scaleY)).append(" re\n");
-                runStart = -1;
-            }
-        }
-        page.append(operators.append("f\nQ\n").toString());
-        var fontSize = barcode.fontSize() * scaleY;
-        text(document, page, barcode.code(), PdfFontFactory.regular(), fontSize,
-            ColorConstants.BLACK, x, y + 1f, width, TextAlignment.CENTER, 0, 1f);
+        source.drawOn(document, page, x, y, width, height);
     }
 
     private static void opacity(StringBuilder operators, PdfPage page, float opacity) {
