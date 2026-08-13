@@ -11,6 +11,7 @@
 | Images | JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction |
 | Drawing | fills, rounded paths, axial shadings, dashed lines, opacity, canvas overlays, end-page events, watermarks, URI links |
 | Barcodes | validated EAN-13 and Code 128 with human-readable text |
+| Product stickers | 93 mm × 35 mm EAN-13 clothing labels (SKU, size, origin, composition) |
 | Composition | merge, copy pages, stamp existing pages, preserve imported resources |
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |
 | Runtime | three focused JPMS modules, JDK 25+, zero third-party runtime dependencies |

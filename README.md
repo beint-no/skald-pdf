@@ -95,6 +95,17 @@ var barcode = new Ean13Barcode("590123412345")
 document.add(new Image(barcode).scaleToFit(260, 110));
 ```
 
+Clothing / product stickers (the ecomtools 93 mm × 35 mm label) are a single call:
+
+```java
+import org.skaldpdf.barcode.ProductSticker;
+
+byte[] sticker = ProductSticker.pdf(new ProductSticker.Spec(
+    "SOJA-BA-L", "CN", "Softy Jacket", "L", "",
+    "80%Nylon, 20%Lycra", "8123613319580", "Orchid"
+));
+```
+
 The high-level facade also handles common composition paths:
 
 ```java

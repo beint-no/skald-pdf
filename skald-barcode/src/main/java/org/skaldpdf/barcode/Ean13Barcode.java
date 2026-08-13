@@ -34,17 +34,25 @@ public final class Ean13Barcode implements ImageSource {
     private final float moduleWidth;
     private final float barHeight;
     private final float fontSize;
+    private final int leftQuietModules;
+    private final int rightQuietModules;
 
     public Ean13Barcode(String value) {
-        this(value, 0.8f, 24f, 8f);
+        this(value, 0.8f, 24f, 8f, LEFT_QUIET_MODULES, RIGHT_QUIET_MODULES);
     }
 
-    private Ean13Barcode(String value, float moduleWidth, float barHeight, float fontSize) {
+    private Ean13Barcode(String value, float moduleWidth, float barHeight, float fontSize,
+                         int leftQuietModules, int rightQuietModules) {
         this.value = normalize(value);
         this.modules = encode(this.value);
         this.moduleWidth = positive(moduleWidth, "moduleWidth");
         this.barHeight = positive(barHeight, "barHeight");
         this.fontSize = positive(fontSize, "fontSize");
+        if (leftQuietModules < 7 || rightQuietModules < 7) {
+            throw new IllegalArgumentException("EAN-13 quiet zones must be at least 7 modules");
+        }
+        this.leftQuietModules = leftQuietModules;
+        this.rightQuietModules = rightQuietModules;
     }
 
     public String value() {
@@ -68,15 +76,19 @@ public final class Ean13Barcode implements ImageSource {
     }
 
     public Ean13Barcode withModuleWidth(float value) {
-        return new Ean13Barcode(this.value, value, barHeight, fontSize);
+        return new Ean13Barcode(this.value, value, barHeight, fontSize, leftQuietModules, rightQuietModules);
     }
 
     public Ean13Barcode withBarHeight(float value) {
-        return new Ean13Barcode(this.value, moduleWidth, value, fontSize);
+        return new Ean13Barcode(this.value, moduleWidth, value, fontSize, leftQuietModules, rightQuietModules);
     }
 
     public Ean13Barcode withFontSize(float value) {
-        return new Ean13Barcode(this.value, moduleWidth, barHeight, value);
+        return new Ean13Barcode(this.value, moduleWidth, barHeight, value, leftQuietModules, rightQuietModules);
+    }
+
+    public Ean13Barcode withQuietZones(int leftModules, int rightModules) {
+        return new Ean13Barcode(value, moduleWidth, barHeight, fontSize, leftModules, rightModules);
     }
 
     /** Computes the check digit for exactly twelve EAN-13 payload digits. */
@@ -95,7 +107,7 @@ public final class Ean13Barcode implements ImageSource {
 
     @Override
     public float intrinsicWidth() {
-        return (LEFT_QUIET_MODULES + modules.length + RIGHT_QUIET_MODULES) * moduleWidth;
+        return (leftQuietModules + modules.length + rightQuietModules) * moduleWidth;
     }
 
     @Override
@@ -114,7 +126,7 @@ public final class Ean13Barcode implements ImageSource {
         var textHeight = fontSize * scaleY + 2f;
         var barBottom = y + textHeight;
         var scaledModuleWidth = moduleWidth * scaleX;
-        var barsX = x + LEFT_QUIET_MODULES * scaledModuleWidth;
+        var barsX = x + leftQuietModules * scaledModuleWidth;
         var operators = new StringBuilder("q\n0 0 0 rg\n");
         var runStart = -1;
         for (int index = 0; index <= modules.length; index++) {
@@ -130,23 +142,36 @@ public final class Ean13Barcode implements ImageSource {
             }
         }
         page.append(operators.append("f\nQ\n").toString());
-        drawLabel(page, x, y + 1f, width, fontSize * scaleY);
+        drawHumanReadable(page, barsX, y + 1f, scaledModuleWidth, fontSize * scaleY);
     }
 
-    private void drawLabel(PdfPage page, float x, float baseline, float width, float scaledFontSize) {
+    private void drawHumanReadable(PdfPage page, float barsX, float baseline, float moduleWidth, float fontSize) {
         var font = PdfFontFactory.regular();
-        var run = font.glyphRun(value);
-        var textWidth = run.advance() * scaledFontSize / 1_000f;
+        drawCentered(page, font, value.substring(0, 1), barsX - 4.2f * moduleWidth, baseline, fontSize);
+        for (int index = 0; index < 6; index++) {
+            var center = barsX + (3 + index * 7 + 3.5f) * moduleWidth;
+            drawCentered(page, font, value.substring(index + 1, index + 2), center, baseline, fontSize);
+        }
+        for (int index = 0; index < 6; index++) {
+            var center = barsX + (50 + index * 7 + 3.5f) * moduleWidth;
+            drawCentered(page, font, value.substring(index + 7, index + 8), center, baseline, fontSize);
+        }
+    }
+
+    private static void drawCentered(PdfPage page, org.skaldpdf.font.PdfFont font, String text,
+                                     float centerX, float baseline, float fontSize) {
+        var run = font.glyphRun(text);
+        var textWidth = run.advance() * fontSize / 1_000f;
         var fontName = page.registerFont(font, run);
         var operators = new StringBuilder(96 + run.glyphs().length * 4)
-            .append("q\n0 0 0 rg\nBT\n/").append(fontName).append(' ')
-            .append(number(scaledFontSize)).append(" Tf\n1 0 0 1 ")
-            .append(number(x + (width - textWidth) / 2f)).append(' ')
+            .append("0 0 0 rg\nBT\n/").append(fontName).append(' ')
+            .append(number(fontSize)).append(" Tf\n1 0 0 1 ")
+            .append(number(centerX - textWidth / 2f)).append(' ')
             .append(number(baseline)).append(" Tm\n<");
         for (var glyph : run.glyphs()) {
             PdfNumbers.appendHex4(operators, glyph);
         }
-        page.append(operators.append("> Tj\nET\nQ\n").toString());
+        page.append(operators.append("> Tj\nET\n").toString());
     }
 
     private static String normalize(String value) {
