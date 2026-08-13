@@ -19,18 +19,45 @@ practical document coverage it adds.
 
 ## 2. Complete common generated-document APIs
 
-- First-class page templates, running headers and footers, and page numbering.
-  Done for flow documents; keep extending chrome to imported/stamped pages.
-- Stronger table row/column constraints, diagnostics, and orphan/widow control.
-  Complete-row checks are in; orphan/widow control is next.
-- Font fallback and an optional modern OpenType shaping module for complex
-  scripts.
-- More vector path, clipping, gradient, and reusable form APIs in core.
-  Axial gradients, rounded paths, and dashed strokes are in; reusable form
-  XObjects remain.
-- Additional barcode symbologies in the existing optional barcode module, each
-  verified by an independent decoder and its governing standard.
-  EAN-13 and Code 128 are in.
+Work is ordered by what blocks invoices, statements, labels, and reports today.
+
+### Make layout honest
+
+- Paint nested `Div` / `Table` / `ListBlock` inside cells, and children of
+  fixed-position / header `Div`s. Estimation without drawing is a bug.
+- Honour `keepTogether` on paragraphs and tables; stop header/footer painters
+  from calling `newPage()`.
+- Split tall table rows at line boundaries, not through glyphs.
+- Measure images after fitting them to the content width.
+
+### Document chrome and navigation
+
+- First-page vs continuing headers; `AreaBreak` with a next page size.
+- Named destinations and outlines bound to headings, not guessed page numbers.
+- Internal GoTo links for TOCs and “see appendix”.
+
+### Tables and type
+
+- Row spans, repeating footer rows, mixed point/percent columns.
+- Font fallback so one unsupported character does not abort the file.
+- Underline, strikethrough, and a real italic face (embedded, not slanted).
+
+### Core composition
+
+- Resolve indirect `/Contents` and `/Annots` when stamping received files.
+- Use the font’s PostScript name in `/BaseFont` (not always `SkaldSans`).
+- Allowlist and size-gate images before `ImageIO` allocates a raster.
+- Strip launch/JS/page-open actions when importing supplier PDFs.
+- CFF/OTF embedding so licensed retail faces work, still as PDF 2.0 CID fonts.
+
+### Optional barcode additions
+
+- QR and GS1-128 in `skald-barcode`, each verified by an independent decoder.
+- N-up sticker sheets for warehouse printing.
+
+### Still later
+
+- Orphan/widow control, Form XObjects, OpenType shaping as an optional module.
 
 ## 3. Add modern conformance profiles
 
