@@ -54,6 +54,16 @@ final class NativePdfWriter {
         var pagesObject = objects.reserve();
         var pageObjects = new ArrayList<Integer>(document.pages().size());
         document.pages().forEach(ignored -> pageObjects.add(objects.reserve()));
+        var signature = document.signatureField();
+        Integer signatureObject = null;
+        Integer signatureWidget = null;
+        if (signature != null) {
+            if (signature.pageNumber() > pageObjects.size()) {
+                throw new IllegalArgumentException("Signature targets a page that does not exist");
+            }
+            signatureObject = objects.reserveUnpacked();
+            signatureWidget = objects.reserveUnpacked();
+        }
         var importers = new IdentityHashMap<NativePdfParser, ImportContext>();
         for (int index = 0; index < document.pages().size(); index++) {
             var imported = document.pages().get(index).importedPage();
@@ -70,6 +80,10 @@ final class NativePdfWriter {
             var opacityObjects = addOpacities(objects, page.opacities(), sharedOpacities);
             var shadingObjects = addShadings(objects, page.shadings());
             var linkObjects = addLinks(objects, page.links(), pageObjects, document.pages());
+            if (signature != null && signature.pageNumber() == index + 1) {
+                linkObjects = new ArrayList<>(linkObjects);
+                linkObjects.add(signatureWidget);
+            }
             var imported = page.importedPage();
             byte[] pageBody;
             if (imported == null) {
@@ -108,6 +122,12 @@ final class NativePdfWriter {
         if (!document.namedDestinations().isEmpty()) {
             catalog.append(" /Names << /Dests ")
                 .append(addNamedDestinations(objects, document, pageObjects)).append(" 0 R >>");
+        }
+        if (signature != null) {
+            writeSignatureObjects(objects, signature, signatureObject, signatureWidget,
+                pageObjects.get(signature.pageNumber() - 1));
+            catalog.append(" /AcroForm << /Fields [").append(signatureWidget)
+                .append(" 0 R] /SigFlags 3 >>");
         }
         var catalogObject = objects.add(ascii(catalog.append(" >>").toString()));
         objects.rootObject = catalogObject;
@@ -407,6 +427,52 @@ final class NativePdfWriter {
             pageObjects.get(pageNumber - 1), number(pages.get(pageNumber - 1).getPageSize().getHeight()));
     }
 
+    private void writeSignatureObjects(ObjectStore objects, SignatureField field,
+                                       int signatureObject, int widgetObject, int pageObject) {
+        var bounds = field.rect();
+        var hexDigits = field.reservedContentBytes() * 2;
+        var contents = "0".repeat(hexDigits);
+        var byteRange = "/ByteRange [0 0000000000 0000000000 0000000000]";
+        var dictionary = new StringBuilder("<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /")
+            .append(field.subFilter()).append(' ')
+            .append(byteRange)
+            .append(" /Contents <").append(contents).append('>');
+        if (field.pdfDate() != null) {
+            dictionary.append(" /M ").append(literalString(field.pdfDate()));
+        }
+        if (field.reason() != null) {
+            dictionary.append(" /Reason ").append(literalString(field.reason()));
+        }
+        if (field.location() != null) {
+            dictionary.append(" /Location ").append(literalString(field.location()));
+        }
+        if (field.contact() != null) {
+            dictionary.append(" /ContactInfo ").append(literalString(field.contact()));
+        }
+        objects.set(signatureObject, ascii(dictionary.append(" >>").toString()));
+        var widget = new StringBuilder("<< /Type /Annot /Subtype /Widget /FT /Sig /T ")
+            .append(literalString(field.fieldName()))
+            .append(" /F 132 /P ").append(pageObject).append(" 0 R /V ").append(signatureObject)
+            .append(" 0 R /Rect [")
+            .append(number(bounds.getLeft())).append(' ').append(number(bounds.getBottom())).append(' ')
+            .append(number(bounds.getRight())).append(' ').append(number(bounds.getTop()))
+            .append("] /H /N");
+        if (field.visible()) {
+            var appearance = objects.add(stream(
+                format("/Type /XObject /Subtype /Form /BBox [0 0 %s %s] /Resources << >>",
+                    number(bounds.getWidth()), number(bounds.getHeight())),
+                ascii(format(
+                    "q 0.09 0.33 0.25 RG 1.25 w 2 2 %s %s re S 0.09 0.33 0.25 0.08 rg 2 2 %s %s re f Q\n",
+                    number(Math.max(0, bounds.getWidth() - 4)),
+                    number(Math.max(0, bounds.getHeight() - 4)),
+                    number(Math.max(0, bounds.getWidth() - 4)),
+                    number(Math.max(0, bounds.getHeight() - 4)))),
+                false));
+            widget.append(" /AP << /N ").append(appearance).append(" 0 R >>");
+        }
+        objects.set(widgetObject, ascii(widget.append(" >>").toString()));
+    }
+
     private static void appendAnnots(StringBuilder body, List<Integer> links) {
         if (links.isEmpty()) {
             return;
@@ -499,7 +565,8 @@ final class NativePdfWriter {
         var candidates = new ArrayList<Integer>();
         for (int number = 1; number <= objects.size(); number++) {
             var body = objects.get(number);
-            if (number != objects.rootObject && body.length <= 4_096 && !isStream(body)) {
+            if (number != objects.rootObject && body.length <= 4_096 && !isStream(body)
+                && objects.mayPack(number)) {
                 candidates.add(number);
             }
         }
@@ -989,11 +1056,22 @@ final class NativePdfWriter {
 
     private static final class ObjectStore {
         private final List<byte[]> objects = new ArrayList<>();
+        private final Set<Integer> unpacked = new LinkedHashSet<>();
         private int rootObject;
 
         int reserve() {
             objects.add(null);
             return objects.size();
+        }
+
+        int reserveUnpacked() {
+            var number = reserve();
+            unpacked.add(number);
+            return number;
+        }
+
+        boolean mayPack(int number) {
+            return !unpacked.contains(number);
         }
 
         int add(byte[] body) {

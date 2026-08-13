@@ -5,9 +5,9 @@ types. This keeps dependencies small without turning ordinary document creation
 into a graph of tiny artifacts.
 
 ```text
-org.skaldpdf.layout  ──┐
-                      ├──> org.skaldpdf.core ──> java.desktop ──> java.base
-org.skaldpdf.barcode ─┘
+org.skaldpdf.layout   ──┐
+org.skaldpdf.barcode  ──┼──> org.skaldpdf.core ──> java.desktop ──> java.base
+org.skaldpdf.sign     ──┘
 ```
 
 ## Core
@@ -37,6 +37,16 @@ reverse dependency or runtime discovery mechanism.
 symbols, plus the 93 mm × 35 mm clothing sticker used in warehouse printing. It
 depends only on core and can be used without the layout module by drawing its
 `ImageSource` onto a page directly.
+
+## Sign
+
+`skald-sign` is optional. Core emits an unpacked `/Type /Sig` placeholder;
+this module writes detached CMS SignedData, patches `/ByteRange` and
+`/Contents`, and verifies the seal. It depends only on core and
+`java.base` security APIs. Layout and barcode never see a private key.
+
+The module is an AdES integrity seal. It is not a QTSP and does not mint
+qualified certificates. See [signing.md](signing.md).
 
 ## Dependency policy
 

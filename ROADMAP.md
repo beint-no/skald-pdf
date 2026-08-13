@@ -4,6 +4,18 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.4.0
+
+- Optional `skald-sign` module: detached CMS SignedData, SHA-256, RSA,
+  PAdES-B-B signed attributes, Adobe.PPKLite or `ETSI.CAdES.detached`.
+- Core only reserves `/ByteRange` + `/Contents`. Cryptography stays out of
+  layout and barcode.
+- ReAI-faithful invoice / credit note / paid copy / reminder / packing-slip
+  corpus with side-by-side samples.
+- Large typical-document suite (invoices, slips, barcodes, statements).
+- Honest signing policy: not a QTSP, not QES, not a Scrive replacement.
+  See [docs/signing.md](docs/signing.md).
+
 ## Shipped in 1.3.0
 
 - Tall table rows split at line boundaries when the row is paragraph-only.
@@ -84,8 +96,9 @@ Still ordered by what businesses hit next.
 
 ## 4. Extend composition and delivery
 
-- Optional PDF 2.0 cryptography and digital-signature modules after focused
-  security review.
+- PAdES-B-T (timestamp) and B-LT/B-LTA after a TSA integration. QES remains
+  out of scope unless a listed QTSP is used.
+- Optional PDF 2.0 encryption after focused security review.
 - Optional linearization for byte-range web delivery.
 - Safer annotation and form APIs based on current PDF 2.0 structures.
 - Explicit image downsampling/recompression policies; no silent quality loss.

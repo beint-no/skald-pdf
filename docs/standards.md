@@ -38,6 +38,11 @@ Generated fixtures are checked at several independent layers:
    derived from ISO 32000-2 and its resolved errata.
 6. Poppler, MuPDF, and Ghostscript provide additional rendering smoke tests during
    release acceptance.
+7. `skald-sign` verifies its own CMS and, in tests, PDFBox reads the signature
+   dictionary. That is an integrity check, not a qualified-status check.
+
+PAdES-B-B attributes are documented in [signing.md](signing.md). QES is out of
+scope without a listed QTSP.
 
 The PDF specification itself remains authoritative. A validator is a second
 implementation and not a substitute for standards review.

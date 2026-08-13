@@ -24,28 +24,34 @@ and other generated documents that do not need historical PDF output modes.
 - EAN-13, UPC-A, Code 128, GS1-128, QR, clothing stickers, and A4 n-up sticker sheets
 - Page events, drawing, watermarks, safer stamping, merging, and page import
 - Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
-- Independent rendering, extraction, barcode, syntax, and PDF 2.0 validation tests
+- Optional `skald-sign` module: PAdES-B-B CMS integrity seals, JDK-only, no BouncyCastle
+- Independent rendering, extraction, barcode, syntax, signature, and PDF 2.0 validation tests
 
 ## Modules
 
 | Artifact | Java module | Use it for |
 |---|---|---|
-| `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, and composition |
+| `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, composition, and signature *placeholders* |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
 | `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, QR, and product stickers |
+| `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
 
-`skald-layout` and `skald-barcode` each depend on core, but not on one another.
-An application only pays for the capabilities it selects. The complete runtime
-still depends solely on the JDK.
+`skald-layout`, `skald-barcode`, and `skald-sign` each depend on core, not on
+one another. An application only pays for the capabilities it selects. The
+complete runtime still depends solely on the JDK.
+
+Signing is an integrity seal, not a qualified eIDAS signature. ReAI and Skald
+are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.3.0` is on Maven Central:
+JDK 25 or newer is required. Release `1.4.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.3.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.3.0") // optional
+    implementation("no.beint.skaldpdf:skald-layout:1.4.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.4.0") // optional
+    implementation("no.beint.skaldpdf:skald-sign:1.4.0")    // optional integrity seals
 }
 ```
 
@@ -60,6 +66,7 @@ For a modular application:
 ```java
 requires org.skaldpdf.layout;
 requires org.skaldpdf.barcode; // optional
+requires org.skaldpdf.sign;    // optional
 ```
 
 ## Create a document
@@ -131,6 +138,17 @@ byte[] stamped = Pdf.rewrite(joined, pdf -> {
 });
 ```
 
+Seal an issued invoice (integrity, not a qualified eIDAS signature):
+
+```java
+import org.skaldpdf.pdf.SignatureField;
+import org.skaldpdf.sign.PdfSigner;
+import org.skaldpdf.sign.SigningKey;
+
+var sealed = PdfSigner.sign(invoice, SigningKey.fromPkcs12(pkcs12, password),
+    SignatureField.invisible("InvoiceSeal").withReason("Issued invoice"));
+```
+
 Use `PdfDocument`, `PdfWriter`, and `PdfReader` directly for page events or
 low-level drawing.
 
@@ -146,7 +164,8 @@ unsupported structural features fail closed instead of being partially read.
 
 See the [website](https://beint-no.github.io/skald-pdf/),
 [capability matrix](docs/capabilities.md), [architecture](docs/architecture.md),
-[standards policy](docs/standards.md), [security model](docs/security.md),
+[standards policy](docs/standards.md), [signing / eIDAS](docs/signing.md),
+[security model](docs/security.md),
 [performance notes](docs/performance.md), and [roadmap](ROADMAP.md).
 
 ## Verify generated PDFs
@@ -156,10 +175,12 @@ See the [website](https://beint-no.github.io/skald-pdf/),
 scripts/validate-pdf2.sh build/use-case-pdfs
 ```
 
-The test suite produces a representative corpus in `build/use-case-pdfs` and
-checks parsing, text extraction, rendering, font embedding, pagination,
-composition, compression, and barcode decoding. The validation script adds qpdf
-syntax checks and the Arlington PDF 2.0 rules.
+The test suite produces a representative corpus in `build/use-case-pdfs`,
+`build/reai-compare`, `build/typical-documents`, and `build/example-gallery`.
+It checks parsing, text extraction, rendering, font embedding, pagination,
+composition, compression, barcode decoding, ReAI-faithful invoice layout, and
+CMS signature verify/tamper. The validation script adds qpdf syntax checks and
+the Arlington PDF 2.0 rules.
 
 Website demos are generated with:
 

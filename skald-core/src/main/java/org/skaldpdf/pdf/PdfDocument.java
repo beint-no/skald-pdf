@@ -24,6 +24,7 @@ public final class PdfDocument implements AutoCloseable {
     private final List<OutlineItem> outlines = new ArrayList<>();
     private final Map<String, NamedDestination> namedDestinations = new LinkedHashMap<>();
     private String language;
+    private SignatureField signatureField;
     private boolean closed;
     private boolean closing;
 
@@ -87,6 +88,19 @@ public final class PdfDocument implements AutoCloseable {
 
     public List<NamedDestination> namedDestinations() {
         return List.copyOf(namedDestinations.values());
+    }
+
+    public PdfDocument prepareSignature(SignatureField field) {
+        ensureOpen();
+        if (signatureField != null) {
+            throw new IllegalStateException("A document can reserve only one signature field");
+        }
+        signatureField = Objects.requireNonNull(field, "field");
+        return this;
+    }
+
+    public SignatureField signatureField() {
+        return signatureField;
     }
 
     public int getNumberOfPages() {

@@ -26,5 +26,12 @@ Imported pages are treated as inert data. Page `/AA`, `/JS`, and `/PresSteps`
 are dropped. Annotation `/A` entries are kept only when they are `/URI` or
 `/GoTo`; Launch, JavaScript, SubmitForm, and remote-goto actions are removed.
 
+`skald-sign` uses the JCA (`SHA256withRSA` / `SHA256withECDSA`) and a small
+DER writer. Private keys stay in the caller’s `SigningKey`. The library does
+not contact a timestamp authority, a CA, or a QTSP. A valid CMS seal means
+the ByteRange is intact and the signature verifies with the *embedded*
+certificate; it is not a claim that the certificate is qualified or trusted
+by a national list.
+
 Consumers should still apply their own upload-size, media-type, timeout, and
 storage policies. A PDF parser is not a malware scanner.

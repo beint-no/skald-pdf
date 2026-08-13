@@ -6,6 +6,7 @@ import org.skaldpdf.font.PdfFontFactory;
 import org.skaldpdf.layout.element.LayoutElement;
 import org.skaldpdf.layout.internal.LayoutEngine;
 import org.skaldpdf.pdf.PdfDocument;
+import org.skaldpdf.pdf.SignatureField;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -137,6 +138,15 @@ public final class Document implements AutoCloseable {
 
     public Document setLanguage(String value) {
         pdfDocument.setLanguage(value);
+        return this;
+    }
+
+    /**
+     * Reserves a signature field in the finished file. Cryptographic sealing is
+     * performed afterwards by {@code org.skaldpdf.sign.PdfSigner}.
+     */
+    public Document prepareSignature(SignatureField field) {
+        pdfDocument.prepareSignature(field);
         return this;
     }
 

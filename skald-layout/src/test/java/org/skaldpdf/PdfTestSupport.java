@@ -16,31 +16,31 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final class PdfTestSupport {
+public final class PdfTestSupport {
     private static final Path OUTPUT_DIRECTORY = Path.of("build", "use-case-pdfs");
 
     private PdfTestSupport() {
     }
 
-    static PDDocument load(byte[] bytes) throws IOException {
+    public static PDDocument load(byte[] bytes) throws IOException {
         assertTrue(bytes.length > 200, "PDF should contain more than an empty shell");
         assertTrue(new String(bytes, 0, 5, java.nio.charset.StandardCharsets.US_ASCII).startsWith("%PDF-"));
         return Loader.loadPDF(bytes);
     }
 
-    static String text(byte[] bytes) throws IOException {
+    public static String text(byte[] bytes) throws IOException {
         try (var document = load(bytes)) {
             return new PDFTextStripper().getText(document);
         }
     }
 
-    static BufferedImage renderFirstPage(byte[] bytes) throws IOException {
+    public static BufferedImage renderFirstPage(byte[] bytes) throws IOException {
         try (var document = load(bytes)) {
             return new PDFRenderer(document).renderImageWithDPI(0, 144, ImageType.RGB);
         }
     }
 
-    static void assertVisibleInk(BufferedImage image) {
+    public static void assertVisibleInk(BufferedImage image) {
         var nonWhitePixels = 0L;
         var totalPixels = (long) image.getWidth() * image.getHeight();
         for (int y = 0; y < image.getHeight(); y += 2) {
@@ -57,7 +57,7 @@ final class PdfTestSupport {
         assertTrue(ratio < 0.70, "Rendered page should not be accidentally filled, ratio=" + ratio);
     }
 
-    static void saveArtifacts(String name, byte[] bytes) throws IOException {
+    public static void saveArtifacts(String name, byte[] bytes) throws IOException {
         Files.createDirectories(OUTPUT_DIRECTORY);
         Files.write(OUTPUT_DIRECTORY.resolve(name + ".pdf"), bytes);
         try (var document = load(bytes)) {
@@ -69,7 +69,7 @@ final class PdfTestSupport {
         }
     }
 
-    static byte[] sampleLogo() throws IOException {
+    public static byte[] sampleLogo() throws IOException {
         var image = new BufferedImage(240, 80, BufferedImage.TYPE_INT_RGB);
         var graphics = image.createGraphics();
         graphics.setColor(Color.WHITE);
