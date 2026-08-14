@@ -2,7 +2,7 @@ package org.skaldpdf.labels;
 
 import org.skaldpdf.barcode.Ean13Barcode;
 import org.skaldpdf.font.PdfFont;
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfNumbers;
@@ -140,7 +140,7 @@ public final class ProductSticker {
 
     private static void draw(PdfPage page, Spec spec) {
         var document = page.document();
-        var font = PdfFontFactory.bold();
+        var font = SkaldSans.bold();
         var barcode = new Ean13Barcode(spec.ean13())
             .withModuleWidth(MODULE_WIDTH)
             .withBarHeight(BAR_HEIGHT)

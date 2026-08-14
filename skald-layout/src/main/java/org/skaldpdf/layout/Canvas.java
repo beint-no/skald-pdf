@@ -3,7 +3,7 @@ package org.skaldpdf.layout;
 import org.skaldpdf.colors.Color;
 import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.font.PdfFont;
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.Rectangle;
 import org.skaldpdf.layout.element.LayoutElement;
 import org.skaldpdf.layout.internal.LayoutEngine;
@@ -19,7 +19,7 @@ public final class Canvas implements AutoCloseable {
     private final PdfPage page;
     private final Rectangle bounds;
     private final float opacity;
-    private PdfFont font = PdfFontFactory.regular();
+    private PdfFont font = SkaldSans.regular();
     private float fontSize = 12f;
     private Color fontColor = ColorConstants.BLACK;
 

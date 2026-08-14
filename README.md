@@ -34,7 +34,8 @@ and other generated documents that do not need historical PDF output modes.
 
 | Artifact | Java module | Use it for |
 |---|---|---|
-| `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, composition, and signature *placeholders* |
+| `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, custom fonts, images, composition, and signature *placeholders* |
+| `skald-fonts` | `org.skaldpdf.fonts` | Lazily loaded, embeddable Skald Sans faces |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
 | `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols |
 | `skald-invoice-no` | `org.skaldpdf.invoice.no` | Norwegian faktura / kreditnota / tilbud / ordrebekreftelse |
@@ -49,8 +50,8 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-image` | `org.skaldpdf.codec` | Optional FFM TurboJPEG / libheif / libjxl photo ingest |
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
 
-Engine modules (`layout`, `barcode`, `sign`, `image`, `optimize`) each depend
-on core, not on one another. Finished pages live under
+Engine modules depend on core. Layout and human-readable barcodes also use the
+standard font module; low-level core users do not pay for its bundled faces. Finished pages live under
 [`skald-components/`](skald-components/README.md) as **separate** artifacts
 — one module per invoice, slip, or label. See [docs/modules.md](docs/modules.md).
 The complete runtime still depends solely on the JDK.
@@ -65,6 +66,7 @@ JDK 25 or newer is required. Release `1.9.0` is on Maven Central:
 ```kotlin
 dependencies {
     implementation("no.beint.skaldpdf:skald-layout:1.9.0")
+    implementation("no.beint.skaldpdf:skald-fonts:1.9.0")         // direct SkaldSans API access
     implementation("no.beint.skaldpdf:skald-barcode:1.9.0")        // optional symbols
     implementation("no.beint.skaldpdf:skald-invoice-no:1.9.0")    // optional Norwegian invoice
     implementation("no.beint.skaldpdf:skald-label-sticker:1.9.0") // optional clothing stickers
@@ -84,6 +86,7 @@ For a modular application:
 
 ```java
 requires org.skaldpdf.layout;
+requires org.skaldpdf.fonts;     // direct SkaldSans API access
 requires org.skaldpdf.barcode;     // optional symbols
 requires org.skaldpdf.invoice.no;  // optional Norwegian invoice
 requires org.skaldpdf.labels;      // optional clothing stickers

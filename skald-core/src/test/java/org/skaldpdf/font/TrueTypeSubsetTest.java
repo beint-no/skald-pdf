@@ -1,6 +1,7 @@
 package org.skaldpdf.font;
 
 import org.junit.jupiter.api.Test;
+import org.skaldpdf.fonts.SkaldSans;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -14,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TrueTypeSubsetTest {
     @Test
     void dropsLayoutTablesAndKeepsACompactGlyphSet() {
-        var font = PdfFontFactory.regular();
+        var font = SkaldSans.regular();
         var run = font.glyphRun("Invoice 2026 NOK 1 250.00");
         var glyphs = new LinkedHashSet<Integer>();
         for (var glyph : run.glyphs()) {

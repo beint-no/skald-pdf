@@ -3,7 +3,7 @@ package org.skaldpdf.layout.internal;
 import org.skaldpdf.colors.Color;
 import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.font.PdfFont;
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.geom.Rectangle;
 import org.skaldpdf.layout.PageNumbering;
@@ -51,7 +51,7 @@ public final class LayoutEngine {
     public LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
                         float bottomMargin, float leftMargin) {
         this(document, pageSize, topMargin, rightMargin, bottomMargin, leftMargin,
-            PdfFontFactory.regular(), DEFAULT_FONT_SIZE, 0, 0);
+            SkaldSans.regular(), DEFAULT_FONT_SIZE, 0, 0);
     }
 
     public LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
@@ -991,8 +991,8 @@ public final class LayoutEngine {
 
     private TextContext resolveTextContext(Style style, TextContext inherited) {
         var font = style.font() == null ? inherited.font() : style.font();
-        if (PdfFontFactory.bundled(font)) {
-            font = PdfFontFactory.create(style.bold() || font.bold(), style.italic() || font.italic());
+        if (SkaldSans.isFace(font)) {
+            font = SkaldSans.create(style.bold() || font.bold(), style.italic() || font.italic());
         }
         return new TextContext(
             font,

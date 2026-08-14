@@ -1,6 +1,6 @@
 # Publishing
 
-Skald publishes `skald-core`, `skald-layout`, `skald-barcode`,
+Skald publishes `skald-core`, `skald-fonts`, `skald-layout`, `skald-barcode`,
 `skald-sign`, `skald-image`, `skald-optimize`, and each
 `skald-components/` artifact (`skald-invoice-no`, `skald-label-sticker`,
 …) to Maven Central under `no.beint.skaldpdf`. Java packages remain

@@ -1,6 +1,6 @@
 package org.skaldpdf.barcode;
 
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfNumbers;
@@ -136,7 +136,7 @@ public final class Code128Barcode implements ImageSource {
     }
 
     private void drawLabel(PdfPage page, float x, float baseline, float width, float scaledFontSize) {
-        var font = PdfFontFactory.regular();
+        var font = SkaldSans.regular();
         var run = font.glyphRun(value);
         var textWidth = run.advance() * scaledFontSize / 1_000f;
         var fontName = page.registerFont(font, run);

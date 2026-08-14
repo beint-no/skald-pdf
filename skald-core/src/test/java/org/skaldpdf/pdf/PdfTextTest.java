@@ -1,7 +1,7 @@
 package org.skaldpdf.pdf;
 
 import org.skaldpdf.font.PdfFont;
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +15,7 @@ class PdfTextTest {
         var output = new ByteArrayOutputStream();
         try (var pdf = new PdfDocument(new PdfWriter(output))) {
             var page = pdf.addNewPage(PageSize.A5);
-            var font = PdfFontFactory.regular();
+            var font = SkaldSans.regular();
             show(page, font, "Invoice 2026-1001", 16, 36, 400);
             show(page, font, "Net 14 days", 11, 36, 380);
         }

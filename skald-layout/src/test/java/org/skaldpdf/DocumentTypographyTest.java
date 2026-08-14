@@ -2,6 +2,7 @@ package org.skaldpdf;
 
 import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.layout.element.Paragraph;
 import org.skaldpdf.layout.element.Text;
 import org.junit.jupiter.api.Test;
@@ -12,11 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DocumentTypographyTest {
     @Test
     void bundledItalicIsATrueItalicFace() {
-        assertTrue(PdfFontFactory.italic().italic());
-        assertTrue(PdfFontFactory.boldItalic().italic());
-        assertTrue(PdfFontFactory.boldItalic().bold());
-        assertTrue(PdfFontFactory.italic().metrics().italicAngle() < 0);
-        assertTrue(PdfFontFactory.regular().metrics().italicAngle() == 0);
+        assertTrue(SkaldSans.italic().italic());
+        assertTrue(SkaldSans.boldItalic().italic());
+        assertTrue(SkaldSans.boldItalic().bold());
+        assertTrue(SkaldSans.italic().metrics().italicAngle() < 0);
+        assertTrue(SkaldSans.regular().metrics().italicAngle() == 0);
     }
 
     @Test
@@ -43,7 +44,7 @@ class DocumentTypographyTest {
     void customDocumentFontFallsBackToBundledSans() throws Exception {
         var display = PdfFontFactory.from(
             java.nio.file.Files.readAllBytes(java.nio.file.Path.of(
-                "skald-core/src/main/resources/org/skaldpdf/font/SkaldSans-Italic.ttf")),
+                "skald-fonts/src/main/resources/org/skaldpdf/fonts/SkaldSans-Italic.ttf")),
             org.skaldpdf.font.FontWeight.ITALIC
         );
         var bytes = Pdf.create(document -> {

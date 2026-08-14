@@ -5,7 +5,7 @@ import org.skaldpdf.colors.DeviceRgb;
 import org.skaldpdf.event.AbstractPdfDocumentEvent;
 import org.skaldpdf.event.AbstractPdfDocumentEventHandler;
 import org.skaldpdf.event.PdfDocumentEvent;
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.image.ImageDataFactory;
 import org.skaldpdf.layout.Canvas;
@@ -183,7 +183,7 @@ class ApplicationUseCaseRenderingTest {
                 var canvasBackend = new PdfCanvas(page.newContentStreamAfter(), page.getResources(), pdfEvent.getDocument());
                 canvasBackend.setExtGState(new PdfExtGState().setFillOpacity(0.14f));
                 new Canvas(canvasBackend, page.getPageSize())
-                    .setFont(PdfFontFactory.bold())
+                    .setFont(SkaldSans.bold())
                     .setFontSize(64).setFontColor(ColorConstants.GRAY)
                     .showTextAligned("PREVIEW", page.getPageSize().getWidth() / 2, page.getPageSize().getHeight() / 2,
                         TextAlignment.CENTER, VerticalAlignment.MIDDLE, (float) Math.toRadians(45));

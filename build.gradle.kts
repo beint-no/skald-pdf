@@ -15,6 +15,7 @@ plugins {
 val releaseVersion = "1.9.0"
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
+    "skald-fonts" to "Skald Fonts",
     "skald-layout" to "Skald Layout",
     "skald-barcode" to "Skald Barcode",
     "skald-sign" to "Skald Sign",
@@ -30,7 +31,8 @@ val moduleTitles = mapOf(
     "skald-purchase-order-no" to "Skald Norwegian Purchase Order"
 )
 val moduleDescriptions = mapOf(
-    "skald-core" to "Native PDF 2.0 writing, reading, fonts, images, and composition",
+    "skald-core" to "Native PDF 2.0 writing, reading, custom fonts, images, and composition",
+    "skald-fonts" to "Lazily loaded Skald Sans faces for Skald PDF",
     "skald-layout" to "Flow layout and high-level document API for Skald PDF",
     "skald-barcode" to "Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols for Skald PDF",
     "skald-sign" to "Optional PKCS#7/CMS PAdES-B-B sealing for Skald PDF documents",

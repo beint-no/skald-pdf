@@ -1,5 +1,6 @@
 dependencies {
     api(project(":skald-core"))
+    implementation(project(":skald-fonts"))
     implementation(project(":skald-barcode"))
 
     testImplementation("org.apache.pdfbox:pdfbox:3.0.8")
