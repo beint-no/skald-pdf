@@ -3,7 +3,7 @@ package org.skaldpdf.invoice.no;
 import org.skaldpdf.Pdf;
 import org.skaldpdf.colors.DeviceRgb;
 import org.skaldpdf.font.PdfFont;
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.image.ImageDataFactory;
 import org.skaldpdf.layout.Document;
@@ -225,7 +225,7 @@ public final class NorwegianTheme {
     }
 
     public static Fonts fonts() {
-        return new Fonts(PdfFontFactory.regular(), PdfFontFactory.bold());
+        return new Fonts(SkaldSans.regular(), SkaldSans.bold());
     }
 
     public record Fonts(PdfFont regular, PdfFont bold) {

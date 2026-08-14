@@ -1,6 +1,6 @@
 package org.skaldpdf.barcode;
 
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfNumbers;
@@ -146,7 +146,7 @@ public final class Ean13Barcode implements ImageSource {
     }
 
     private void drawHumanReadable(PdfPage page, float barsX, float baseline, float moduleWidth, float fontSize) {
-        var font = PdfFontFactory.bold();
+        var font = SkaldSans.bold();
         drawCentered(page, font, value.substring(0, 1), barsX - 4.2f * moduleWidth, baseline, fontSize);
         for (int index = 0; index < 6; index++) {
             var center = barsX + (3 + index * 7 + 3.5f) * moduleWidth;

@@ -1,5 +1,6 @@
 module org.skaldpdf.layout {
     requires transitive org.skaldpdf.core;
+    requires org.skaldpdf.fonts;
 
     exports org.skaldpdf;
     exports org.skaldpdf.layout;

@@ -2,7 +2,7 @@ package org.skaldpdf;
 
 import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.colors.DeviceRgb;
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.image.ImageDataFactory;
 import org.skaldpdf.layout.element.AreaBreak;
@@ -152,7 +152,7 @@ class LayoutHonestyTest {
     void substitutesMissingGlyphsInsteadOfAborting() {
         assertDoesNotThrow(() -> Pdf.create(document ->
             document.add(new Paragraph("Invoice ☃ 2026"))));
-        assertFalse(PdfFontFactory.regular().supports(0x2603));
+        assertFalse(SkaldSans.regular().supports(0x2603));
     }
 
     @Test
@@ -175,7 +175,7 @@ class LayoutHonestyTest {
     @Test
     void embedsTheFontsPostScriptName() throws Exception {
         var bytes = Pdf.create(document -> document.add(new Paragraph("Named face").setTextAlignment(TextAlignment.LEFT)));
-        var name = PdfFontFactory.regular().postScriptName();
+        var name = SkaldSans.regular().postScriptName();
         assertTrue(name != null && !name.isBlank());
         try (var parsed = PdfTestSupport.load(bytes)) {
             var fonts = parsed.getPage(0).getResources().getFontNames();

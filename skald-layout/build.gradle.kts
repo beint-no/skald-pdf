@@ -1,5 +1,6 @@
 dependencies {
     api(project(":skald-core"))
+    implementation(project(":skald-fonts"))
 
     testImplementation(project(":skald-barcode"))
     testImplementation(project(":skald-label-sticker"))

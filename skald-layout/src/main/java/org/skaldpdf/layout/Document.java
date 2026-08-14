@@ -2,7 +2,7 @@ package org.skaldpdf.layout;
 
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.font.PdfFont;
-import org.skaldpdf.font.PdfFontFactory;
+import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.layout.element.LayoutElement;
 import org.skaldpdf.layout.internal.LayoutEngine;
 import org.skaldpdf.pdf.PdfDocument;
@@ -20,7 +20,7 @@ public final class Document implements AutoCloseable {
     private float rightMargin = 36f;
     private float bottomMargin = 36f;
     private float leftMargin = 36f;
-    private PdfFont font = PdfFontFactory.regular();
+    private PdfFont font = SkaldSans.regular();
     private final List<PdfFont> fallbacks = new ArrayList<>();
     private boolean fallbacksExplicit;
     private float fontSize = 12f;
@@ -81,8 +81,8 @@ public final class Document implements AutoCloseable {
     public Document setFont(PdfFont value) {
         requireLayoutNotStarted();
         font = Objects.requireNonNull(value, "value");
-        if (!fallbacksExplicit && fallbacks.isEmpty() && !PdfFontFactory.bundled(font)) {
-            fallbacks.add(PdfFontFactory.regular());
+        if (!fallbacksExplicit && fallbacks.isEmpty() && !SkaldSans.isFace(font)) {
+            fallbacks.add(SkaldSans.regular());
         }
         return this;
     }

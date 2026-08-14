@@ -8,20 +8,27 @@ into a graph of tiny artifacts.
 org.skaldpdf.packing.no ──┐
 org.skaldpdf.reminder.no ─┼──> org.skaldpdf.invoice.no ──> org.skaldpdf.layout ──┐
 org.skaldpdf.statement.no ┘         │                        org.skaldpdf.barcode ┼──> org.skaldpdf.core
-org.skaldpdf.labels                 ┘                        org.skaldpdf.sign    │
-org.skaldpdf.labels.shipping                                 org.skaldpdf.codec   │
-                                                             org.skaldpdf.optimize┘
+org.skaldpdf.labels                 ┘                             │               │
+org.skaldpdf.labels.shipping                         org.skaldpdf.fonts          │
+org.skaldpdf.sign / codec / optimize ────────────────────────────────────────────┘
 ```
 
 ## Core
 
-`skald-core` owns PDF syntax, COS values, pages, resource registration, embedded
-fonts, raster images, metadata, reading, merging, and stamping. It emits only
+`skald-core` owns PDF syntax, COS values, pages, resource registration, the
+custom-font engine, raster images, metadata, reading, merging, and stamping. It emits only
 PDF 2.0. Its parser accepts the older object and cross-reference structures still
 encountered in received documents, with explicit resource limits.
 
 The core uses `java.desktop` only for standard JDK image decoding. There are no
 third-party production dependencies.
+
+## Fonts
+
+`skald-fonts` owns the bundled Skald Sans resources. Each face is loaded on its
+first use. Layout and human-readable barcodes consume it internally, while a
+core-only application can provide its own OpenType program without shipping the
+bundled family.
 
 ## Layout
 
@@ -37,7 +44,8 @@ reverse dependency or runtime discovery mechanism.
 ## Barcode
 
 `skald-barcode` provides immutable, validated EAN-13, UPC-A, Code 128, GS1-128, and QR
-symbols as `ImageSource` values. It depends only on core. Place a symbol on any
+symbols as `ImageSource` values. It depends on core and uses the standard font
+module for human-readable barcode text. Place a symbol on any
 page without taking label templates.
 
 ## Labels and document themes

@@ -16,8 +16,9 @@ Components           skald-components/          (folder, not one jar)
                      └── label-shipping         skald-label-shipping
 
 Engine               layout  barcode  sign  image  optimize
-                     └────────────┬────────────────────────┘
-                                  core
+                       │       │      └───┬─────┘
+                       └─ fonts           │
+                            └─────────────┴── core
 ```
 
 ## Engine modules
@@ -26,12 +27,16 @@ These are the building blocks. They have stable, spec-shaped jobs.
 
 | Artifact | Job |
 |---|---|
-| `skald-core` | PDF 2.0 syntax, fonts, images, read/write, merge |
+| `skald-core` | PDF 2.0 syntax, custom-font engine, images, read/write, merge |
+| `skald-fonts` | Lazily loaded Skald Sans regular, bold, italic, and bold-italic faces |
 | `skald-layout` | Flowing documents: paragraphs, tables, pagination |
 | `skald-barcode` | EAN-13, UPC-A, Code 128, GS1-128, QR as `ImageSource` |
 | `skald-sign` | PAdES-B-B integrity seal |
 | `skald-image` | Optional native photo ingest |
 | `skald-optimize` | Recompress images already inside a received PDF |
+
+Layout and human-readable barcodes depend on `skald-fonts`; low-level core,
+signing, and composition do not include the bundled TTF resources.
 
 `skald-barcode` draws **symbols**. It does not know SKU, composition, or
 label stock. A warehouse app that only needs a QR on an invoice takes

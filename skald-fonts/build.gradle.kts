@@ -1,4 +1,3 @@
 dependencies {
     api(project(":skald-core"))
-    implementation(project(":skald-fonts"))
 }
