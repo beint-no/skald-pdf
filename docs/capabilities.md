@@ -14,12 +14,12 @@
 | Optimize | optional `skald-optimize`: downsample and JPEG-recompress images already inside a received PDF |
 | Drawing | fills, rounded paths, axial shadings, dashed lines, opacity, canvas overlays, end-page events, watermarks, URI and GoTo links |
 | Barcodes | validated EAN-13, UPC-A, Code 128, GS1-128, and QR (versions 1–16) with independent decode tests |
-| Product stickers | 93 mm × 35 mm EAN-13 clothing labels; A4 n-up print sheets |
+| Labels | optional `skald-labels`: 93 mm × 35 mm EAN-13 clothing stickers and A4 n-up sheets |
 | Composition | merge, copy pages, stamp existing pages, resolve indirect Contents/Annots, strip Launch/JS and other unsafe imported actions |
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |
 | Signatures | reserved signature field in core; optional `skald-sign` CMS / PAdES-B-B integrity seal; verify + tamper tests |
 | Native photos | optional `skald-image`: TurboJPEG, libheif (HEIC/AVIF), libjxl (JPEG XL ingest only) via FFM; absent libraries are skipped |
-| Runtime | six JPMS modules, JDK 25+, zero third-party *Java* runtime dependencies; native codecs optional |
+| Runtime | seven JPMS modules, JDK 25+, zero third-party *Java* runtime dependencies; native codecs optional |
 
 ## Deliberately deferred
 

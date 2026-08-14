@@ -5,7 +5,7 @@
 stickers, and signatures work without it.
 
 ```kotlin
-implementation("no.beint.skaldpdf:skald-image:1.6.0")
+implementation("no.beint.skaldpdf:skald-image:1.7.0")
 ```
 
 ```text

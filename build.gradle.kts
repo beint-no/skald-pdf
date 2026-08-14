@@ -12,22 +12,24 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = "1.6.0"
+val releaseVersion = "1.7.0"
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-layout" to "Skald Layout",
     "skald-barcode" to "Skald Barcode",
     "skald-sign" to "Skald Sign",
     "skald-image" to "Skald Image",
-    "skald-optimize" to "Skald Optimize"
+    "skald-optimize" to "Skald Optimize",
+    "skald-labels" to "Skald Labels"
 )
 val moduleDescriptions = mapOf(
     "skald-core" to "Native PDF 2.0 writing, reading, fonts, images, and composition",
     "skald-layout" to "Flow layout and high-level document API for Skald PDF",
-    "skald-barcode" to "EAN-13, UPC-A, Code 128, GS1-128, QR, and product-sticker generation for Skald PDF",
+    "skald-barcode" to "Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols for Skald PDF",
     "skald-sign" to "Optional PKCS#7/CMS PAdES-B-B sealing for Skald PDF documents",
     "skald-image" to "Optional FFM bindings to TurboJPEG, libheif, and libjxl for photo ingest",
-    "skald-optimize" to "Optional recompression of image XObjects already stored in a received PDF"
+    "skald-optimize" to "Optional recompression of image XObjects already stored in a received PDF",
+    "skald-labels" to "Optional print-stock labels such as 93×35 mm clothing EAN stickers"
 )
 
 allprojects {

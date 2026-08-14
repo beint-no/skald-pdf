@@ -4,6 +4,13 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.7.0
+
+- Split print stock out of barcode. `skald-barcode` is symbols only.
+  `ProductSticker` moved to `skald-labels` (`org.skaldpdf.labels`).
+- Documented the engine vs print-stock vs application-document rule in
+  [docs/modules.md](docs/modules.md). Invoices stay examples, not artifacts.
+
 ## Shipped in 1.6.0
 
 - Imported image XObjects: `PdfDocument.importedImages()` and

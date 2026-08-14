@@ -6,8 +6,8 @@ and implementation proposals.
 ## Before opening a change
 
 - Search existing issues and describe the PDF use case or specification rule.
-- For a public API proposal, explain why the capability belongs in core, layout,
-  barcode, sign, image, optimize, or a new optional module.
+- For a public API proposal, explain why it is an engine primitive, print
+  stock (`skald-labels`), or application/example code. See [docs/modules.md](docs/modules.md).
 - Do not add a production dependency without first showing why the JDK and a
   small native implementation are insufficient.
 

@@ -21,7 +21,8 @@ and other generated documents that do not need historical PDF output modes.
 - First-page vs continuing headers, named destinations, URI links, internal GoTo links, and draft watermarks
 - JPEG pass-through, lossless raster compression, alpha, image allowlisting, and image deduplication
 - Rounded surfaces, dashed rules, underline, strikethrough, and axial gradients
-- EAN-13, UPC-A, Code 128, GS1-128, QR, clothing stickers, and A4 n-up sticker sheets
+- EAN-13, UPC-A, Code 128, GS1-128, and QR as drawable symbols
+- Optional `skald-labels` for 93×35 mm clothing stickers and A4 n-up sheets
 - Page events, drawing, watermarks, safer stamping, merging, and page import
 - Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
 - Optional `skald-sign` module: PAdES-B-B CMS integrity seals, JDK-only, no BouncyCastle
@@ -35,29 +36,34 @@ and other generated documents that do not need historical PDF output modes.
 |---|---|---|
 | `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, composition, and signature *placeholders* |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
-| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, QR, and product stickers |
+| `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols |
+| `skald-labels` | `org.skaldpdf.labels` | Optional print-stock labels (93×35 mm clothing EAN sticker, A4 n-up) |
 | `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
 | `skald-image` | `org.skaldpdf.codec` | Optional FFM TurboJPEG / libheif / libjxl photo ingest |
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
 
-`skald-layout`, `skald-barcode`, `skald-sign`, `skald-image`, and `skald-optimize`
-each depend on core, not on one another. An application only pays for the
-capabilities it selects. The complete runtime still depends solely on the JDK.
+Engine modules (`layout`, `barcode`, `sign`, `image`, `optimize`) each depend
+on core, not on one another. `skald-labels` composes barcode + core into a
+finished label. An application only pays for the capabilities it selects.
+Invoices and packing slips stay as examples, not artifacts. See
+[docs/modules.md](docs/modules.md). The complete runtime still depends solely
+on the JDK.
 
 Signing is an integrity seal, not a qualified eIDAS signature. ReAI and Skald
 are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.6.0` is on Maven Central:
+JDK 25 or newer is required. Release `1.7.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.6.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.6.0") // optional
-    implementation("no.beint.skaldpdf:skald-sign:1.6.0")    // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.6.0")   // optional HEIC / JPEG XL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.6.0") // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-layout:1.7.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.7.0") // optional symbols
+    implementation("no.beint.skaldpdf:skald-labels:1.7.0")  // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.7.0")    // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.7.0")   // optional HEIC / JPEG XL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.7.0") // optional received-PDF recompress
 }
 ```
 
@@ -71,7 +77,8 @@ For a modular application:
 
 ```java
 requires org.skaldpdf.layout;
-requires org.skaldpdf.barcode;  // optional
+requires org.skaldpdf.barcode;  // optional symbols
+requires org.skaldpdf.labels;   // optional print stock
 requires org.skaldpdf.sign;     // optional
 requires org.skaldpdf.optimize; // optional
 ```
@@ -119,11 +126,11 @@ var barcode = new Ean13Barcode("590123412345")
 document.add(new Image(barcode).scaleToFit(260, 110));
 ```
 
-Clothing / product stickers (the ecomtools 93 mm × 35 mm label) are a single call.
-`ProductSticker.sheet` tiles the same labels onto A4 for warehouse printing:
+Clothing / product stickers live in `skald-labels`, not in the barcode
+module. `ProductSticker.sheet` tiles the same labels onto A4:
 
 ```java
-import org.skaldpdf.barcode.ProductSticker;
+import org.skaldpdf.labels.ProductSticker;
 
 byte[] sticker = ProductSticker.pdf(new ProductSticker.Spec(
     "SOJA-BA-L", "CN", "Softy Jacket", "L", "",
@@ -181,6 +188,7 @@ separate documents work naturally on virtual threads. Encrypted input and
 unsupported structural features fail closed instead of being partially read.
 
 See the [website](https://beint-no.github.io/skald-pdf/),
+[module layers](docs/modules.md),
 [capability matrix](docs/capabilities.md), [architecture](docs/architecture.md),
 [standards policy](docs/standards.md), [signing / eIDAS](docs/signing.md),
 [security model](docs/security.md),

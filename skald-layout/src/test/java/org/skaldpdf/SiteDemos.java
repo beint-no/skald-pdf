@@ -2,7 +2,7 @@ package org.skaldpdf;
 
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
-import org.skaldpdf.barcode.ProductSticker;
+import org.skaldpdf.labels.ProductSticker;
 import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.geom.PageSize;

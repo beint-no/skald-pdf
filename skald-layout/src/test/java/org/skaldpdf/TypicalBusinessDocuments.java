@@ -3,7 +3,7 @@ package org.skaldpdf;
 import org.skaldpdf.barcode.Code128Barcode;
 import org.skaldpdf.barcode.Ean13Barcode;
 import org.skaldpdf.barcode.Gs1128Barcode;
-import org.skaldpdf.barcode.ProductSticker;
+import org.skaldpdf.labels.ProductSticker;
 import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.barcode.UpcABarcode;
 import org.skaldpdf.colors.ColorConstants;

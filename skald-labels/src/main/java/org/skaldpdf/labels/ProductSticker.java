@@ -1,5 +1,6 @@
-package org.skaldpdf.barcode;
+package org.skaldpdf.labels;
 
+import org.skaldpdf.barcode.Ean13Barcode;
 import org.skaldpdf.font.PdfFont;
 import org.skaldpdf.font.PdfFontFactory;
 import org.skaldpdf.geom.PageSize;
@@ -15,9 +16,11 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Clothing / product EAN-13 sticker used by ecomtools.
- * Page is 93 mm × 35 mm: barcode on the left, origin/SKU/size on the right,
- * product title and composition underneath.
+ * 93 mm × 35 mm clothing / product EAN-13 sticker: barcode on the left,
+ * origin/SKU/size on the right, title and composition underneath.
+ *
+ * <p>This is print-stock, not a barcode primitive. Symbol encoding lives in
+ * {@code skald-barcode}; this class composes a finished label.
  */
 public final class ProductSticker {
     public static final float PAGE_WIDTH_MM = 93f;

@@ -5,11 +5,11 @@ types. This keeps dependencies small without turning ordinary document creation
 into a graph of tiny artifacts.
 
 ```text
-org.skaldpdf.layout    ──┐
-org.skaldpdf.barcode   ──┤
-org.skaldpdf.sign      ──┼──> org.skaldpdf.core ──> java.desktop ──> java.base
-org.skaldpdf.codec     ──┤  (optional FFM → libturbojpeg / libheif / libjxl)
-org.skaldpdf.optimize  ──┘
+org.skaldpdf.labels  ──> org.skaldpdf.barcode ──┐
+org.skaldpdf.layout                            │
+org.skaldpdf.sign                              ┼──> org.skaldpdf.core ──> java.desktop
+org.skaldpdf.codec   (optional FFM natives)    │
+org.skaldpdf.optimize                          ┘
 ```
 
 ## Core
@@ -36,9 +36,15 @@ reverse dependency or runtime discovery mechanism.
 ## Barcode
 
 `skald-barcode` provides immutable, validated EAN-13, UPC-A, Code 128, GS1-128, and QR
-symbols, plus the 93 mm × 35 mm clothing sticker used in warehouse printing. It
-depends only on core and can be used without the layout module by drawing its
-`ImageSource` onto a page directly.
+symbols as `ImageSource` values. It depends only on core. Place a symbol on any
+page without taking label templates.
+
+## Labels
+
+`skald-labels` is optional print stock. `ProductSticker` is a 93 mm × 35 mm
+clothing EAN label composed from barcode + core. It does not depend on layout.
+Invoices and packing slips are not modules; they are examples. The layering
+rule is in [modules.md](modules.md).
 
 ## Sign
 

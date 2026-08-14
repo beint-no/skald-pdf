@@ -6,7 +6,7 @@ import com.google.zxing.DecodeHintType;
 import com.google.zxing.MultiFormatReader;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
-import org.skaldpdf.barcode.ProductSticker;
+import org.skaldpdf.labels.ProductSticker;
 import org.skaldpdf.image.ImageDataFactory;
 import org.skaldpdf.layout.element.Image;
 import org.skaldpdf.layout.element.Paragraph;
