@@ -4,6 +4,21 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.6.0
+
+- Imported image XObjects: `PdfDocument.importedImages()` and
+  `replaceImportedImage`. The page `Do` name is preserved.
+- Optional `skald-optimize`: downsample / JPEG-recompress images *inside*
+  received PDFs. Depends only on core.
+- JPEG XL *ingest* in `skald-image` via libjxl. Not written into PDF 2.0 —
+  ISO 32000-2 has no `/JXLDecode`, and Acrobat / Preview / PDFBox cannot
+  display it. The PDF Association selected JXL as the preferred HDR solution
+  for a *future* spec (Wyatt, PDF Days Europe 2025). See
+  [native-image.md](docs/native-image.md).
+- `ImageData.fromRgb` / `fromGray` for rasters already decoded by a native codec.
+- `PdfText` / `Pdf.extractText`: ToUnicode-aware extraction for invoices and slips.
+- 16×16 visual fingerprints in the layout test harness.
+
 ## Shipped in 1.5.0
 
 - Optional `skald-image`: FFM bindings to TurboJPEG and libheif. Missing
@@ -14,13 +29,11 @@ practical document coverage it adds.
 Ordered by what would make Skald the better business-PDF library, not a
 bigger iText clone:
 
-1. **Imported image XObjects** — read and replace `/XObject /Image` in
-   received files. That unblocks `skald-optimize` (shrink supplier PDFs).
-2. **Visual regression** — Poppler/MuPDF baselines for the ReAI corpus.
-3. **CFF/OTF embedding** — licensed retail faces as PDF 2.0 CID fonts.
-4. **PDF/A-4 module** — archive invoices with output intents.
-5. **PAdES-B-T** — timestamp after a TSA; still not QES.
-6. **High-level text extract** on the existing parser.
+1. **Visual regression baselines** — persist fingerprints for the ReAI corpus.
+2. **CFF/OTF embedding** — licensed retail faces as PDF 2.0 CID fonts.
+3. **PDF/A-4 module** — archive invoices with output intents.
+4. **PAdES-B-T** — timestamp after a TSA; still not QES.
+5. **Emit JPEG XL** — only after ISO publishes a filter and viewers implement it.
 
 ## Shipped in 1.4.1
 

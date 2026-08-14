@@ -6,10 +6,12 @@ import org.skaldpdf.image.ImageDataFactory;
 import java.util.Objects;
 
 /**
- * Optional native codecs (TurboJPEG, libheif) via the JDK FFM API.
+ * Optional native codecs (TurboJPEG, libheif, libjxl) via the JDK FFM API.
  *
  * <p>Missing libraries are not fatal: {@link #jpegAvailable()} / {@link #heifAvailable()}
- * report what this machine can do. Core PDF generation never requires this module.
+ * / {@link #jpegXlAvailable()} report what this machine can do. Core PDF
+ * generation never requires this module. JPEG XL is decode-only ingest —
+ * prepared output is always a DCT JPEG that current PDF viewers can display.
  */
 public final class NativeImages {
     private NativeImages() {
@@ -21,6 +23,10 @@ public final class NativeImages {
 
     public static boolean heifAvailable() {
         return Heif.AVAILABLE;
+    }
+
+    public static boolean jpegXlAvailable() {
+        return JpegXl.AVAILABLE;
     }
 
     public static byte[] jpegEncode(Raster raster, int quality) {
@@ -35,17 +41,25 @@ public final class NativeImages {
         return Heif.decode(heif);
     }
 
+    public static Raster jpegXlDecode(byte[] jxl) {
+        return JpegXl.decode(jxl);
+    }
+
     /**
-     * Decode a JPEG or HEIC/AVIF photo, shrink it, and return an {@link ImageData}
-     * that Skald can embed as a DCT stream.
+     * Decode a JPEG, HEIC/AVIF, or JPEG XL photo, shrink it, and return an
+     * {@link ImageData} that Skald can embed as a DCT stream. JPEG XL is never
+     * stored inside the PDF.
      */
     public static ImageData prepare(byte[] bytes, PrepareOptions options) {
         Objects.requireNonNull(bytes, "bytes");
         Objects.requireNonNull(options, "options");
         var raster = decode(bytes);
         raster = scaleToFit(raster, options.maxEdge());
-        var jpeg = TurboJpeg.compress(raster, options.jpegQuality());
-        return ImageDataFactory.create(jpeg);
+        if (TurboJpeg.AVAILABLE) {
+            return ImageDataFactory.create(TurboJpeg.compress(raster, options.jpegQuality()));
+        }
+        return ImageData.fromRgb(raster.width(), raster.height(), raster.rgb())
+            .asJpeg(options.jpegQuality() / 100f);
     }
 
     static Raster decode(byte[] bytes) {
@@ -55,7 +69,10 @@ public final class NativeImages {
         if (isHeif(bytes)) {
             return Heif.decode(bytes);
         }
-        throw new IllegalArgumentException("NativeImages.prepare accepts JPEG or HEIC/AVIF");
+        if (isJpegXl(bytes)) {
+            return JpegXl.decode(bytes);
+        }
+        throw new IllegalArgumentException("NativeImages.prepare accepts JPEG, HEIC/AVIF, or JPEG XL");
     }
 
     static Raster scaleToFit(Raster source, int maxEdge) {
@@ -102,5 +119,14 @@ public final class NativeImages {
             }
         }
         return false;
+    }
+
+    static boolean isJpegXl(byte[] bytes) {
+        if (bytes.length >= 2 && (bytes[0] & 0xff) == 0xff && bytes[1] == 0x0a) {
+            return true;
+        }
+        return bytes.length >= 12
+            && bytes[0] == 0 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 0x0c
+            && bytes[4] == 'J' && bytes[5] == 'X' && bytes[6] == 'L' && bytes[7] == ' ';
     }
 }

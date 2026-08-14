@@ -176,6 +176,45 @@ public final class ImageData implements ImageSource {
         return true;
     }
 
+    /**
+     * Packed 8-bit DeviceRGB samples, top-down, three bytes per pixel.
+     * Use this when a native codec has already decoded a photo.
+     */
+    public static ImageData fromRgb(int width, int height, byte[] rgb) {
+        return fromRaster(width, height, 3, rgb);
+    }
+
+    /**
+     * Packed 8-bit DeviceGray samples, top-down, one byte per pixel.
+     */
+    public static ImageData fromGray(int width, int height, byte[] gray) {
+        return fromRaster(width, height, 1, gray);
+    }
+
+    private static ImageData fromRaster(int width, int height, int components, byte[] samples) {
+        Objects.requireNonNull(samples, "samples");
+        if (width < 1 || height < 1) {
+            throw new IllegalArgumentException("Image dimensions must be positive");
+        }
+        if ((long) width * height > MAXIMUM_PIXELS) {
+            throw new IllegalArgumentException("Image dimensions exceed the safe decoding limit");
+        }
+        var expected = Math.multiplyExact(Math.multiplyExact(width, height), components);
+        if (samples.length != expected) {
+            throw new IllegalArgumentException("Raster sample length does not match its dimensions");
+        }
+        return new ImageData(samples.clone(), null, width, height, components, false);
+    }
+
+    private ImageData(byte[] samples, byte[] alpha, int width, int height, int components, boolean jpeg) {
+        this.samples = samples;
+        this.alpha = alpha;
+        this.width = width;
+        this.height = height;
+        this.components = components;
+        this.jpeg = jpeg;
+    }
+
     public byte[] samples() {
         return samples.clone();
     }
@@ -290,9 +329,16 @@ public final class ImageData implements ImageSource {
         var offset = 0;
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                var red = samples[offset++] & 0xff;
-                var green = samples[offset++] & 0xff;
-                var blue = samples[offset++] & 0xff;
+                int red;
+                int green;
+                int blue;
+                if (components == 1) {
+                    red = green = blue = samples[offset++] & 0xff;
+                } else {
+                    red = samples[offset++] & 0xff;
+                    green = samples[offset++] & 0xff;
+                    blue = samples[offset++] & 0xff;
+                }
                 var alphaValue = this.alpha == null ? 255 : (this.alpha[y * width + x] & 0xff);
                 image.setRGB(x, y, (alphaValue << 24) | (red << 16) | (green << 8) | blue);
             }

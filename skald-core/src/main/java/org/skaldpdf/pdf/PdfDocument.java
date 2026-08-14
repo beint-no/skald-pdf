@@ -3,6 +3,7 @@ package org.skaldpdf.pdf;
 import org.skaldpdf.event.AbstractPdfDocumentEventHandler;
 import org.skaldpdf.event.PdfDocumentEvent;
 import org.skaldpdf.geom.PageSize;
+import org.skaldpdf.image.ImageData;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ public final class PdfDocument implements AutoCloseable {
     private final Map<String, NamedDestination> namedDestinations = new LinkedHashMap<>();
     private String language;
     private SignatureField signatureField;
+    private final Map<ImportedImageKey, ImageData> importedImageReplacements = new LinkedHashMap<>();
     private boolean closed;
     private boolean closing;
 
@@ -127,6 +129,49 @@ public final class PdfDocument implements AutoCloseable {
             .add(Objects.requireNonNull(handler, "handler"));
     }
 
+    /**
+     * Image XObjects on imported pages, in page order. Generated pages that
+     * were never parsed contribute nothing; reopen the file first.
+     */
+    public List<EmbeddedImage> importedImages() {
+        ensureOpen();
+        var result = new ArrayList<EmbeddedImage>();
+        for (int index = 0; index < pages.size(); index++) {
+            var imported = pages.get(index).importedPage();
+            if (imported != null) {
+                result.addAll(imported.source().imageXObjects(imported, index + 1));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * Replaces one imported image XObject. The page content stream keeps the
+     * same resource name, so the existing {@code Do} operator continues to
+     * work. The replacement is written as a new DCT or Flate stream.
+     */
+    public PdfDocument replaceImportedImage(int pageNumber, String resourceName, ImageData image) {
+        ensureOpen();
+        Objects.requireNonNull(resourceName, "resourceName");
+        Objects.requireNonNull(image, "image");
+        var page = getPage(pageNumber);
+        if (page.importedPage() == null) {
+            throw new IllegalArgumentException("Only imported pages can replace image XObjects");
+        }
+        var present = importedImages().stream()
+            .anyMatch(candidate -> candidate.pageNumber() == pageNumber
+                && candidate.resourceName().equals(resourceName));
+        if (!present) {
+            throw new IllegalArgumentException("No imported image named " + resourceName + " on page " + pageNumber);
+        }
+        importedImageReplacements.put(new ImportedImageKey(pageNumber, resourceName), image);
+        return this;
+    }
+
+    Map<ImportedImageKey, ImageData> importedImageReplacements() {
+        return Map.copyOf(importedImageReplacements);
+    }
+
     public void copyPagesFrom(PdfDocument source, int fromPage, int toPage) {
         ensureOpen();
         Objects.requireNonNull(source, "source");
@@ -180,6 +225,12 @@ public final class PdfDocument implements AutoCloseable {
     public void ensureOpen() {
         if (closed) {
             throw new IllegalStateException("PDF document is closed");
+        }
+    }
+
+    record ImportedImageKey(int pageNumber, String resourceName) {
+        ImportedImageKey {
+            Objects.requireNonNull(resourceName, "resourceName");
         }
     }
 }

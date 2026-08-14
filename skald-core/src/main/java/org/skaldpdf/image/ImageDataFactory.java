@@ -14,6 +14,14 @@ public final class ImageDataFactory {
         return new ImageData(bytes);
     }
 
+    public static ImageData fromRgb(int width, int height, byte[] rgb) {
+        return ImageData.fromRgb(width, height, rgb);
+    }
+
+    public static ImageData fromGray(int width, int height, byte[] gray) {
+        return ImageData.fromGray(width, height, gray);
+    }
+
     public static ImageData create(InputStream input) {
         Objects.requireNonNull(input, "input");
         try {

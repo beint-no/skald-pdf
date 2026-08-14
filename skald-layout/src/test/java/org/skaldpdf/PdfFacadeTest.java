@@ -69,4 +69,26 @@ class PdfFacadeTest {
         assertTrue(text.contains("Another path output"));
         assertTrue(text.contains("Path workflow"));
     }
+
+    @Test
+    void extractsEmbeddedUnicodeText() {
+        var bytes = Pdf.create(document -> {
+            document.add(new Paragraph("Invoice 2026-1001").bold());
+            document.add(new Paragraph("Payment terms: net 14 days."));
+        });
+        var text = Pdf.extractText(bytes);
+        assertTrue(text.contains("Invoice 2026-1001"), text);
+        assertTrue(text.contains("Payment terms"), text);
+    }
+
+    @Test
+    void rewriteWithoutChangesKeepsThePageFingerprint() throws Exception {
+        var original = Pdf.create(document -> document.add(new Paragraph("Fingerprint stable")));
+        var rewritten = Pdf.rewrite(original, document -> {
+        });
+        var first = PdfTestSupport.visualFingerprint(PdfTestSupport.renderFirstPage(original));
+        var second = PdfTestSupport.visualFingerprint(PdfTestSupport.renderFirstPage(rewritten));
+        assertTrue(PdfTestSupport.fingerprintDistance(first, second) < 80,
+            "rewrite should not change painted pixels");
+    }
 }

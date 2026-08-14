@@ -14,9 +14,10 @@ what it uses. This is the mapping against the workflows ReAI actually runs.
 | Redact personal data | pdfSweep | — | Maybe `skald-redact` when we have a concrete ReAI case |
 | Forms / AcroForm fill | Core forms | Signature field only | Not a priority |
 | Optimize generated files | pdfOptimizer | Compact subset, object streams, JPEG pass-through | Incremental, stays in core |
-| Recompress photos *already inside* a received PDF | pdfOptimizer | Not yet | **Yes — `skald-optimize`** |
-| Downscale/re-encode *before* embedding | Manual | `ImageData.scaledToFit` / `asJpeg`; optional `skald-image` for HEIC + TurboJPEG | No |
+| Recompress photos *already inside* a received PDF | pdfOptimizer | `skald-optimize` | Done, optional |
+| Downscale/re-encode *before* embedding | Manual | `ImageData.scaledToFit` / `asJpeg`; optional `skald-image` for HEIC / JXL + TurboJPEG | No |
 | HEIC/AVIF phone photos | ImageIO plugins / none | `skald-image` (`NativeImages.prepare`) | Done, optional |
+| JPEG XL phone photos | none | `skald-image` decode → DCT JPEG. Not stored as JXL in PDF 2.0 | Ingest only |
 
 ## Image compression of existing PDFs
 
@@ -29,11 +30,10 @@ needs a different path: walk imported XObject image streams, decode, optionally
 downsample, write a new DCT or Flate XObject, keep the page content stream's
 `Do` name.
 
-That work belongs in an optional `skald-optimize` module that depends only on
-core. It should not sit in layout or barcode. It is not started in this release
-because the parser currently treats imported XObjects as inert COS blobs — the
-right first step is an explicit image-XObject reader, not a silent recompress
-during `Pdf.rewrite`.
+That work is `skald-optimize`. It depends only on core. `PdfDocument.importedImages()`
+lists XObjects; `replaceImportedImage` writes a new DCT/Flate stream under the
+same resource name. `PdfOptimizer.recompress` applies `OptimizeOptions`
+(max edge + JPEG quality) and skips filters it cannot decode (JPX, JBIG2, CCITT).
 
 Do not add pdfHTML. HTML-in-core is the baggage Skald exists to avoid.
 

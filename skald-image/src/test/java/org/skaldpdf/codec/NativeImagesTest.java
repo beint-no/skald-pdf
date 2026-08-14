@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -22,6 +23,7 @@ class NativeImagesTest {
     void reportsMissingNativesWithoutThrowing() {
         NativeImages.jpegAvailable();
         NativeImages.heifAvailable();
+        NativeImages.jpegXlAvailable();
     }
 
     @Test
@@ -94,6 +96,45 @@ class NativeImagesTest {
 
     static boolean heifPresent() {
         return NativeImages.heifAvailable();
+    }
+
+    @Test
+    @EnabledIf("jxlPresent")
+    void decodesJpegXlAndPreparesADctJpeg() throws Exception {
+        assumeTrue(Files.isRegularFile(Path.of("/opt/homebrew/bin/cjxl"))
+            || Files.isRegularFile(Path.of("/usr/bin/cjxl")));
+        var cjxl = Files.isRegularFile(Path.of("/opt/homebrew/bin/cjxl"))
+            ? "/opt/homebrew/bin/cjxl" : "/usr/bin/cjxl";
+        var png = Files.createTempFile("skald-jxl", ".png");
+        var jxl = Files.createTempFile("skald-jxl", ".jxl");
+        ImageIO.write(solidPng(80, 48), "png", png.toFile());
+        var process = new ProcessBuilder(cjxl, "-q", "60", png.toString(), jxl.toString())
+            .redirectErrorStream(true)
+            .start();
+        var log = new String(process.getInputStream().readAllBytes());
+        assertEquals(0, process.waitFor(), log);
+        var bytes = Files.readAllBytes(jxl);
+        assertTrue(NativeImages.isJpegXl(bytes));
+        var raster = NativeImages.jpegXlDecode(bytes);
+        assertEquals(80, raster.width());
+        assertEquals(48, raster.height());
+        var prepared = NativeImages.prepare(bytes, PrepareOptions.photos());
+        assertTrue(prepared.jpeg());
+        assertEquals(80, prepared.width());
+        var output = new ByteArrayOutputStream();
+        try (var pdf = new PdfDocument(new PdfWriter(output))) {
+            var page = pdf.addNewPage(new PageSize(160, 120));
+            prepared.drawOn(pdf, page, 8, 8, 144, 104);
+        }
+        var pdf = output.toByteArray();
+        assertTrue(new String(pdf, java.nio.charset.StandardCharsets.ISO_8859_1).contains("/DCTDecode"));
+        assertFalse(new String(pdf, java.nio.charset.StandardCharsets.ISO_8859_1).contains("JXLDecode"));
+        Files.deleteIfExists(png);
+        Files.deleteIfExists(jxl);
+    }
+
+    static boolean jxlPresent() {
+        return NativeImages.jpegXlAvailable();
     }
 
     private static Raster noisyRaster(int width, int height) {

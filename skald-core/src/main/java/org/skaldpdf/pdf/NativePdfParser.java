@@ -4,6 +4,8 @@ import static org.skaldpdf.pdf.CosValue.*;
 
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.geom.Rectangle;
+import org.skaldpdf.image.ImageData;
+import org.skaldpdf.image.ImageDataFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -57,6 +59,118 @@ final class NativePdfParser {
 
     List<ImportedPage> pages() {
         return pages;
+    }
+
+    List<EmbeddedImage> imageXObjects(ImportedPage page, int pageNumber) {
+        var resourcesValue = page.dictionary().get("Resources");
+        if (resourcesValue == null) {
+            return List.of();
+        }
+        var resources = dictionary(resolve(resourcesValue), "page Resources");
+        var xobjects = resources.get("XObject");
+        if (xobjects == null) {
+            return List.of();
+        }
+        var dictionary = dictionary(resolve(xobjects), "XObject");
+        var result = new ArrayList<EmbeddedImage>();
+        for (var entry : dictionary.values().entrySet()) {
+            var resolved = resolve(entry.getValue());
+            if (!(resolved instanceof CosStream stream)) {
+                continue;
+            }
+            var subtype = stream.dictionary().get("Subtype");
+            if (!(resolve(subtype) instanceof CosName name) || !name.value().equals("Image")) {
+                continue;
+            }
+            result.add(embeddedImage(pageNumber, entry.getKey(), stream));
+        }
+        return List.copyOf(result);
+    }
+
+    byte[] contentBytes(ImportedPage page) {
+        var contents = resolve(page.dictionary().get("Contents"));
+        if (contents instanceof CosStream stream) {
+            return decoded(stream, "page contents");
+        }
+        if (contents instanceof CosArray array) {
+            var output = new ByteArrayOutputStream();
+            for (var item : array.values()) {
+                var resolved = resolve(item);
+                if (resolved instanceof CosStream stream) {
+                    try {
+                        output.write(decoded(stream, "page contents"));
+                        output.write('\n');
+                    } catch (IOException impossible) {
+                        throw new AssertionError(impossible);
+                    }
+                }
+            }
+            return output.toByteArray();
+        }
+        return new byte[0];
+    }
+
+    byte[] decodedStream(CosStream stream, String description) {
+        return decoded(stream, description);
+    }
+
+    ImageData decodeImage(CosStream stream) {
+        var dictionary = stream.dictionary();
+        var width = integer(resolve(dictionary.get("Width")), "image Width");
+        var height = integer(resolve(dictionary.get("Height")), "image Height");
+        var bits = dictionary.get("BitsPerComponent") == null ? 8
+            : integer(resolve(dictionary.get("BitsPerComponent")), "image BitsPerComponent");
+        require(width > 0 && height > 0, "Image dimensions must be positive");
+        require(bits == 8, "Only 8-bit images can be decoded");
+        var filters = filterNames(dictionary.get("Filter"));
+        var data = stream.encodedBytes();
+        var jpeg = false;
+        for (var filter : filters) {
+            switch (filter) {
+                case "FlateDecode", "Fl" -> data = inflate(data, "image");
+                case "ASCIIHexDecode", "AHx" -> data = asciiHex(data, "image");
+                case "DCTDecode", "DCT" -> jpeg = true;
+                default -> throw new IllegalArgumentException("Unsupported image filter " + filter);
+            }
+        }
+        if (jpeg) {
+            return ImageDataFactory.create(data);
+        }
+        data = applyPredictor(data, dictionary.get("DecodeParms"), "image");
+        var colorSpace = colorSpaceName(dictionary.get("ColorSpace"));
+        return switch (colorSpace) {
+            case "DeviceRGB" -> ImageData.fromRgb(width, height, data);
+            case "DeviceGray" -> ImageData.fromGray(width, height, data);
+            default -> throw new IllegalArgumentException("Unsupported image color space " + colorSpace);
+        };
+    }
+
+    private EmbeddedImage embeddedImage(int pageNumber, String resourceName, CosStream stream) {
+        var dictionary = stream.dictionary();
+        var width = integer(resolve(dictionary.get("Width")), "image Width");
+        var height = integer(resolve(dictionary.get("Height")), "image Height");
+        var bits = dictionary.get("BitsPerComponent") == null ? 8
+            : integer(resolve(dictionary.get("BitsPerComponent")), "image BitsPerComponent");
+        var filters = filterNames(dictionary.get("Filter"));
+        var filter = filters.isEmpty() ? "None" : String.join("+", filters);
+        var jpeg = filters.contains("DCTDecode") || filters.contains("DCT");
+        return new EmbeddedImage(pageNumber, resourceName, width, height, filter,
+            colorSpaceName(dictionary.get("ColorSpace")), bits, jpeg, stream.encodedBytes(), this, stream);
+    }
+
+    private String colorSpaceName(CosValue value) {
+        if (value == null) {
+            return "DeviceGray";
+        }
+        var resolved = resolve(value);
+        if (resolved instanceof CosName name) {
+            return name.value();
+        }
+        if (resolved instanceof CosArray array && !array.values().isEmpty()
+            && resolve(array.values().get(0)) instanceof CosName name) {
+            return name.value();
+        }
+        return "Unknown";
     }
 
     CosValue resolve(CosValue value) {

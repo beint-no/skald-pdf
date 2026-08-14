@@ -4,6 +4,7 @@ import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfReader;
+import org.skaldpdf.pdf.PdfText;
 import org.skaldpdf.pdf.PdfWriter;
 import org.skaldpdf.pdf.WriterProperties;
 import org.skaldpdf.pdf.merge.PdfMerger;
@@ -70,6 +71,10 @@ public final class Pdf {
         try (var document = new PdfDocument(new PdfReader(source), new PdfWriter(target))) {
             changes.accept(document);
         }
+    }
+
+    public static String extractText(byte[] source) {
+        return PdfText.extract(source);
     }
 
     public static byte[] merge(List<byte[]> sources) {

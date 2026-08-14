@@ -25,6 +25,8 @@ and other generated documents that do not need historical PDF output modes.
 - Page events, drawing, watermarks, safer stamping, merging, and page import
 - Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
 - Optional `skald-sign` module: PAdES-B-B CMS integrity seals, JDK-only, no BouncyCastle
+- Optional `skald-optimize` module: recompress image XObjects inside received PDFs
+- Optional `skald-image` module: TurboJPEG, libheif, and JPEG XL *ingest* (never emitted in PDF 2.0)
 - Independent rendering, extraction, barcode, syntax, signature, and PDF 2.0 validation tests
 
 ## Modules
@@ -35,25 +37,27 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
 | `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, QR, and product stickers |
 | `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
-| `skald-image` | `org.skaldpdf.codec` | Optional FFM TurboJPEG / libheif photo ingest |
+| `skald-image` | `org.skaldpdf.codec` | Optional FFM TurboJPEG / libheif / libjxl photo ingest |
+| `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
 
-`skald-layout`, `skald-barcode`, `skald-sign`, and `skald-image` each depend on
-core, not on one another. An application only pays for the capabilities it selects. The
-complete runtime still depends solely on the JDK.
+`skald-layout`, `skald-barcode`, `skald-sign`, `skald-image`, and `skald-optimize`
+each depend on core, not on one another. An application only pays for the
+capabilities it selects. The complete runtime still depends solely on the JDK.
 
 Signing is an integrity seal, not a qualified eIDAS signature. ReAI and Skald
 are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.5.0` is on Maven Central:
+JDK 25 or newer is required. Release `1.6.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.5.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.5.0") // optional
-    implementation("no.beint.skaldpdf:skald-sign:1.5.0")    // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.5.0")   // optional HEIC/JPEG natives
+    implementation("no.beint.skaldpdf:skald-layout:1.6.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.6.0") // optional
+    implementation("no.beint.skaldpdf:skald-sign:1.6.0")    // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.6.0")   // optional HEIC / JPEG XL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.6.0") // optional received-PDF recompress
 }
 ```
 
@@ -67,8 +71,9 @@ For a modular application:
 
 ```java
 requires org.skaldpdf.layout;
-requires org.skaldpdf.barcode; // optional
-requires org.skaldpdf.sign;    // optional
+requires org.skaldpdf.barcode;  // optional
+requires org.skaldpdf.sign;     // optional
+requires org.skaldpdf.optimize; // optional
 ```
 
 ## Create a document
@@ -138,6 +143,17 @@ byte[] stamped = Pdf.rewrite(joined, pdf -> {
         TextAlignment.LEFT, VerticalAlignment.BOTTOM, 0
     );
 });
+
+String text = Pdf.extractText(stamped);
+```
+
+Recompress photos that arrived *inside* a supplier PDF:
+
+```java
+import org.skaldpdf.optimize.OptimizeOptions;
+import org.skaldpdf.optimize.PdfOptimizer;
+
+byte[] smaller = PdfOptimizer.recompress(attachment, OptimizeOptions.attachments());
 ```
 
 Seal an issued invoice (integrity, not a qualified eIDAS signature):

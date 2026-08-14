@@ -5,10 +5,11 @@ types. This keeps dependencies small without turning ordinary document creation
 into a graph of tiny artifacts.
 
 ```text
-org.skaldpdf.layout   ──┐
-org.skaldpdf.barcode  ──┼──> org.skaldpdf.core ──> java.desktop ──> java.base
-org.skaldpdf.sign     ──┤
-org.skaldpdf.codec    ──┘  (optional FFM → libturbojpeg / libheif)
+org.skaldpdf.layout    ──┐
+org.skaldpdf.barcode   ──┤
+org.skaldpdf.sign      ──┼──> org.skaldpdf.core ──> java.desktop ──> java.base
+org.skaldpdf.codec     ──┤  (optional FFM → libturbojpeg / libheif / libjxl)
+org.skaldpdf.optimize  ──┘
 ```
 
 ## Core
@@ -49,9 +50,13 @@ this module writes detached CMS SignedData, patches `/ByteRange` and
 The module is an AdES integrity seal. It is not a QTSP and does not mint
 qualified certificates. See [signing.md](signing.md).
 
+## Optimize
+
+`skald-optimize` rewrites imported image XObjects. Core lists and replaces
+them; this module applies a downsample / JPEG policy. It does not depend on
+`skald-image`. JPEG XL is never written into the file.
+
 Workflow-to-module mapping against iText's suite is in [workflows.md](workflows.md).
-The next optional module, if any, is `skald-optimize` for recompressing images
-already stored in a received PDF.
 
 ## Dependency policy
 

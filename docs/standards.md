@@ -16,8 +16,8 @@ part of the public API.
 
 Composition accepts unencrypted PDF 1.x and PDF 2.0 inputs using classic xref
 tables, xref streams, object streams, hybrid references, and revision chains. The
-parser preserves imported page content and resources as inert PDF objects. Any
-newly saved file is PDF 2.0.
+parser preserves imported page content and resources as inert PDF objects
+unless the application replaces an image XObject. Any newly saved file is PDF 2.0.
 
 Supporting older inputs is not the same as maintaining a legacy output mode. It
 is required for practical stamping and merging because received documents are not
@@ -43,6 +43,11 @@ Generated fixtures are checked at several independent layers:
 
 PAdES-B-B attributes are documented in [signing.md](signing.md). QES is out of
 scope without a listed QTSP.
+
+JPEG XL (ISO/IEC 18181) is the PDF Association's preferred HDR candidate for a
+*future* PDF edition (Wyatt, PDF Days Europe 2025). It is not in ISO 32000-2:2020.
+Skald decodes JXL as input and embeds `DCTDecode`. It will not write a
+`/JXLDecode` stream until the ISO filter exists and viewers implement it.
 
 The PDF specification itself remains authoritative. A validator is a second
 implementation and not a substitute for standards review.

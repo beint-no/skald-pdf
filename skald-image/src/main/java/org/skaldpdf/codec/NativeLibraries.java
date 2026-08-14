@@ -37,6 +37,21 @@ final class NativeLibraries {
         ), "heif");
     }
 
+    static Optional<SymbolLookup> jxl() {
+        return load("SKALD_JXL", List.of(
+            "/opt/homebrew/opt/jpeg-xl/lib/libjxl.dylib",
+            "/opt/homebrew/lib/libjxl.dylib",
+            "/usr/local/lib/libjxl.dylib",
+            "/usr/lib/libjxl.so.0.12",
+            "/usr/lib/libjxl.so.0.11",
+            "/usr/lib/libjxl.so.0.10",
+            "/usr/lib/x86_64-linux-gnu/libjxl.so.0.12",
+            "/usr/lib/x86_64-linux-gnu/libjxl.so.0.11",
+            "/usr/lib/aarch64-linux-gnu/libjxl.so.0.12",
+            "/usr/lib/aarch64-linux-gnu/libjxl.so.0.11"
+        ), "jxl");
+    }
+
     private static Optional<SymbolLookup> load(String envName, List<String> paths, String libraryName) {
         var override = System.getenv(envName);
         if (override != null && !override.isBlank()) {

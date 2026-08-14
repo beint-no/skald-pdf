@@ -8,15 +8,18 @@
 | Text | Unicode, embedded subset TrueType, PostScript font names, regular/bold/italic/bold-italic, fallback stack, color, left/center/right/justify, rotation, underline, strikethrough, `.notdef` for missing glyphs |
 | Layout | Paragraphs, lists with custom start index, runs, margins, padding, backgrounds, gradients, rounded borders, dashed rules, divs, nested cell content, fixed position, `keepTogether`, widow/orphan control, fitted-image measure, `AreaBreak` page size, named destinations |
 | Tables | weighted or mixed point/percent columns, min-content honoured before leftover is distributed, column and row spans, repeating headers and footers, inset hairline rules (`addRule`), line-boundary row splits, complete-row checks, nested blocks in cells |
-| Images | JPEG/PNG/GIF/BMP allowlist, encoded-size and pixel gates, JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction, `scaledToFit` / `asJpeg` |
+| Images | JPEG/PNG/GIF/BMP allowlist, encoded-size and pixel gates, JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction, `scaledToFit` / `asJpeg` / `fromRgb` / `fromGray` |
+| Imported images | list `/XObject /Image` on parsed pages; replace with new DCT/Flate while keeping the `Do` name |
+| Text extract | `PdfText` / `Pdf.extractText` via ToUnicode CMaps (WinAnsi fallback) |
+| Optimize | optional `skald-optimize`: downsample and JPEG-recompress images already inside a received PDF |
 | Drawing | fills, rounded paths, axial shadings, dashed lines, opacity, canvas overlays, end-page events, watermarks, URI and GoTo links |
 | Barcodes | validated EAN-13, UPC-A, Code 128, GS1-128, and QR (versions 1–16) with independent decode tests |
 | Product stickers | 93 mm × 35 mm EAN-13 clothing labels; A4 n-up print sheets |
 | Composition | merge, copy pages, stamp existing pages, resolve indirect Contents/Annots, strip Launch/JS and other unsafe imported actions |
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |
 | Signatures | reserved signature field in core; optional `skald-sign` CMS / PAdES-B-B integrity seal; verify + tamper tests |
-| Native photos | optional `skald-image`: TurboJPEG encode/decode and libheif HEIC/AVIF via FFM; absent libraries are skipped |
-| Runtime | five JPMS modules, JDK 25+, zero third-party *Java* runtime dependencies; native codecs optional |
+| Native photos | optional `skald-image`: TurboJPEG, libheif (HEIC/AVIF), libjxl (JPEG XL ingest only) via FFM; absent libraries are skipped |
+| Runtime | six JPMS modules, JDK 25+, zero third-party *Java* runtime dependencies; native codecs optional |
 
 ## Deliberately deferred
 
@@ -32,8 +35,8 @@
 | Complex-script shaping | needs a focused OpenType shaping engine or optional integration |
 | Multi-script fallback | a document-level fallback stack exists; script-aware shaping is still deferred |
 | CFF/OTF embedding | TrueType/OpenType glyf faces only until a dedicated CFF reader exists |
-| Optimizing arbitrary PDFs | rewriting received content is distinct from efficient generation |
-| Lossy image optimization | quality and DPI policy belongs at the application boundary |
+| Emitting JPEG XL in PDF | not in ISO 32000-2; no interoperable viewer filter yet. Decode-as-ingest is shipped |
+| Lossy image optimization | quality and DPI policy belongs at the application boundary (`OptimizeOptions`) |
 
 Priorities and the boundary between planned modules are documented in the
 [roadmap](../ROADMAP.md). Signing policy is in [signing.md](signing.md).

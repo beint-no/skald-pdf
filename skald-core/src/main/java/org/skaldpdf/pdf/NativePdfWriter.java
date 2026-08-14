@@ -99,8 +99,10 @@ final class NativePdfWriter {
                 appendAnnots(body, linkObjects);
                 pageBody = ascii(body.append(" >>").toString());
             } else {
+                var replacements = replacementImages(document, index + 1, objects, sharedImages);
                 pageBody = importedPage(imported, page, pagesObject, contentObject, fontObjects,
-                    imageObjects, opacityObjects, shadingObjects, linkObjects, importers.get(imported.source()));
+                    imageObjects, opacityObjects, shadingObjects, linkObjects,
+                    importers.get(imported.source()), replacements);
             }
             objects.set(pageObjects.get(index), pageBody);
         }
@@ -138,7 +140,7 @@ final class NativePdfWriter {
                                        int overlayContentObject, Map<PdfFont, Integer> fonts,
                                        Map<String, Integer> images, Map<String, Integer> opacities,
                                        Map<String, Integer> shadings, List<Integer> links,
-                                       ImportContext importer) {
+                                       ImportContext importer, Map<String, Integer> imageReplacements) {
         var dictionary = imported.dictionary();
         var result = new StringBuilder("<< /Type /Page /Parent ").append(pagesObject).append(" 0 R");
         dictionary.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
@@ -158,7 +160,8 @@ final class NativePdfWriter {
             result.append(" /CropBox ").append(importer.direct(crop));
         }
         result.append(" /Resources ")
-            .append(importedResources(imported, page, fonts, images, opacities, shadings, importer));
+            .append(importedResources(imported, page, fonts, images, opacities, shadings, importer,
+                imageReplacements));
         var rawContents = dictionary.get("Contents");
         var contents = importer.resolve(rawContents);
         if (page.content().isBlank()) {
@@ -199,7 +202,8 @@ final class NativePdfWriter {
 
     private static String importedResources(ImportedPage imported, PdfPage page, Map<PdfFont, Integer> fonts,
                                             Map<String, Integer> images, Map<String, Integer> opacities,
-                                            Map<String, Integer> shadings, ImportContext importer) {
+                                            Map<String, Integer> shadings, ImportContext importer,
+                                            Map<String, Integer> imageReplacements) {
         var resourcesValue = imported.dictionary().get("Resources");
         var resources = resourcesValue == null
             ? Map.<String, CosValue>of()
@@ -213,25 +217,32 @@ final class NativePdfWriter {
         });
         var fontAdditions = new LinkedHashMap<String, Integer>();
         page.fonts().forEach((font, resourceName) -> fontAdditions.put(resourceName, fonts.get(font)));
-        appendImportedResourceCategory(result, "Font", resources.get("Font"), fontAdditions, importer);
-        appendImportedResourceCategory(result, "XObject", resources.get("XObject"), images, importer);
-        appendImportedResourceCategory(result, "ExtGState", resources.get("ExtGState"), opacities, importer);
-        appendImportedResourceCategory(result, "Shading", resources.get("Shading"), shadings, importer);
+        appendImportedResourceCategory(result, "Font", resources.get("Font"), fontAdditions, importer, Map.of());
+        appendImportedResourceCategory(result, "XObject", resources.get("XObject"), images, importer,
+            imageReplacements);
+        appendImportedResourceCategory(result, "ExtGState", resources.get("ExtGState"), opacities, importer, Map.of());
+        appendImportedResourceCategory(result, "Shading", resources.get("Shading"), shadings, importer, Map.of());
         return result.append(" >>").toString();
     }
 
     private static void appendImportedResourceCategory(StringBuilder result, String category,
                                                        CosValue existingValue, Map<String, Integer> additions,
-                                                       ImportContext importer) {
+                                                       ImportContext importer, Map<String, Integer> replacements) {
         if (existingValue == null && additions.isEmpty()) {
             return;
         }
         result.append(" /").append(category).append(" <<");
         if (existingValue != null) {
             var existing = importer.dictionary(existingValue, category + " resources");
-            existing.values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry ->
-                result.append(" /").append(name(entry.getKey())).append(' ')
-                    .append(importer.direct(entry.getValue())));
+            existing.values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+                result.append(" /").append(name(entry.getKey())).append(' ');
+                var replacement = replacements.get(entry.getKey());
+                if (replacement != null) {
+                    result.append(replacement).append(" 0 R");
+                } else {
+                    result.append(importer.direct(entry.getValue()));
+                }
+            });
         }
         additions.forEach((resourceName, object) -> result.append(" /").append(resourceName).append(' ')
             .append(object).append(" 0 R"));
@@ -272,39 +283,53 @@ final class NativePdfWriter {
                                            IdentityHashMap<org.skaldpdf.image.ImageData, Integer> shared) {
         var result = new LinkedHashMap<String, Integer>();
         for (var resource : images) {
-            var image = resource.image();
-            var existing = shared.get(image);
-            if (existing != null) {
-                result.put(resource.name(), existing);
-                continue;
-            }
-            var alpha = image.alpha();
-            var softMask = alpha == null ? null : objects.add(stream(
-                format("/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
-                    + "/BitsPerComponent 8 /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent 8 /Columns %d >>",
-                    image.width(), image.height(), image.width()),
-                pngPredictor(alpha, image.width(), image.height(), 1), true));
-            var dictionary = new StringBuilder("/Type /XObject /Subtype /Image")
-                .append(" /Width ").append(image.width())
-                .append(" /Height ").append(image.height())
-                .append(" /ColorSpace ").append(image.components() == 1 ? "/DeviceGray" : "/DeviceRGB")
-                .append(" /BitsPerComponent 8");
-            if (softMask != null) {
-                dictionary.append(" /SMask ").append(softMask).append(" 0 R");
-            }
-            if (image.jpeg()) {
-                result.put(resource.name(), objects.add(stream(
-                    dictionary.toString(), image.samples(), false, "/DCTDecode"
-                )));
-            } else {
-                dictionary.append(" /DecodeParms << /Predictor 15 /Colors ").append(image.components())
-                    .append(" /BitsPerComponent 8 /Columns ").append(image.width()).append(" >>");
-                result.put(resource.name(), objects.add(stream(dictionary.toString(),
-                    pngPredictor(image.samples(), image.width(), image.height(), image.components()), true)));
-            }
-            shared.put(image, result.get(resource.name()));
+            result.put(resource.name(), addImageObject(objects, resource.image(), shared));
         }
         return result;
+    }
+
+    private Map<String, Integer> replacementImages(PdfDocument document, int pageNumber, ObjectStore objects,
+                                                   IdentityHashMap<org.skaldpdf.image.ImageData, Integer> shared) {
+        var result = new LinkedHashMap<String, Integer>();
+        document.importedImageReplacements().forEach((key, image) -> {
+            if (key.pageNumber() == pageNumber) {
+                result.put(key.resourceName(), addImageObject(objects, image, shared));
+            }
+        });
+        return result;
+    }
+
+    private int addImageObject(ObjectStore objects, org.skaldpdf.image.ImageData image,
+                               IdentityHashMap<org.skaldpdf.image.ImageData, Integer> shared) {
+        var existing = shared.get(image);
+        if (existing != null) {
+            return existing;
+        }
+        var alpha = image.alpha();
+        var softMask = alpha == null ? null : objects.add(stream(
+            format("/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray "
+                + "/BitsPerComponent 8 /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent 8 /Columns %d >>",
+                image.width(), image.height(), image.width()),
+            pngPredictor(alpha, image.width(), image.height(), 1), true));
+        var dictionary = new StringBuilder("/Type /XObject /Subtype /Image")
+            .append(" /Width ").append(image.width())
+            .append(" /Height ").append(image.height())
+            .append(" /ColorSpace ").append(image.components() == 1 ? "/DeviceGray" : "/DeviceRGB")
+            .append(" /BitsPerComponent 8");
+        if (softMask != null) {
+            dictionary.append(" /SMask ").append(softMask).append(" 0 R");
+        }
+        int object;
+        if (image.jpeg()) {
+            object = objects.add(stream(dictionary.toString(), image.samples(), false, "/DCTDecode"));
+        } else {
+            dictionary.append(" /DecodeParms << /Predictor 15 /Colors ").append(image.components())
+                .append(" /BitsPerComponent 8 /Columns ").append(image.width()).append(" >>");
+            object = objects.add(stream(dictionary.toString(),
+                pngPredictor(image.samples(), image.width(), image.height(), image.components()), true));
+        }
+        shared.put(image, object);
+        return object;
     }
 
     private static byte[] pngPredictor(byte[] samples, int width, int height, int components) {
