@@ -4,6 +4,13 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped after 1.8.0
+
+- Components live in `skald-components/` as a folder of independently
+  published artifacts. Maven coordinates are unchanged
+  (`skald-label-sticker`, `skald-labels`). Country-specific invoices may
+  join later as `skald-invoice-no` and similar — not as one generic invoice.
+
 ## Shipped in 1.8.0
 
 - PDF 2.0 AES-256 encryption (`PdfEncryption`, revision 6) for payslips

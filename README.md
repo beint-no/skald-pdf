@@ -44,11 +44,11 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
 
 Engine modules (`layout`, `barcode`, `sign`, `image`, `optimize`) each depend
-on core, not on one another. `skald-labels` composes barcode + core into a
-finished label. An application only pays for the capabilities it selects.
-Invoices and packing slips stay as examples, not artifacts. See
-[docs/modules.md](docs/modules.md). The complete runtime still depends solely
-on the JDK.
+on core, not on one another. Finished pages live under
+[`skald-components/`](skald-components/README.md) as **separate** artifacts
+(`skald-label-sticker` today). `skald-labels` is only the print-stock
+umbrella. See [docs/modules.md](docs/modules.md). The complete runtime still
+depends solely on the JDK.
 
 Signing is an integrity seal, not a qualified eIDAS signature. ReAI and Skald
 are not QTSPs. See [docs/signing.md](docs/signing.md).

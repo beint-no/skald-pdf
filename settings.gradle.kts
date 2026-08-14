@@ -11,6 +11,9 @@ include(
     "skald-labels"
 )
 
+project(":skald-label-sticker").projectDir = file("skald-components/label-sticker")
+project(":skald-labels").projectDir = file("skald-components/labels")
+
 dependencyResolutionManagement {
     repositories {
         mavenCentral()

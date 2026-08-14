@@ -1,12 +1,14 @@
 # Module layers
 
-Skald is split so an application pays only for the capability it uses. There
-are two published layers, and a third that is deliberately *not* a Maven
-artifact.
+Skald is split so an application pays only for the capability it uses.
+Engine modules are the building blocks. Published **components** live under
+[`skald-components/`](../skald-components/README.md) as separate artifacts.
 
 ```text
-Print stock          skald-labels              (optional umbrella)
-                     └── skald-label-sticker   (93×35 clothing EAN)
+Components           skald-components/          (folder, not one jar)
+                     ├── label-sticker          skald-label-sticker
+                     └── labels                 skald-labels (label-* umbrella)
+
 Engine               layout  barcode  sign  image  optimize
                      └────────────┬────────────────────────┘
                                   core
@@ -52,38 +54,26 @@ These depend on core and barcode, not on layout. Take
 `skald-label-sticker` for one type, or `skald-labels` if you want
 whatever print stock exists at that version.
 
-## What does not become a module
+## Document themes (invoices, later)
 
-Invoices, packing slips, credit notes, reminders, and payslips are
-**application documents**. Their information architecture follows VAT
-rules, brand, and locale. Publishing `skald-invoice` would either freeze
-one company's look or become a worse layout API.
+A generic `skald-invoice` is still the wrong shape. A *named* theme such
+as `skald-invoice-no` can be a component once a second product wants the
+same chrome. Until then ReAI and the example gallery are the invoices.
 
-Those live as:
+Document themes must not sit on the `skald-labels` umbrella. Print stock
+and bookkeeping layout are different products.
 
-- copy-paste recipes in the example gallery and `TypicalBusinessDocuments`
-- application code (ReAI, ecomtools)
-
-Do not add `skald-components`, `skald-invoice`, or `skald-packing-slip`.
-A grab-bag "components" module becomes a junk drawer. Per-document
-modules pretend Skald owns business paperwork.
-
-If ReAI wants shared invoice chrome, that belongs in a ReAI package, not
-on Maven Central as Skald.
+See [skald-components/README.md](../skald-components/README.md).
 
 ## Rule for new published code
 
-Ask which layer it is:
+1. **Engine** — PDF, font, image, or symbology rule → existing engine module.
+2. **Print stock** — physical page, stable fields → `skald-components/label-<name>`,
+   published as `skald-label-<name>`. Add it to `skald-labels`.
+3. **Document theme** — country- or style-specific invoice/slip → new
+   `skald-components/invoice-<locale>` only after a second real consumer.
+   Mark it as an opinionated template in the Javadoc.
+4. **Application-only** — one company’s letterhead. Stays in that app.
 
-1. **Engine** — does it implement a PDF, font, image, or symbology rule?
-   Put it in the matching engine module.
-2. **Print stock** — is the page size physical and the field set stable
-   across companies? New `skald-label-<type>` artifact. Do not grow
-   `skald-label-sticker`. The `skald-labels` umbrella may depend on the
-   new type.
-3. **Business document** — example or application code. Not a Skald
-   artifact.
-
-New engine modules stay justified the way sign/image/optimize were:
-they make a substantial capability optional. They are not a place to
-park every document we have generated in a test.
+Do not publish empty placeholders. Do not grow `skald-label-sticker` with
+shipping or shelf code.
