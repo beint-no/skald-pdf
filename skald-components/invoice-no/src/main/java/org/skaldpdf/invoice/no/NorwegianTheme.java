@@ -5,7 +5,7 @@ import org.skaldpdf.colors.DeviceRgb;
 import org.skaldpdf.font.PdfFont;
 import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
-import org.skaldpdf.image.ImageDataFactory;
+import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.borders.Border;
 import org.skaldpdf.layout.borders.SolidBorder;
@@ -79,12 +79,12 @@ public final class NorwegianTheme {
         document.setTitle(title).setAuthor(author).setLanguage(language);
     }
 
-    public static void header(Document document, Company company, String organizationLabel, byte[] logo) {
+    public static void header(Document document, Company company, String organizationLabel, ImageSource logo) {
         Objects.requireNonNull(company, "company");
         var fonts = fonts();
         var label = organizationLabel == null || organizationLabel.isBlank()
             ? ORG_NUMBER_NB : organizationLabel;
-        if (logo == null || logo.length == 0) {
+        if (logo == null) {
             document.add(new Paragraph(company.name())
                 .setFont(fonts.bold)
                 .setFontSize(FONT_HEADER)
@@ -96,7 +96,7 @@ public final class NorwegianTheme {
                 .setBorder(Border.NO_BORDER)
                 .setMarginBottom(2);
             row.addCell(new Cell().setBorder(Border.NO_BORDER).setPadding(0)
-                .add(new Image(ImageDataFactory.create(logo)).scaleToFit(160, 60)));
+                .add(new Image(logo).scaleToFit(160, 60)));
             row.addCell(new Cell().setBorder(Border.NO_BORDER).setPadding(0)
                 .add(new Paragraph(company.name()).setFont(fonts.bold).setFontSize(FONT_HEADER)
                     .setTextAlignment(TextAlignment.RIGHT)));

@@ -1,12 +1,22 @@
-# Optional native image codecs
+# Optional image processing and native codecs
 
-`skald-image` (`org.skaldpdf.codec`) binds **TurboJPEG**, **libheif**, and
-**libjxl** with the JDK FFM API. It is not on the core classpath. Invoices,
-stickers, and signatures work without it.
+`skald-image` (`org.skaldpdf.codec`) owns standard JDK image decoding,
+downscaling, and JPEG re-encoding. It also binds **TurboJPEG**, **libheif**,
+and **libjxl** with the JDK FFM API. It is not on the core classpath. Invoices,
+stickers, signatures, and callers that provide prepared `ImageData` work without it.
 
 ```kotlin
-implementation("no.beint.skaldpdf:skald-image:1.8.0")
+implementation("no.beint.skaldpdf:skald-image:1.9.0")
 ```
+
+```java
+var logo = RasterImages.decode(pngBytes);
+var photo = RasterImages.scaleToFit(RasterImages.decode(jpegBytes), 1600, 1600);
+var compressed = RasterImages.asJpeg(photo, 0.82f);
+```
+
+The module requires `java.desktop`; `skald-core` requires only `java.base`.
+The native methods below additionally need native-access permission.
 
 ```text
 java --enable-native-access=org.skaldpdf.codec ...
@@ -47,9 +57,9 @@ PDF/A and PDF/X still require converting JXL to an existing filter
 - Not ImageMagick
 - Not a rewriter of images already inside a received PDF (that is
   `skald-optimize`)
-- Not required at runtime. `NativeImages.jpegAvailable()` /
-  `heifAvailable()` / `jpegXlAvailable()` are false when the `.dylib` /
-  `.so` is missing.
+- Native libraries are not required for the JDK codec path.
+  `NativeImages.jpegAvailable()` / `heifAvailable()` /
+  `jpegXlAvailable()` are false when the `.dylib` / `.so` is missing.
 
 Override search paths with `SKALD_TURBOJPEG`, `SKALD_HEIF`, and `SKALD_JXL`.
 

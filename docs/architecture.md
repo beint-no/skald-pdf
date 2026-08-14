@@ -16,12 +16,13 @@ org.skaldpdf.sign / codec / optimize ──────────────�
 ## Core
 
 `skald-core` owns PDF syntax, COS values, pages, resource registration, the
-custom-font engine, raster images, metadata, reading, merging, and stamping. It emits only
+custom-font engine, prepared raster data, metadata, reading, merging, and stamping. It emits only
 PDF 2.0. Its parser accepts the older object and cross-reference structures still
 encountered in received documents, with explicit resource limits.
 
-The core uses `java.desktop` only for standard JDK image decoding. There are no
-third-party production dependencies.
+Core requires only `java.base`. Standard JDK image decoding and transformation
+live in `skald-image`, so text-only generation and composition do not bring
+`java.desktop` into a linked runtime. There are no third-party production dependencies.
 
 ## Fonts
 
@@ -69,8 +70,8 @@ qualified certificates. See [signing.md](signing.md).
 ## Optimize
 
 `skald-optimize` rewrites imported image XObjects. Core lists and replaces
-them; this module applies a downsample / JPEG policy. It does not depend on
-`skald-image`. JPEG XL is never written into the file.
+them; the optional image module supplies its downsample / JPEG policy. JPEG XL
+is never written into the file.
 
 Workflow-to-module mapping against iText's suite is in [workflows.md](workflows.md).
 

@@ -19,7 +19,7 @@ and other generated documents that do not need historical PDF output modes.
 - Flowing paragraphs, lists, justified text, divisions, repeating tables, and automatic pagination
 - Nested blocks inside table cells, row spans, repeating footer rows, mixed point/percent columns
 - First-page vs continuing headers, named destinations, URI links, internal GoTo links, and draft watermarks
-- JPEG pass-through, lossless raster compression, alpha, image allowlisting, and image deduplication
+- Prepared JPEG pass-through, lossless raster compression, alpha, and image deduplication
 - Rounded surfaces, dashed rules, underline, strikethrough, and axial gradients
 - EAN-13, UPC-A, Code 128, GS1-128, and QR as drawable symbols
 - Optional components under `skald-components/`: Norwegian invoices, packing slips, reminders, and print-stock labels
@@ -27,14 +27,14 @@ and other generated documents that do not need historical PDF output modes.
 - Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
 - Optional `skald-sign` module: PAdES-B-B CMS integrity seals, JDK-only, no BouncyCastle
 - Optional `skald-optimize` module: recompress image XObjects inside received PDFs
-- Optional `skald-image` module: TurboJPEG, libheif, and JPEG XL *ingest* (never emitted in PDF 2.0)
+- Optional `skald-image` module: JDK JPEG/PNG/GIF/BMP processing plus TurboJPEG, libheif, and JPEG XL ingest
 - Independent rendering, extraction, barcode, syntax, signature, and PDF 2.0 validation tests
 
 ## Modules
 
 | Artifact | Java module | Use it for |
 |---|---|---|
-| `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, custom fonts, images, composition, and signature *placeholders* |
+| `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, custom fonts, prepared images, composition, and signature *placeholders* |
 | `skald-fonts` | `org.skaldpdf.fonts` | Lazily loaded, embeddable Skald Sans faces |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
 | `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols |
@@ -47,11 +47,12 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-label-sticker` | `org.skaldpdf.labels` | 93×35 mm clothing EAN sticker and A4 n-up sheets |
 | `skald-label-shipping` | `org.skaldpdf.labels.shipping` | 100×150 mm shipping label |
 | `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
-| `skald-image` | `org.skaldpdf.codec` | Optional FFM TurboJPEG / libheif / libjxl photo ingest |
+| `skald-image` | `org.skaldpdf.codec` | Optional JDK raster processing and FFM TurboJPEG / libheif / libjxl ingest |
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
 
 Engine modules depend on core. Layout and human-readable barcodes also use the
-standard font module; low-level core users do not pay for its bundled faces. Finished pages live under
+standard font module; optimization also uses the optional image-processing module.
+Low-level core users pay for neither bundled faces nor `java.desktop`. Finished pages live under
 [`skald-components/`](skald-components/README.md) as **separate** artifacts
 — one module per invoice, slip, or label. See [docs/modules.md](docs/modules.md).
 The complete runtime still depends solely on the JDK.
@@ -71,7 +72,7 @@ dependencies {
     implementation("no.beint.skaldpdf:skald-invoice-no:1.9.0")    // optional Norwegian invoice
     implementation("no.beint.skaldpdf:skald-label-sticker:1.9.0") // optional clothing stickers
     implementation("no.beint.skaldpdf:skald-sign:1.9.0")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.9.0")         // optional HEIC / JPEG XL ingest
+    implementation("no.beint.skaldpdf:skald-image:1.9.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
     implementation("no.beint.skaldpdf:skald-optimize:1.9.0")      // optional received-PDF recompress
 }
 ```

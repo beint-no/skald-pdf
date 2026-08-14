@@ -7,7 +7,7 @@ import com.google.zxing.MultiFormatReader;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
 import org.skaldpdf.labels.ProductSticker;
-import org.skaldpdf.image.ImageDataFactory;
+import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.layout.element.Image;
 import org.skaldpdf.layout.element.Paragraph;
 import org.skaldpdf.layout.properties.TextAlignment;
@@ -145,11 +145,11 @@ class ProductStickerTest {
                 document.add(new Paragraph("ecomtools original vs Skald").bold().setFontSize(16));
                 try {
                     document.add(new Paragraph("Original iText 93x35 mm sticker").setFontSize(9).setMarginTop(10));
-                    document.add(new Image(ImageDataFactory.create(png(PdfTestSupport.renderFirstPage(original))))
+                    document.add(new Image(RasterImages.decode(png(PdfTestSupport.renderFirstPage(original))))
                         .scaleToFit(340, 118));
                     document.add(new Paragraph("Skald ProductSticker (PDF 2.0, embedded font, same fields)")
                         .setFontSize(9).setMarginTop(10));
-                    document.add(new Image(ImageDataFactory.create(png(PdfTestSupport.renderFirstPage(skald))))
+                    document.add(new Image(RasterImages.decode(png(PdfTestSupport.renderFirstPage(skald))))
                         .scaleToFit(340, 118));
                 } catch (Exception exception) {
                     throw new IllegalStateException(exception);

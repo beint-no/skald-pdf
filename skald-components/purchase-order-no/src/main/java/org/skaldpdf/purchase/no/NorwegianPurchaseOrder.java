@@ -6,6 +6,7 @@ import org.skaldpdf.invoice.no.NorwegianInvoice;
 import org.skaldpdf.invoice.no.NorwegianMoney;
 import org.skaldpdf.invoice.no.NorwegianTheme;
 import org.skaldpdf.invoice.no.Party;
+import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.element.Paragraph;
 import org.skaldpdf.layout.element.Table;
@@ -108,7 +109,7 @@ public final class NorwegianPurchaseOrder {
         private final String currency;
         private final String notes;
         private final String footer;
-        private final byte[] logo;
+        private final ImageSource logo;
         private final List<LineItem> lines;
 
         Model(Builder builder) {
@@ -175,7 +176,7 @@ public final class NorwegianPurchaseOrder {
             return footer;
         }
 
-        public byte[] logo() {
+        public ImageSource logo() {
             return logo;
         }
 
@@ -195,7 +196,7 @@ public final class NorwegianPurchaseOrder {
         private String currency = NorwegianMoney.NOK;
         private String notes;
         private String footer;
-        private byte[] logo;
+        private ImageSource logo;
         private final List<LineItem> lines = new ArrayList<>();
 
         private Builder() {
@@ -251,7 +252,7 @@ public final class NorwegianPurchaseOrder {
             return this;
         }
 
-        public Builder logo(byte[] logo) {
+        public Builder logo(ImageSource logo) {
             this.logo = logo;
             return this;
         }

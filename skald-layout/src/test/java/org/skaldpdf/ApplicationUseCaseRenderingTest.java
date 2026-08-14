@@ -7,7 +7,7 @@ import org.skaldpdf.event.AbstractPdfDocumentEventHandler;
 import org.skaldpdf.event.PdfDocumentEvent;
 import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
-import org.skaldpdf.image.ImageDataFactory;
+import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.layout.Canvas;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.borders.Border;
@@ -82,7 +82,7 @@ class ApplicationUseCaseRenderingTest {
                 var header = new Table(UnitValue.createPercentArray(new float[] { 45, 55 })).useAllAvailableWidth()
                     .setBorder(Border.NO_BORDER);
                 header.addCell(new Cell().setBorder(Border.NO_BORDER).add(
-                    new Image(ImageDataFactory.create(PdfTestSupport.sampleLogo())).scaleToFit(145, 48)
+                    new Image(RasterImages.decode(PdfTestSupport.sampleLogo())).scaleToFit(145, 48)
                 ));
                 header.addCell(new Cell().setBorder(Border.NO_BORDER).add(
                     new Paragraph("Invoice 2026-1001").bold().setFontSize(19).setFontColor(GREEN)
@@ -161,7 +161,7 @@ class ApplicationUseCaseRenderingTest {
     private byte[] attachmentImage() {
         return create(PageSize.LETTER, 0, "Expense attachment", (pdf, document) -> {
             try {
-                var image = new Image(ImageDataFactory.create(PdfTestSupport.sampleLogo())).scaleToFit(520, 680);
+                var image = new Image(RasterImages.decode(PdfTestSupport.sampleLogo())).scaleToFit(520, 680);
                 image.setHorizontalAlignment(org.skaldpdf.layout.properties.HorizontalAlignment.CENTER);
                 document.add(image.setMarginTop(70));
             } catch (Exception exception) {

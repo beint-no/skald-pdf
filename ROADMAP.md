@@ -74,7 +74,7 @@ bigger iText clone:
 
 - Table min-content columns so invoice headers such as `Antall` do not split.
 - Inset hairline rules; `Table.addRule` for summary separators.
-- `ImageData.scaledToFit` / `asJpeg` for generation-time photo policy.
+- `RasterImages.scaleToFit` / `asJpeg` in `skald-image` for generation-time photo policy.
 - Generation speed/size harness (`build/benchmarks/latest.json`).
 - Documented `skald-optimize` (recompress images *inside* received PDFs) as
   the next optional module. Not a pdfHTML clone.

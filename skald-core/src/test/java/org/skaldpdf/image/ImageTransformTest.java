@@ -1,6 +1,7 @@
 package org.skaldpdf.image;
 
 import org.junit.jupiter.api.Test;
+import org.skaldpdf.codec.RasterImages;
 
 import javax.imageio.ImageIO;
 import java.awt.Color;
@@ -13,12 +14,12 @@ class ImageTransformTest {
     @Test
     void downscalesAndJpegCompressesAPhoto() throws Exception {
         var png = png(1200, 800);
-        var original = ImageDataFactory.create(png);
+        var original = RasterImages.decode(png);
         assertTrue(original.width() == 1200);
-        var scaled = original.scaledToFit(400, 300);
+        var scaled = RasterImages.scaleToFit(original, 400, 300);
         assertTrue(scaled.width() <= 400);
         assertTrue(scaled.height() <= 300);
-        var jpeg = original.asJpeg(0.55f);
+        var jpeg = RasterImages.asJpeg(original, 0.55f);
         assertTrue(jpeg.jpeg());
         var uncompressed = original.width() * original.height() * 3;
         assertTrue(jpeg.samples().length < uncompressed / 4,

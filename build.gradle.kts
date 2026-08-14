@@ -31,12 +31,12 @@ val moduleTitles = mapOf(
     "skald-purchase-order-no" to "Skald Norwegian Purchase Order"
 )
 val moduleDescriptions = mapOf(
-    "skald-core" to "Native PDF 2.0 writing, reading, custom fonts, images, and composition",
+    "skald-core" to "Native PDF 2.0 writing, reading, custom fonts, prepared images, and composition",
     "skald-fonts" to "Lazily loaded Skald Sans faces for Skald PDF",
     "skald-layout" to "Flow layout and high-level document API for Skald PDF",
     "skald-barcode" to "Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols for Skald PDF",
     "skald-sign" to "Optional PKCS#7/CMS PAdES-B-B sealing for Skald PDF documents",
-    "skald-image" to "Optional FFM bindings to TurboJPEG, libheif, and libjxl for photo ingest",
+    "skald-image" to "Optional JDK and native decoding, scaling, and photo ingest for Skald PDF",
     "skald-optimize" to "Optional recompression of image XObjects already stored in a received PDF",
     "skald-label-sticker" to "93×35 mm clothing EAN-13 sticker print stock",
     "skald-label-shipping" to "100×150 mm shipping label with address and tracking",

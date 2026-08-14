@@ -3,6 +3,7 @@ dependencies {
     implementation(project(":skald-fonts"))
 
     testImplementation(project(":skald-barcode"))
+    testImplementation(project(":skald-image"))
     testImplementation(project(":skald-label-sticker"))
     testImplementation(project(":skald-label-shipping"))
     testImplementation(project(":skald-invoice-no"))

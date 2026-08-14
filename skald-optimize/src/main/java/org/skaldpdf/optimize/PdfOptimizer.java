@@ -1,5 +1,6 @@
 package org.skaldpdf.optimize;
 
+import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.image.ImageData;
 import org.skaldpdf.pdf.EmbeddedImage;
 import org.skaldpdf.pdf.PdfDocument;
@@ -11,7 +12,7 @@ import java.util.Objects;
 
 /**
  * Recompresses image XObjects inside a received PDF. Generation-time helpers
- * ({@code ImageData.scaledToFit}, {@code NativeImages.prepare}) stay on the
+ * ({@link RasterImages#scaleToFit}, {@code NativeImages.prepare}) stay on the
  * create path; this module is for files that already arrived as PDF.
  *
  * <p>JPEG XL is not written into the file. ISO 32000-2 has no interoperable
@@ -49,10 +50,10 @@ public final class PdfOptimizer {
         var longest = Math.max(data.width(), data.height());
         var scaled = longest > options.maxEdge();
         if (scaled) {
-            data = data.scaledToFit(options.maxEdge(), options.maxEdge());
+            data = RasterImages.scaleToFit(data, options.maxEdge(), options.maxEdge());
         }
         if (!data.jpeg() || options.recompressJpeg() || scaled) {
-            data = data.asJpeg(options.jpegQuality());
+            data = RasterImages.asJpeg(data, options.jpegQuality());
         } else {
             return null;
         }

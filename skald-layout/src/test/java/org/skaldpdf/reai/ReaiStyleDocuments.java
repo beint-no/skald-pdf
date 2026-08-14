@@ -1,5 +1,7 @@
 package org.skaldpdf.reai;
 
+import org.skaldpdf.codec.RasterImages;
+import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.invoice.no.LineItem;
 import org.skaldpdf.invoice.no.NorwegianInvoice;
 import org.skaldpdf.invoice.no.NorwegianMoney;
@@ -76,7 +78,7 @@ public final class ReaiStyleDocuments {
             .lateFee("70.00")
             .interest("82.47", "12", 14)
             .footer(Labels.norwegian(false).branding())
-            .logo(logo)
+            .logo(image(logo))
             .build());
     }
 
@@ -90,7 +92,7 @@ public final class ReaiStyleDocuments {
             .tracking("POSTEN 373724189NO")
             .trackingUrl("https://sporing.posten.no/373724189NO")
             .footer("Denne pakkseddelen er laget med Skald, samme layoutmotor som ReAI.")
-            .logo(logo)
+            .logo(image(logo))
             .line("Regnskapstjeneste august", "REG-AUG", 8, "A-12")
             .line("Lønnskjøring", "PAY-2026-08", 1, "A-12")
             .line("Årsoppgjør tillegg", "YEAR-ADD", 1, "B-04")
@@ -206,7 +208,7 @@ public final class ReaiStyleDocuments {
             .ourReference(model.ourReference())
             .buyerReference(model.buyerReference())
             .footer(model.labels().branding())
-            .logo(logo)
+            .logo(image(logo))
             .paymentQr(paymentQr);
         if (model.title() != null && model.title().toLowerCase().contains("forhåndsvisning")) {
             builder.watermark("FORHÅNDSVISNING");
@@ -229,6 +231,10 @@ public final class ReaiStyleDocuments {
             builder.creditFor(model.creditFor().number(), parseDate(model.creditFor().date()));
         }
         return builder;
+    }
+
+    private static ImageSource image(byte[] logo) {
+        return logo == null ? null : RasterImages.decode(logo);
     }
 
     private static NorwegianInvoice.Kind kindOf(InvoiceModel model) {

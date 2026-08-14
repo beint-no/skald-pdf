@@ -4,6 +4,7 @@ import org.skaldpdf.invoice.no.Company;
 import org.skaldpdf.invoice.no.NorwegianMoney;
 import org.skaldpdf.invoice.no.NorwegianTheme;
 import org.skaldpdf.invoice.no.Party;
+import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.borders.SolidBorder;
 import org.skaldpdf.layout.element.Paragraph;
@@ -117,7 +118,7 @@ public final class NorwegianReminder {
         private final int interestDays;
         private final String body;
         private final String footer;
-        private final byte[] logo;
+        private final ImageSource logo;
 
         Model(Builder builder) {
             this.kind = builder.kind;
@@ -212,7 +213,7 @@ public final class NorwegianReminder {
             return footer;
         }
 
-        public byte[] logo() {
+        public ImageSource logo() {
             return logo;
         }
     }
@@ -233,7 +234,7 @@ public final class NorwegianReminder {
         private int interestDays;
         private String body;
         private String footer;
-        private byte[] logo;
+        private ImageSource logo;
 
         private Builder() {
         }
@@ -317,7 +318,7 @@ public final class NorwegianReminder {
             return this;
         }
 
-        public Builder logo(byte[] logo) {
+        public Builder logo(ImageSource logo) {
             this.logo = logo;
             return this;
         }
