@@ -19,7 +19,7 @@ import java.util.Objects;
 /**
  * Norwegian payment reminder ({@code Purring}) or collection notice
  * ({@code Betalingsoppfordring}). Legal default text follows common
- * Norwegian dunning practice; override {@link Model.Builder#body(String)}
+ * Norwegian dunning practice; override {@link Builder#body(String)}
  * if you need counsel-approved wording.
  */
 public final class NorwegianReminder {
