@@ -2,17 +2,18 @@ package org.skaldpdf;
 
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.skaldpdf.invoice.no.Bank;
+import org.skaldpdf.invoice.no.Company;
+import org.skaldpdf.invoice.no.NorwegianInvoice;
+import org.skaldpdf.invoice.no.Party;
 import org.skaldpdf.labels.ProductSticker;
+import org.skaldpdf.packing.no.NorwegianPackingSlip;
+import org.skaldpdf.statement.no.NorwegianStatement;
 import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.geom.PageSize;
-import org.skaldpdf.layout.element.Cell;
-import org.skaldpdf.layout.element.Div;
 import org.skaldpdf.layout.element.Image;
 import org.skaldpdf.layout.element.Paragraph;
-import org.skaldpdf.layout.element.Table;
-import org.skaldpdf.layout.properties.TextAlignment;
-import org.skaldpdf.layout.properties.UnitValue;
 
 import javax.imageio.ImageIO;
 import java.nio.file.Files;
@@ -52,57 +53,18 @@ public final class SiteDemos {
     }
 
     private static byte[] invoice() {
-        return Pdf.create(document -> {
-            document.setTitle("Invoice 2026-1001")
-                .setAuthor("Skald PDF")
-                .setLanguage("en-GB")
-                .setMargins(48, 48, 44, 48)
-                .setHeader(16, page -> new Paragraph("Northstar Ledger AS")
-                    .setFontSize(8).setFontColor(ColorConstants.MUTED))
-                .setFirstHeader(page -> new Paragraph("Northstar Ledger AS · original invoice")
-                    .setFontSize(8).setFontColor(ColorConstants.ACCENT))
-                .setFooter(16, page -> new Paragraph(page.pageNumber() + " / " + page.pageCount())
-                    .setFontSize(8).setTextAlignment(TextAlignment.CENTER).setFontColor(ColorConstants.MUTED));
-            document.add(new Paragraph("Invoice").setFontSize(11).setFontColor(ColorConstants.ACCENT));
-            document.add(new Paragraph("2026-1001").bold().setFontSize(28).setFontColor(ColorConstants.INK));
-            document.add(new Paragraph("Consulting August · due 26 August 2026")
-                .setFontColor(ColorConstants.MUTED).setMarginTop(4));
-            var parties = new Table(UnitValue.createPercentArray(new float[] {1, 1}))
-                .useAllAvailableWidth().setMarginTop(22);
-            parties.addCell(cell("From", "Northstar Ledger AS\nKarl Johans gate 1\n0154 Oslo"));
-            parties.addCell(cell("Bill to", "Nordlys Butikk AS\nStorgata 10\n0184 Oslo"));
-            document.add(parties);
-            var lines = new Table(UnitValue.createPercentArray(new float[] {4, 1, 1.4f, 1.4f}))
-                .useAllAvailableWidth().setMarginTop(20);
-            for (var header : new String[] {"Description", "Qty", "Rate", "Amount"}) {
-                lines.addHeaderCell(new Cell().add(new Paragraph(header).bold().setFontSize(8)
-                    .setFontColor(ColorConstants.WHITE))
-                    .setBackgroundColor(ColorConstants.ACCENT).setPadding(6));
-            }
-            lines.addCell(body("Consulting August"));
-            lines.addCell(body("1"));
-            lines.addCell(body("12 500.00"));
-            lines.addCell(body("12 500.00"));
-            lines.addCell(body("Platform access"));
-            lines.addCell(body("1"));
-            lines.addCell(body("1 200.00"));
-            lines.addCell(body("1 200.00"));
-            document.add(lines);
-            var total = new Table(UnitValue.createPercentArray(new float[] {1, 3}))
-                .useAllAvailableWidth().setMarginTop(18);
-            total.addCell(new Cell().add(new Image(new QrCode("https://pay.skaldpdf.org/inv/2026-1001")
-                .withModuleSize(2.4f)).scaleToFit(78, 78)));
-            total.addCell(new Cell()
-                .add(new Paragraph("Total NOK 13 700.00").bold().setFontSize(16)
-                    .setTextAlignment(TextAlignment.RIGHT).setFontColor(ColorConstants.ACCENT))
-                .add(new Paragraph("Scan to pay · Account 1503.45.67890")
-                    .setFontSize(9).setTextAlignment(TextAlignment.RIGHT)
-                    .setFontColor(ColorConstants.MUTED).setMarginTop(6))
-                .add(new Paragraph("Payment terms: net 14 days.").italic()
-                    .setFontSize(9).setTextAlignment(TextAlignment.RIGHT)
-                    .setFontColor(ColorConstants.MUTED).setMarginTop(4)));
-            document.add(total);
-        });
+        return NorwegianInvoice.pdf(NorwegianInvoice.Model.builder()
+            .company(new Company("Northstar Ledger AS", "NO", "999888777",
+                "Karl Johans gate 1, 0154 Oslo, Norge", true))
+            .customer(new Party("Nordlys Butikk AS", "Storgata 10", "0184 Oslo"))
+            .bank(new Bank("DNB Bank ASA", "15034567890", "NO9315034567890", "DNBANOKK"))
+            .number("2026-1001")
+            .issueDate(java.time.LocalDate.of(2026, 8, 12))
+            .dueDate(java.time.LocalDate.of(2026, 8, 26))
+            .line("Consulting August", "Retainer", 1, "12,500.00", 25)
+            .line("Platform access", "", 1, "1,200.00", 25)
+            .paymentQr(true)
+            .build());
     }
 
     private static byte[] ticket() {
@@ -119,65 +81,36 @@ public final class SiteDemos {
     }
 
     private static byte[] statement() {
-        return Pdf.create(document -> {
-            document.setMargins(48, 48, 44, 48)
-                .setFooter(16, page -> new Paragraph(page.pageNumber() + " / " + page.pageCount())
-                    .setFontSize(8).setTextAlignment(TextAlignment.CENTER).setFontColor(ColorConstants.MUTED));
-            document.add(new Paragraph("Statement of account").bold().setFontSize(22)
-                .setFontColor(ColorConstants.ACCENT));
-            document.add(new Paragraph("Nordlys Butikk AS · July 2026").setFontColor(ColorConstants.MUTED));
-            var table = new Table(UnitValue.createPercentArray(new float[] {1.4f, 3, 1.3f, 1.3f}))
-                .useAllAvailableWidth().setMarginTop(18);
-            for (var header : new String[] {"Date", "Text", "Debit", "Credit"}) {
-                table.addHeaderCell(new Cell().add(new Paragraph(header).bold().setFontSize(8)
-                    .setFontColor(ColorConstants.WHITE))
-                    .setBackgroundColor(ColorConstants.ACCENT).setPadding(6));
+        var builder = NorwegianStatement.Model.builder()
+            .company(new Company("Northstar Ledger AS", "NO", "999888777",
+                "Karl Johans gate 1, 0154 Oslo, Norge", true))
+            .customer(new Party("Nordlys Butikk AS", "Storgata 10", "0184 Oslo"))
+            .number("2026-07")
+            .period(java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 7, 31))
+            .openingBalance("0.00");
+        for (int index = 1; index <= 8; index++) {
+            if (index % 2 == 0) {
+                builder.debit(java.time.LocalDate.of(2026, 7, index), "D" + index,
+                    "Settlement " + index, "1,250.00");
+            } else {
+                builder.credit(java.time.LocalDate.of(2026, 7, index), "C" + index,
+                    "Settlement " + index, "1,250.00");
             }
-            for (int index = 1; index <= 8; index++) {
-                table.addCell(body("%02d.07".formatted(index)));
-                table.addCell(body("Settlement " + index));
-                table.addCell(body(index % 2 == 0 ? "1 250.00" : ""));
-                table.addCell(body(index % 2 == 0 ? "" : "1 250.00"));
-            }
-            document.add(table);
-        });
+        }
+        return NorwegianStatement.pdf(builder.build());
     }
 
     private static byte[] packingSlip() {
-        return Pdf.create(document -> {
-            document.setMargins(48, 48, 44, 48);
-            document.add(new Paragraph("Packing slip · #4412").bold().setFontSize(22)
-                .setFontColor(ColorConstants.ACCENT));
-            document.add(new Paragraph("Ship to Nordlys Butikk AS, Storgata 10, Oslo").setMarginTop(6));
-            var table = new Table(UnitValue.createPercentArray(new float[] {2, 4, 1}))
-                .useAllAvailableWidth().setMarginTop(16);
-            for (var header : new String[] {"SKU", "Item", "Qty"}) {
-                table.addHeaderCell(new Cell().add(new Paragraph(header).bold().setFontSize(8)
-                    .setFontColor(ColorConstants.WHITE))
-                    .setBackgroundColor(ColorConstants.ACCENT).setPadding(6));
-            }
-            table.addCell(body("SKU-018"));
-            table.addCell(body("Oak tray"));
-            table.addCell(body("3"));
-            table.addCell(body("SKU-044"));
-            table.addCell(body("Linen napkin set"));
-            table.addCell(body("6"));
-            document.add(table);
-            document.add(new Div().setMarginTop(20).add(
-                new Image(new QrCode("https://track.skaldpdf.org/4412").withModuleSize(2.4f)).scaleToFit(72, 72)
-            ));
-            document.add(new Paragraph("Scan for live tracking").setFontSize(9)
-                .setFontColor(ColorConstants.MUTED).setMarginTop(6));
-        });
-    }
-
-    private static Cell cell(String label, String body) {
-        return new Cell()
-            .add(new Paragraph(label).setFontSize(8).setFontColor(ColorConstants.MUTED))
-            .add(new Paragraph(body).setFontSize(10).setMarginTop(2));
-    }
-
-    private static Cell body(String text) {
-        return new Cell().add(new Paragraph(text).setFontSize(9)).setPadding(5);
+        return NorwegianPackingSlip.pdf(NorwegianPackingSlip.Model.builder()
+            .company(new Company("Northstar Ledger AS", "NO", "999888777",
+                "Karl Johans gate 1, 0154 Oslo, Norge", true))
+            .recipient(new Party("Nordlys Butikk AS", "Storgata 10", "0184 Oslo"))
+            .number("4412")
+            .deliveryDate(java.time.LocalDate.of(2026, 8, 14))
+            .tracking("TRACK-4412")
+            .trackingUrl("https://track.skaldpdf.org/4412")
+            .line("Oak tray", "SKU-018", 3, "A-12")
+            .line("Linen napkin set", "SKU-044", 6, "B-04")
+            .build());
     }
 }

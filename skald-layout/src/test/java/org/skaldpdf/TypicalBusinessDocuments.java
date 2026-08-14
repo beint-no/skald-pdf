@@ -3,7 +3,14 @@ package org.skaldpdf;
 import org.skaldpdf.barcode.Code128Barcode;
 import org.skaldpdf.barcode.Ean13Barcode;
 import org.skaldpdf.barcode.Gs1128Barcode;
+import org.skaldpdf.invoice.no.Company;
+import org.skaldpdf.invoice.no.NorwegianInvoice;
+import org.skaldpdf.invoice.no.Party;
 import org.skaldpdf.labels.ProductSticker;
+import org.skaldpdf.labels.shipping.ShippingLabel;
+import org.skaldpdf.purchase.no.NorwegianPurchaseOrder;
+import org.skaldpdf.receipt.no.NorwegianReceipt;
+import org.skaldpdf.statement.no.NorwegianStatement;
 import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.barcode.UpcABarcode;
 import org.skaldpdf.colors.ColorConstants;
@@ -65,7 +72,7 @@ public final class TypicalBusinessDocuments {
             () -> deliveryNote());
         add(documents, "picking-list", "Picking list", List.of("Picking list", "BIN"),
             () -> pickingList());
-        add(documents, "shipping-label", "Shipping label", List.of("POSTEN", "5003 BERGEN"),
+        add(documents, "shipping-label", "Shipping label", List.of("Posten", "5003 BERGEN", "373724189NO"),
             () -> shippingLabel());
         add(documents, "ean13-sticker", "EAN-13", List.of("SOJA-BA-L"),
             () -> ProductSticker.pdf(new ProductSticker.Spec(
@@ -86,17 +93,17 @@ public final class TypicalBusinessDocuments {
             () -> upcShelf());
         add(documents, "barcode-pack", "Barcode pack", List.of("EAN-13", "Code 128", "QR"),
             () -> barcodePack());
-        add(documents, "proforma", "Proforma", List.of("Proforma invoice", "Not a VAT invoice"),
+        add(documents, "proforma", "Proforma", List.of("Proforma", "Dette er ikke en MVA-faktura"),
             () -> proforma());
-        add(documents, "quote", "Quote Q-88", List.of("Quote", "Valid until"),
+        add(documents, "quote", "Quote Q-88", List.of("Tilbud", "Gyldig til"),
             () -> quote());
-        add(documents, "purchase-order", "PO-2201", List.of("Purchase order", "Deliver to"),
+        add(documents, "purchase-order", "PO-2201", List.of("Innkjøpsordre", "Leveres til"),
             () -> purchaseOrder());
-        add(documents, "receipt", "Receipt", List.of("SALES RECEIPT", "TOTAL NOK"),
+        add(documents, "receipt", "Receipt", List.of("Kvittering", "Å betale"),
             () -> receipt());
         add(documents, "credit-application", "Credit application", List.of("Credit application", "Approved limit"),
             () -> creditApplication());
-        add(documents, "statement", "Statement", List.of("Statement of account", "Closing balance"),
+        add(documents, "statement", "Statement", List.of("Kontooversikt", "Utgående saldo"),
             () -> statement());
         add(documents, "dunning-run", "Dunning run", List.of("Dunning run", "Ageing"),
             () -> dunningRun());
@@ -155,14 +162,14 @@ public final class TypicalBusinessDocuments {
     }
 
     private static byte[] shippingLabel() {
-        return Pdf.create(new PageSize(283.46f, 425.2f), document -> {
-            document.setMargins(12).setTitle("Shipping label");
-            document.add(new Paragraph("POSTEN").bold().setFontSize(16));
-            document.add(new Paragraph("Fjordbutikken AS\nKaien 4\n5003 BERGEN").setFontSize(11));
-            document.add(new Image(new Code128Barcode("373724189NO").withBarHeight(36)).scaleInto(240, 56)
-                .setMarginTop(10));
-            document.add(new Paragraph("373724189NO").setFontSize(9).setTextAlignment(TextAlignment.CENTER));
-        });
+        return ShippingLabel.pdf(new ShippingLabel.Spec(
+            new ShippingLabel.Address("Nordlys Handel AS", "Storgata 10", "0184 OSLO"),
+            new ShippingLabel.Address("Fjordbutikken AS", "Kaien 4", "5003 BERGEN"),
+            "373724189NO",
+            "Posten Bedriftspakke",
+            "PO-5512",
+            "https://sporing.posten.no/373724189NO"
+        ));
     }
 
     private static byte[] cartonLabel() {
@@ -204,49 +211,43 @@ public final class TypicalBusinessDocuments {
     }
 
     private static byte[] proforma() {
-        return Pdf.create(document -> {
-            document.setMargins(40).setTitle("Proforma 77");
-            document.add(new Paragraph("Proforma invoice 77").bold().setFontSize(20));
-            document.add(new Paragraph("Not a VAT invoice. For customs only.").italic());
-            var table = table(new float[] {4, 1, 2}, "Description", "Qty", "Value");
-            row(table, "Clothing sample", "12", "4 800.00");
-            document.add(table.setMarginTop(16));
-        });
+        return NorwegianInvoice.pdf(nordlysInvoice()
+            .kind(NorwegianInvoice.Kind.PROFORMA)
+            .number("77")
+            .line("Clothing sample", "", 12, "400.00", 25)
+            .build());
     }
 
     private static byte[] quote() {
-        return Pdf.create(document -> {
-            document.setMargins(40).setTitle("Quote Q-88");
-            document.add(new Paragraph("Quote Q-88").bold().setFontSize(20).setFontColor(ACCENT));
-            document.add(new Paragraph("Valid until 12.09.2026"));
-            var table = table(new float[] {4, 1, 2}, "Service", "Hours", "Amount");
-            row(table, "Implementation", "40", "50 000.00");
-            document.add(table.setMarginTop(16));
-        });
+        return NorwegianInvoice.pdf(nordlysInvoice()
+            .kind(NorwegianInvoice.Kind.QUOTE)
+            .number("Q-88")
+            .dueDate(java.time.LocalDate.of(2026, 9, 12))
+            .line("Implementation", "", 40, "1,250.00", 25)
+            .build());
     }
 
     private static byte[] purchaseOrder() {
-        return Pdf.create(document -> {
-            document.setMargins(40).setTitle("PO-2201");
-            document.add(new Paragraph("Purchase order PO-2201").bold().setFontSize(20));
-            document.add(new Paragraph("Deliver to: Warehouse B, Oslo"));
-            var table = table(new float[] {4, 1, 2}, "Item", "Qty", "Price");
-            row(table, "Laptop", "3", "36 000.00");
-            document.add(table.setMarginTop(16));
-        });
+        return NorwegianPurchaseOrder.pdf(NorwegianPurchaseOrder.Model.builder()
+            .company(nordlys())
+            .supplier(new Party("Papirgrossisten AS", "Industriveien 2", "2000 Lillestrøm"))
+            .shipTo(new Party("Warehouse B", "Oslo"))
+            .number("PO-2201")
+            .orderDate(java.time.LocalDate.of(2026, 8, 10))
+            .neededBy(java.time.LocalDate.of(2026, 8, 20))
+            .line("Laptop", "LAP-14", 3, "12,000.00", 25)
+            .build());
     }
 
     private static byte[] receipt() {
-        return Pdf.create(new PageSize(226.77f, 600), document -> {
-            document.setMargins(12).setTitle("Receipt");
-            document.add(new Paragraph("SALES RECEIPT").bold().setTextAlignment(TextAlignment.CENTER));
-            document.add(new Paragraph("Northstar Coffee").setTextAlignment(TextAlignment.CENTER).setFontSize(9));
-            var table = table(new float[] {4, 1, 2}, "Item", "Qty", "Amount");
-            row(table, "Coffee", "2", "78.00");
-            row(table, "Bun", "1", "45.00");
-            document.add(table.setMarginTop(8));
-            document.add(new Paragraph("TOTAL NOK 123.00").bold().setTextAlignment(TextAlignment.RIGHT));
-        });
+        return NorwegianReceipt.pdf(NorwegianReceipt.Model.builder()
+            .company(nordlys())
+            .number("K-4401")
+            .issuedAt(java.time.LocalDateTime.of(2026, 8, 14, 14, 30))
+            .paymentMethod("Kort")
+            .line("Kaffe", 2, "39.00", 25)
+            .line("Bolle", 1, "45.00", 15)
+            .build());
     }
 
     private static byte[] creditApplication() {
@@ -258,17 +259,29 @@ public final class TypicalBusinessDocuments {
     }
 
     private static byte[] statement() {
-        return Pdf.create(document -> {
-            document.setMargins(36).setTitle("Statement");
-            document.add(new Paragraph("Statement of account").bold().setFontSize(20).setFontColor(ACCENT));
-            document.add(new Paragraph("Fjordbutikken AS · 01.07.2026–31.07.2026"));
-            var table = table(new float[] {2, 3, 2, 2, 2}, "Date", "Text", "Debit", "Credit", "Balance");
-            row(table, "01.07", "Opening", "", "", "12 500.00");
-            row(table, "12.07", "Invoice 0990", "12 500.00", "", "25 000.00");
-            row(table, "20.07", "Payment", "", "12 500.00", "12 500.00");
-            document.add(table.setMarginTop(14));
-            document.add(new Paragraph("Closing balance NOK 12 500.00").bold().setMarginTop(10));
-        });
+        return NorwegianStatement.pdf(NorwegianStatement.Model.builder()
+            .company(nordlys())
+            .customer(new Party("Fjordbutikken AS", "Kaien 4", "5003 Bergen"))
+            .number("2026-07")
+            .period(java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 7, 31))
+            .openingBalance("12,500.00")
+            .debit(java.time.LocalDate.of(2026, 7, 12), "0990", "Faktura 0990", "12,500.00")
+            .credit(java.time.LocalDate.of(2026, 7, 20), "BET", "Innbetaling", "12,500.00")
+            .build());
+    }
+
+    private static Company nordlys() {
+        return new Company("Nordlys Handel AS", "NO", "999888777",
+            "Storgata 10, 0184 Oslo, Norge", true);
+    }
+
+    private static NorwegianInvoice.Builder nordlysInvoice() {
+        return NorwegianInvoice.Model.builder()
+            .company(nordlys())
+            .customer(new Party("Fjordbutikken AS", "Kaien 4", "5003 Bergen"))
+            .bank(new org.skaldpdf.invoice.no.Bank("DNB Bank ASA", "15034567890", "NO9315034567890", "DNBANOKK"))
+            .issueDate(java.time.LocalDate.of(2026, 8, 12))
+            .dueDate(java.time.LocalDate.of(2026, 8, 26));
     }
 
     private static byte[] dunningRun() {

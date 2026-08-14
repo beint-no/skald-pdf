@@ -14,13 +14,14 @@
 | Optimize | optional `skald-optimize`: downsample and JPEG-recompress images already inside a received PDF |
 | Drawing | fills, rounded paths, axial shadings, dashed lines, opacity, canvas overlays, end-page events, watermarks, URI and GoTo links |
 | Barcodes | validated EAN-13, UPC-A, Code 128, GS1-128, and QR (versions 1–16) with independent decode tests |
-| Labels | `skald-label-sticker` for 93×35 mm clothing EAN stickers; `skald-labels` umbrella |
+| Labels | `skald-label-sticker` (93×35 mm clothing EAN); `skald-label-shipping` (100×150 mm) |
+| Norwegian documents | `skald-invoice-no` and companions: packing slip, reminder, statement, receipt, purchase order |
 | Composition | merge, copy pages, stamp existing pages, resolve indirect Contents/Annots, strip Launch/JS and other unsafe imported actions |
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |
 | Signatures | reserved signature field in core; optional `skald-sign` CMS / PAdES-B-B; incremental second seal; rewrite of sealed files fails closed |
 | Encryption | PDF 2.0 revision 6 AES-256 (`PdfEncryption`) on write; encrypted input is not parsed |
 | Native photos | optional `skald-image`: TurboJPEG, libheif (HEIC/AVIF), libjxl (JPEG XL ingest only) via FFM; absent libraries are skipped |
-| Runtime | eight published artifacts, JDK 25+, zero third-party *Java* runtime dependencies; native codecs optional |
+| Runtime | published engine + component artifacts, JDK 25+, zero third-party *Java* runtime dependencies; native codecs optional |
 
 ## Deliberately deferred
 

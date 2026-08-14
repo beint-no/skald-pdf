@@ -6,8 +6,14 @@ Engine modules are the building blocks. Published **components** live under
 
 ```text
 Components           skald-components/          (folder, not one jar)
+                     ├── invoice-no             skald-invoice-no
+                     ├── packing-slip-no        skald-packing-slip-no
+                     ├── reminder-no            skald-reminder-no
+                     ├── statement-no           skald-statement-no
+                     ├── receipt-no             skald-receipt-no
+                     ├── purchase-order-no      skald-purchase-order-no
                      ├── label-sticker          skald-label-sticker
-                     └── labels                 skald-labels (label-* umbrella)
+                     └── label-shipping         skald-label-shipping
 
 Engine               layout  barcode  sign  image  optimize
                      └────────────┬────────────────────────┘
@@ -26,7 +32,6 @@ These are the building blocks. They have stable, spec-shaped jobs.
 | `skald-sign` | PAdES-B-B integrity seal |
 | `skald-image` | Optional native photo ingest |
 | `skald-optimize` | Recompress images already inside a received PDF |
-| `skald-label-sticker` | One print-stock type: 93×35 mm clothing EAN sticker |
 
 `skald-barcode` draws **symbols**. It does not know SKU, composition, or
 label stock. A warehouse app that only needs a QR on an invoice takes
@@ -44,24 +49,30 @@ only prints clothing stickers does not take a future GS1 shipping label.
 | Artifact | Type |
 |---|---|
 | `skald-label-sticker` | 93 mm × 35 mm clothing EAN (`ProductSticker`, A4 n-up) |
-| `skald-labels` | Umbrella that `api`-depends on every current `skald-label-*` |
+| `skald-label-shipping` | 100 mm × 150 mm address + tracking label |
 
-A new physical label (GS1 shipping, shelf tag) becomes `skald-label-<name>`,
+A new physical label (GS1, shelf tag) becomes `skald-label-<name>`,
 not a class dumped into the sticker jar. We do not publish empty
-placeholder modules.
+placeholder modules. There is no labels umbrella: take the one stock
+you print.
 
-These depend on core and barcode, not on layout. Take
-`skald-label-sticker` for one type, or `skald-labels` if you want
-whatever print stock exists at that version.
+## Document themes
 
-## Document themes (invoices, later)
+A generic `skald-invoice` is the wrong shape. Named themes live here:
 
-A generic `skald-invoice` is still the wrong shape. A *named* theme such
-as `skald-invoice-no` can be a component once a second product wants the
-same chrome. Until then ReAI and the example gallery are the invoices.
+| Artifact | Pages |
+|---|---|
+| `skald-invoice-no` | Faktura, kreditnota, betalt kopi, tilbud, ordrebekreftelse, proforma |
+| `skald-packing-slip-no` | Pakkseddel, følgeseddel |
+| `skald-reminder-no` | Purring, betalingsoppfordring |
+| `skald-statement-no` | Kontooversikt |
+| `skald-receipt-no` | A5 kvittering |
+| `skald-purchase-order-no` | Innkjøpsordre |
 
-Document themes must not sit on the `skald-labels` umbrella. Print stock
-and bookkeeping layout are different products.
+`skald-invoice-no` also exports the shared Norwegian letterhead
+(`Company`, `Party`, `Bank`, `NorwegianTheme`) that the other `*-no`
+documents reuse. It is an opinionated ReAI-style template, not a claim
+that Skald owns every Norwegian invoice.
 
 See [skald-components/README.md](../skald-components/README.md).
 
@@ -69,10 +80,9 @@ See [skald-components/README.md](../skald-components/README.md).
 
 1. **Engine** — PDF, font, image, or symbology rule → existing engine module.
 2. **Print stock** — physical page, stable fields → `skald-components/label-<name>`,
-   published as `skald-label-<name>`. Add it to `skald-labels`.
+   published as `skald-label-<name>`.
 3. **Document theme** — country- or style-specific invoice/slip → new
-   `skald-components/invoice-<locale>` only after a second real consumer.
-   Mark it as an opinionated template in the Javadoc.
+   `skald-components/<kind>-<locale>`. Mark it as an opinionated template.
 4. **Application-only** — one company’s letterhead. Stays in that app.
 
 Do not publish empty placeholders. Do not grow `skald-label-sticker` with

@@ -9,15 +9,17 @@ It is a folder of independently published artifacts, not one jar.
 
 ```text
 skald-components/
-  label-sticker/     → no.beint.skaldpdf:skald-label-sticker
-  labels/            → no.beint.skaldpdf:skald-labels   (umbrella of every label-*)
-  # later, when a real consumer exists:
-  # label-gs1/       → skald-label-gs1
-  # invoice-no/      → skald-invoice-no
+  invoice-no/        → no.beint.skaldpdf:skald-invoice-no
+  packing-slip-no/   → skald-packing-slip-no
+  reminder-no/       → skald-reminder-no
+  statement-no/      → skald-statement-no
+  receipt-no/        → skald-receipt-no
+  purchase-order-no/ → skald-purchase-order-no
+  label-sticker/     → skald-label-sticker
+  label-shipping/    → skald-label-shipping
 ```
 
-Take one artifact. Do not take the umbrella unless you want every current
-print-stock type.
+Take one artifact. There is no umbrella that pulls every component.
 
 ## What belongs here
 
@@ -29,28 +31,26 @@ A component is allowed when all of these are true:
 3. Someone can use it without forking on day one.
 4. It is not empty. No placeholder modules.
 
-Labels qualify. A 93×35 mm clothing EAN sticker is the same across brands.
+## Document themes
 
-## Invoices
+Country-specific commercial pages are separate artifacts, not one
+`Invoice` class. `skald-invoice-no` is the ReAI-style Norwegian theme
+(faktura, kreditnota, betalt kopi, tilbud, ordrebekreftelse, proforma).
+Packing slips, reminders, statements, receipts, and purchase orders in
+the same family reuse that letterhead.
 
-Country-specific invoices can live here **later**, as separate artifacts
-(`skald-invoice-no`, `skald-invoice-se`, …), not as one `Invoice` class.
-
-They are a different contract from labels:
-
-- A label is print stock. Changing wrap or quiet zones is a bugfix.
-- An invoice is a **theme**. Norwegian VAT lines, KID, and “Betalingsinformasjon”
-  are shared; letterhead, column weights, and tone are not. ReAI’s Respiro
-  invoice is not every Norwegian invoice.
-
-So an `skald-invoice-no` would be an opinionated starting point — high
-quality, documented as a template you may copy — not a promise that
-Skald owns Norwegian bookkeeping layout. Promote one from ReAI only
-when a *second* product wants the same chrome. Until then the gallery
-and ReAI stay the examples.
+They are a starting point — high quality, documented as a template you
+may copy — not a promise that Skald owns Norwegian bookkeeping layout.
 
 Do not publish `skald-invoice` (generic). Do not put every country in
 one jar.
+
+## Print stock
+
+A 93×35 mm clothing EAN sticker is the same across brands. A 100×150 mm
+shipping label is its own artifact. Future stock (GS1, shelf tags) gets
+another `skald-label-*` module. Do not grow the clothing sticker with
+shipping fields.
 
 ## Adding a component
 
@@ -58,7 +58,5 @@ one jar.
    and tests that decode or fingerprint the output.
 2. `include` it in `settings.gradle.kts` and map `projectDir`.
 3. Keep the Maven name `skald-<kind>-<name>` so a clothing printer never
-   downloads a shipping label.
-4. If it is print stock, add it to the `skald-labels` umbrella.
-5. If it is a document theme, leave it off that umbrella. Document
-   themes are not labels.
+   downloads a shipping label or an invoice.
+4. Document themes are not labels. Print stock is not an invoice.

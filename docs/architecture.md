@@ -5,11 +5,12 @@ types. This keeps dependencies small without turning ordinary document creation
 into a graph of tiny artifacts.
 
 ```text
-org.skaldpdf.labels.all ──> org.skaldpdf.labels ──> org.skaldpdf.barcode ──┐
-org.skaldpdf.layout                            │
-org.skaldpdf.sign                              ┼──> org.skaldpdf.core ──> java.desktop
-org.skaldpdf.codec   (optional FFM natives)    │
-org.skaldpdf.optimize                          ┘
+org.skaldpdf.packing.no ──┐
+org.skaldpdf.reminder.no ─┼──> org.skaldpdf.invoice.no ──> org.skaldpdf.layout ──┐
+org.skaldpdf.statement.no ┘         │                        org.skaldpdf.barcode ┼──> org.skaldpdf.core
+org.skaldpdf.labels                 ┘                        org.skaldpdf.sign    │
+org.skaldpdf.labels.shipping                                 org.skaldpdf.codec   │
+                                                             org.skaldpdf.optimize┘
 ```
 
 ## Core
@@ -39,12 +40,13 @@ reverse dependency or runtime discovery mechanism.
 symbols as `ImageSource` values. It depends only on core. Place a symbol on any
 page without taking label templates.
 
-## Labels
+## Labels and document themes
 
-`skald-label-sticker` is the 93 mm × 35 mm clothing EAN label. `skald-labels`
-is an umbrella that depends on every current `skald-label-*`. Future print
-stock (GS1 shipping, shelf tags) gets its own artifact. The layering rule is
-in [modules.md](modules.md).
+`skald-label-sticker` is the 93 mm × 35 mm clothing EAN label.
+`skald-label-shipping` is the 100 mm × 150 mm tracking label.
+`skald-invoice-no` is the Norwegian commercial theme; packing slip,
+reminder, statement, receipt, and purchase order reuse its letterhead.
+The layering rule is in [modules.md](modules.md).
 
 ## Sign
 

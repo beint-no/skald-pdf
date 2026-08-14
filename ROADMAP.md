@@ -4,12 +4,22 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.9.0
+
+- One module per component under `skald-components/`. The `skald-labels`
+  umbrella is gone; take the label you print.
+- `skald-invoice-no`: ReAI-style Norwegian faktura, kreditnota, betalt
+  kopi, tilbud, ordrebekreftelse, proforma. BigDecimal line math, optional
+  logo and payment QR.
+- Everyday companions on the same letterhead: packing slip / delivery
+  note, reminder / collection notice, statement of account, A5 receipt,
+  purchase order.
+- `skald-label-shipping`: 100×150 mm address + tracking label.
+
 ## Shipped after 1.8.0
 
 - Components live in `skald-components/` as a folder of independently
-  published artifacts. Maven coordinates are unchanged
-  (`skald-label-sticker`, `skald-labels`). Country-specific invoices may
-  join later as `skald-invoice-no` and similar — not as one generic invoice.
+  published artifacts.
 
 ## Shipped in 1.8.0
 

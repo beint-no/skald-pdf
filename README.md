@@ -22,7 +22,7 @@ and other generated documents that do not need historical PDF output modes.
 - JPEG pass-through, lossless raster compression, alpha, image allowlisting, and image deduplication
 - Rounded surfaces, dashed rules, underline, strikethrough, and axial gradients
 - EAN-13, UPC-A, Code 128, GS1-128, and QR as drawable symbols
-- Optional `skald-labels` for 93×35 mm clothing stickers and A4 n-up sheets
+- Optional components under `skald-components/`: Norwegian invoices, packing slips, reminders, and print-stock labels
 - Page events, drawing, watermarks, safer stamping, merging, and page import
 - Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
 - Optional `skald-sign` module: PAdES-B-B CMS integrity seals, JDK-only, no BouncyCastle
@@ -37,8 +37,14 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, composition, and signature *placeholders* |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
 | `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols |
+| `skald-invoice-no` | `org.skaldpdf.invoice.no` | Norwegian faktura / kreditnota / tilbud / ordrebekreftelse |
+| `skald-packing-slip-no` | `org.skaldpdf.packing.no` | Norwegian packing slip and delivery note |
+| `skald-reminder-no` | `org.skaldpdf.reminder.no` | Norwegian purring and betalingsoppfordring |
+| `skald-statement-no` | `org.skaldpdf.statement.no` | Norwegian statement of account |
+| `skald-receipt-no` | `org.skaldpdf.receipt.no` | Norwegian A5 sales receipt |
+| `skald-purchase-order-no` | `org.skaldpdf.purchase.no` | Norwegian purchase order |
 | `skald-label-sticker` | `org.skaldpdf.labels` | 93×35 mm clothing EAN sticker and A4 n-up sheets |
-| `skald-labels` | `org.skaldpdf.labels.all` | Umbrella that depends on every current `skald-label-*` |
+| `skald-label-shipping` | `org.skaldpdf.labels.shipping` | 100×150 mm shipping label |
 | `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
 | `skald-image` | `org.skaldpdf.codec` | Optional FFM TurboJPEG / libheif / libjxl photo ingest |
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
@@ -46,25 +52,25 @@ and other generated documents that do not need historical PDF output modes.
 Engine modules (`layout`, `barcode`, `sign`, `image`, `optimize`) each depend
 on core, not on one another. Finished pages live under
 [`skald-components/`](skald-components/README.md) as **separate** artifacts
-(`skald-label-sticker` today). `skald-labels` is only the print-stock
-umbrella. See [docs/modules.md](docs/modules.md). The complete runtime still
-depends solely on the JDK.
+— one module per invoice, slip, or label. See [docs/modules.md](docs/modules.md).
+The complete runtime still depends solely on the JDK.
 
 Signing is an integrity seal, not a qualified eIDAS signature. ReAI and Skald
 are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.8.0` is on Maven Central:
+JDK 25 or newer is required. Release `1.9.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.8.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.8.0")        // optional symbols
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.8.0") // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.8.0")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.8.0")         // optional HEIC / JPEG XL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.8.0")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-layout:1.9.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.9.0")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.9.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.9.0") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.9.0")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.9.0")         // optional HEIC / JPEG XL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.9.0")      // optional received-PDF recompress
 }
 ```
 
@@ -78,10 +84,11 @@ For a modular application:
 
 ```java
 requires org.skaldpdf.layout;
-requires org.skaldpdf.barcode;  // optional symbols
-requires org.skaldpdf.labels;   // optional clothing stickers
-requires org.skaldpdf.sign;     // optional
-requires org.skaldpdf.optimize; // optional
+requires org.skaldpdf.barcode;     // optional symbols
+requires org.skaldpdf.invoice.no;  // optional Norwegian invoice
+requires org.skaldpdf.labels;      // optional clothing stickers
+requires org.skaldpdf.sign;        // optional
+requires org.skaldpdf.optimize;    // optional
 ```
 
 ## Create a document
@@ -127,7 +134,29 @@ var barcode = new Ean13Barcode("590123412345")
 document.add(new Image(barcode).scaleToFit(260, 110));
 ```
 
-Clothing / product stickers live in `skald-labels`, not in the barcode
+Norwegian invoices live in `skald-invoice-no`. The theme is ReAI's
+faktura layout: 40 pt A4 margins, right-aligned letterhead, 7-column VAT
+table, payment block, optional QR.
+
+```java
+import org.skaldpdf.invoice.no.Bank;
+import org.skaldpdf.invoice.no.Company;
+import org.skaldpdf.invoice.no.NorwegianInvoice;
+import org.skaldpdf.invoice.no.Party;
+
+byte[] invoice = NorwegianInvoice.pdf(NorwegianInvoice.Model.builder()
+    .company(new Company("Nordlys Handel AS", "NO", "999888777",
+        "Storgata 10, 0184 Oslo, Norge", true))
+    .customer(new Party("Fjordbutikken AS", "Kaien 4", "5003 Bergen"))
+    .bank(new Bank("DNB Bank ASA", "15034567890", "NO9315034567890", "DNBANOKK"))
+    .number("1001")
+    .issueDate(java.time.LocalDate.of(2026, 8, 12))
+    .dueDate(java.time.LocalDate.of(2026, 8, 26))
+    .line("Regnskapstjeneste august", "Løpende avtale", 8, "1,250.00", 25)
+    .build());
+```
+
+Clothing / product stickers live in `skald-label-sticker`, not in the barcode
 module. `ProductSticker.sheet` tiles the same labels onto A4:
 
 ```java

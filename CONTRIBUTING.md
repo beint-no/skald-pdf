@@ -7,7 +7,8 @@ and implementation proposals.
 
 - Search existing issues and describe the PDF use case or specification rule.
 - For a public API proposal, explain why it is an engine primitive, print
-  stock (`skald-labels`), or application/example code. See [docs/modules.md](docs/modules.md).
+  stock (`skald-label-*`), a document theme (`skald-invoice-no`, …),
+  or application/example code. See [docs/modules.md](docs/modules.md).
 - Do not add a production dependency without first showing why the JDK and a
   small native implementation are insufficient.
 

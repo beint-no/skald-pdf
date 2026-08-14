@@ -41,7 +41,7 @@
         <div><dt>Runtime deps</dt><dd>0</dd></div>
         <div><dt>Output</dt><dd>PDF 2.0 only</dd></div>
         <div><dt>Typical invoice</dt><dd>~25–35&nbsp;KB</dd></div>
-        <div><dt>Modules</dt><dd>core · layout · barcode · labels · sign · image · optimize</dd></div>
+        <div><dt>Modules</dt><dd>core · layout · barcode · invoice-no · sign · image · optimize</dd></div>
       </dl>
     </section>
 
@@ -126,11 +126,12 @@
     <section id="start" class="start">
       <div class="section-head">
         <h2>Start in one dependency.</h2>
-        <p>Release <strong>1.8.0</strong> is on Maven Central. Java packages stay <code>org.skaldpdf</code>.</p>
+        <p>Release <strong>1.9.0</strong> is on Maven Central. Java packages stay <code>org.skaldpdf</code>.</p>
       </div>
       <pre><code>dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.8.0")
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.8.0") // optional
+    implementation("no.beint.skaldpdf:skald-layout:1.9.0")
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.9.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.9.0") // optional
 }</code></pre>
       <pre><code>byte[] invoice = Pdf.create(document -&gt; {
     document.setMargins(40, 40, 40, 40);

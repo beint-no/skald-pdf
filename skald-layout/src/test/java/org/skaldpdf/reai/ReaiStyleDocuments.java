@@ -1,34 +1,18 @@
 package org.skaldpdf.reai;
 
-import org.skaldpdf.Pdf;
-import org.skaldpdf.barcode.QrCode;
-import org.skaldpdf.colors.DeviceRgb;
-import org.skaldpdf.font.PdfFont;
-import org.skaldpdf.font.PdfFontFactory;
-import org.skaldpdf.image.ImageDataFactory;
-import org.skaldpdf.layout.Document;
-import org.skaldpdf.layout.borders.Border;
-import org.skaldpdf.layout.borders.SolidBorder;
-import org.skaldpdf.layout.canvas.SolidLine;
-import org.skaldpdf.layout.element.Cell;
-import org.skaldpdf.layout.element.Image;
-import org.skaldpdf.layout.element.LineSeparator;
-import org.skaldpdf.layout.element.Paragraph;
-import org.skaldpdf.layout.element.Table;
-import org.skaldpdf.layout.properties.HorizontalAlignment;
-import org.skaldpdf.layout.properties.TextAlignment;
-import org.skaldpdf.layout.properties.UnitValue;
+import org.skaldpdf.invoice.no.LineItem;
+import org.skaldpdf.invoice.no.NorwegianInvoice;
+import org.skaldpdf.invoice.no.NorwegianMoney;
+import org.skaldpdf.packing.no.NorwegianPackingSlip;
+import org.skaldpdf.reminder.no.NorwegianReminder;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  * Faithful Skald reconstruction of ReAI's iText invoice family
@@ -40,11 +24,6 @@ import java.util.function.Consumer;
  * Helvetica. Skald embeds a compact IBM Plex / Skald Sans subset (PDF 2.0).
  */
 public final class ReaiStyleDocuments {
-    static final float FONT_SIZE_NORMAL = 10f;
-    static final float FONT_SIZE_SMALL = 9f;
-    static final float FONT_SIZE_HEADER = 14f;
-    static final DeviceRgb BRAND_GRAY = new DeviceRgb(150, 150, 150);
-
     private ReaiStyleDocuments() {
     }
 
@@ -70,148 +49,58 @@ public final class ReaiStyleDocuments {
     }
 
     public static byte[] invoice(InvoiceModel model, byte[] logo) {
-        return create(document -> {
-            document.setTitle(model.documentTitle()).setAuthor(model.company().name()).setLanguage(model.language());
-            var fonts = fonts();
-            addHeader(document, fonts, model.company(), model.labels(), logo);
-            addCustomer(document, fonts, model.customer());
-            addInvoiceDetails(document, fonts, model);
-            if (model.paymentReceipt() != null) {
-                addPaymentReceipt(document, fonts, model);
-            }
-            if (model.showPaymentDetails()) {
-                addPaymentDetails(document, fonts, model);
-            }
-            addDetails(document, fonts, model);
-            addLinesAndSummary(document, fonts, model);
-            addBranding(document, model.labels().branding());
-        });
+        return NorwegianInvoice.pdf(invoiceBuilder(model, logo, false).build());
     }
 
     public static byte[] invoiceWithQr(InvoiceModel model, byte[] logo) {
-        return create(document -> {
-            document.setTitle(model.documentTitle()).setAuthor(model.company().name()).setLanguage(model.language());
-            var fonts = fonts();
-            addHeader(document, fonts, model.company(), model.labels(), logo);
-            addCustomer(document, fonts, model.customer());
-            addInvoiceDetails(document, fonts, model);
-            addPaymentDetails(document, fonts, model);
-            addDetails(document, fonts, model);
-            addLinesAndSummary(document, fonts, model);
-            document.add(new Paragraph("Betaling med QR").bold().setFontSize(FONT_SIZE_NORMAL).setMarginTop(16));
-            document.add(new Image(new QrCode(kidPayload(model))).scaleInto(88, 88));
-            addBranding(document, model.labels().branding());
-        });
+        return NorwegianInvoice.pdf(invoiceBuilder(model, logo, true).build());
     }
 
     public static byte[] orderConfirmation(InvoiceModel model, byte[] logo) {
-        return create(document -> {
-            document.setTitle(model.documentTitle()).setAuthor(model.company().name()).setLanguage("nb-NO");
-            var fonts = fonts();
-            addHeader(document, fonts, model.company(), model.labels(), logo);
-            addCustomer(document, fonts, model.customer());
-            addInvoiceDetails(document, fonts, model);
-            addLinesAndSummary(document, fonts, model);
-        });
+        return NorwegianInvoice.pdf(invoiceBuilder(model, logo, false)
+            .kind(NorwegianInvoice.Kind.ORDER_CONFIRMATION)
+            .build());
     }
 
     public static byte[] reminder(boolean collection, byte[] logo) {
-        var model = sampleInvoice();
-        var labels = Labels.norwegian(false);
-        var title = collection ? "Betalingsoppfordring" : "Purring";
-        return create(document -> {
-            document.setTitle(title + " for faktura 1001").setAuthor(model.company().name()).setLanguage("nb-NO");
-            var fonts = fonts();
-            addHeader(document, fonts, model.company(), labels, logo);
-            addCustomer(document, fonts, model.customer());
-            document.add(new Paragraph(title).bold().setFontSize(18).setMarginTop(12));
-            document.add(new Paragraph(title + " for faktura 1001")
-                .setFontSize(FONT_SIZE_NORMAL).setMultipliedLeading(1f).setMarginBottom(8));
-            document.add(new Paragraph(collection
-                ? "Vi ser ikke ut til å ha mottatt betaling for fakturaen nedenfor. De varsles med dette om at skyldig beløp må være betalt innen 14 dager fra datoen for dette varselet. Dersom kravet ikke betales i sin helhet innen fristen, kan kravet bli begjært tvangsinnfordret (utlegg) gjennom namsmyndighetene, jf. tvangsfullbyrdelsesloven §4-18 og §4-19."
-                : "Vi ser ikke ut til å ha mottatt betaling for fakturaen under. Dersom betaling skjer etter forfallsdato kan rente- og purregebyr bli lagt til. Dersom betalingen er gjort de siste dagene, vennligst se bort fra denne påminnelsen.")
-                .setFontSize(FONT_SIZE_NORMAL).setMultipliedLeading(1.15f));
-            var table = new Table(UnitValue.createPercentArray(new float[] {18, 18, 18, 18, 28}))
-                .useAllAvailableWidth()
-                .setMarginTop(16);
-            headerCell(table, "Fakturanr.");
-            headerCell(table, "Fakturadato");
-            headerCell(table, "Forfallsdato");
-            headerCell(table, "Beløp");
-            headerCell(table, "Beskrivelse / Spesifikasjon");
-            addPlain(table, "1001", TextAlignment.LEFT);
-            addPlain(table, "12.08.2026", TextAlignment.LEFT);
-            addPlain(table, "26.08.2026", TextAlignment.LEFT);
-            addPlain(table, "NOK 15,625.00", TextAlignment.RIGHT);
-            addPlain(table, "Opprinnelig faktura", TextAlignment.LEFT);
-            addPlain(table, "", TextAlignment.LEFT);
-            addPlain(table, "09.09.2026", TextAlignment.LEFT);
-            addPlain(table, "", TextAlignment.LEFT);
-            addPlain(table, "70.00", TextAlignment.RIGHT);
-            addPlain(table, "Purregebyr", TextAlignment.LEFT);
-            addPlain(table, "", TextAlignment.LEFT);
-            addPlain(table, "09.09.2026", TextAlignment.LEFT);
-            addPlain(table, "", TextAlignment.LEFT);
-            addPlain(table, "82.47", TextAlignment.RIGHT);
-            addPlain(table, "Renter 12.00 % · 14 rentedager", TextAlignment.LEFT);
-            table.addCell(empty(3).setBorderTop(new SolidBorder(2f)));
-            table.addCell(cell("Til betaling", true, FONT_SIZE_SMALL, TextAlignment.LEFT));
-            table.addCell(cell("NOK 15,777.47", true, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-            document.add(table);
-            addBranding(document, labels.branding());
-        });
+        var sample = sampleInvoice();
+        return NorwegianReminder.pdf(NorwegianReminder.Model.builder()
+            .kind(collection ? NorwegianReminder.Kind.COLLECTION : NorwegianReminder.Kind.REMINDER)
+            .company(toCompany(sample.company()))
+            .customer(toParty(sample.customer()))
+            .invoiceNumber("1001")
+            .invoiceDate(LocalDate.of(2026, 8, 12))
+            .dueDate(LocalDate.of(2026, 8, 26))
+            .noticeDate(LocalDate.of(2026, 9, 9))
+            .originalAmount("15,625.00")
+            .lateFee("70.00")
+            .interest("82.47", "12", 14)
+            .footer(Labels.norwegian(false).branding())
+            .logo(logo)
+            .build());
     }
 
     public static byte[] packingSlip(byte[] logo) {
-        var model = sampleInvoice();
-        return create(document -> {
-            document.setTitle("Pakkseddel 1001").setAuthor(model.company().name()).setLanguage("nb-NO");
-            var fonts = fonts();
-            addHeader(document, fonts, model.company(), Labels.norwegian(false), logo);
-            addCustomer(document, fonts, model.customer());
-            document.add(new Paragraph("Pakkseddel").bold().setFontSize(18).setMarginTop(10));
-            var meta = new Table(new float[] {1, 1})
-                .setWidth(UnitValue.createPercentValue(50f))
-                .setHorizontalAlignment(HorizontalAlignment.RIGHT)
-                .setBorder(Border.NO_BORDER);
-            meta.addCell(cell("Ordrenr.:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-            meta.addCell(cell("1001", false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-            meta.addCell(cell("Leveringsdato:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-            meta.addCell(cell("14.08.2026", false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-            meta.addCell(cell("Sporing:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-            meta.addCell(cell("POSTEN 373724189NO", false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-            document.add(meta);
-            document.add(new Paragraph("Vennligst sjekk innholdet mot listen under.")
-                .setFontSize(FONT_SIZE_NORMAL).setMarginTop(16));
-            var table = new Table(UnitValue.createPercentArray(new float[] {38, 22, 12, 14, 14}))
-                .useAllAvailableWidth()
-                .setMarginTop(16);
-            headerCell(table, "Vare");
-            headerCell(table, "SKU");
-            headerCell(table, "Antall");
-            headerCell(table, "Lokasjon");
-            headerCell(table, "Pakket");
-            addPlain(table, "Regnskapstjeneste august", "REG-AUG", "8", "A-12", "☐");
-            addPlain(table, "Lønnskjøring", "PAY-2026-08", "1", "A-12", "☐");
-            addPlain(table, "Årsoppgjør tillegg", "YEAR-ADD", "1", "B-04", "☐");
-            document.add(table);
-            document.add(new Image(new QrCode("https://sporing.posten.no/373724189NO")).scaleInto(72, 72)
-                .setMarginTop(18));
-            addBranding(document, "Denne pakkseddelen er laget med Skald, samme layoutmotor som ReAI.");
-        });
+        var sample = sampleInvoice();
+        return NorwegianPackingSlip.pdf(NorwegianPackingSlip.Model.builder()
+            .company(toCompany(sample.company()))
+            .recipient(toParty(sample.customer()))
+            .number("1001")
+            .deliveryDate(LocalDate.of(2026, 8, 14))
+            .tracking("POSTEN 373724189NO")
+            .trackingUrl("https://sporing.posten.no/373724189NO")
+            .footer("Denne pakkseddelen er laget med Skald, samme layoutmotor som ReAI.")
+            .logo(logo)
+            .line("Regnskapstjeneste august", "REG-AUG", 8, "A-12")
+            .line("Lønnskjøring", "PAY-2026-08", 1, "A-12")
+            .line("Årsoppgjør tillegg", "YEAR-ADD", 1, "B-04")
+            .build());
     }
 
     public static byte[] ehfPreview(byte[] logo) {
-        return create(document -> {
-            document.setTitle("EHF Faktura 1001").setAuthor("Nordlys Handel AS").setLanguage("nb-NO");
-            document.setWatermark("EHF FORHÅNDSVISNING");
-            var fonts = fonts();
-            addHeader(document, fonts, Company.nordlys(), Labels.norwegian(false), logo);
-            addCustomer(document, fonts, Customer.fjordbutikken());
-            addInvoiceDetails(document, fonts, sampleInvoice());
-            addLinesAndSummary(document, fonts, sampleInvoice());
-            addBranding(document, Labels.norwegian(false).branding());
-        });
+        return NorwegianInvoice.pdf(invoiceBuilder(sampleInvoice(), logo, false)
+            .watermark("EHF FORHÅNDSVISNING")
+            .build());
     }
 
     public static InvoiceModel respiroPaidCopy() {
@@ -302,273 +191,80 @@ public final class ReaiStyleDocuments {
             .asOrder();
     }
 
-    static byte[] create(Consumer<Document> content) {
-        return Pdf.create(document -> {
-            document.setMargins(40, 40, 40, 40);
-            content.accept(document);
-        });
-    }
-
-    private static void addHeader(Document document, Fonts fonts, Company company, Labels labels, byte[] logo) {
-        if (logo == null) {
-            document.add(new Paragraph(company.name())
-                .setFont(fonts.bold)
-                .setFontSize(FONT_SIZE_HEADER)
-                .setTextAlignment(TextAlignment.RIGHT)
-                .setMarginBottom(2));
-        } else {
-            try {
-                var header = new Table(UnitValue.createPercentArray(new float[] {50, 50}))
-                    .useAllAvailableWidth()
-                    .setBorder(Border.NO_BORDER)
-                    .setMarginBottom(2);
-                header.addCell(new Cell().setBorder(Border.NO_BORDER).setPadding(0)
-                    .add(new Image(ImageDataFactory.create(logo)).scaleToFit(160, 60)));
-                header.addCell(new Cell().setBorder(Border.NO_BORDER).setPadding(0)
-                    .add(new Paragraph(company.name()).setFont(fonts.bold).setFontSize(FONT_SIZE_HEADER)
-                        .setTextAlignment(TextAlignment.RIGHT)));
-                document.add(header);
-            } catch (Exception exception) {
-                throw new IllegalStateException(exception);
-            }
-        }
-        document.add(new LineSeparator(new SolidLine(2f)).setMarginTop(2).setMarginBottom(4));
-        document.add(new Paragraph(company.addressLine())
-            .setFont(fonts.regular)
-            .setFontSize(FONT_SIZE_NORMAL)
-            .setWidth(UnitValue.createPercentValue(40f))
-            .setTextAlignment(TextAlignment.LEFT)
-            .setHorizontalAlignment(HorizontalAlignment.RIGHT)
-            .setMarginBottom(0)
-            .setMultipliedLeading(1f));
-        var orgValue = company.country() + company.organizationNumber() + (company.vatRegistered() ? "MVA" : "");
-        var labelWidth = fonts.bold.getWidth(labels.companyNumber(), FONT_SIZE_NORMAL) + 8;
-        var valueWidth = fonts.regular.getWidth(orgValue, FONT_SIZE_NORMAL) + 8;
-        var org = Table.withColumns(UnitValue.createPointValue(labelWidth), UnitValue.createPointValue(valueWidth))
-            .setWidth(UnitValue.createPointValue(labelWidth + valueWidth))
-            .setHorizontalAlignment(HorizontalAlignment.RIGHT)
-            .setBorder(Border.NO_BORDER)
-            .setMarginTop(10);
-        org.addCell(cell(labels.companyNumber(), true, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        org.addCell(cell(orgValue, false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        document.add(org);
-    }
-
-    private static void addCustomer(Document document, Fonts fonts, Customer customer) {
-        document.add(new Paragraph(customer.name())
-            .setFont(fonts.regular).setFontSize(FONT_SIZE_NORMAL)
-            .setMarginTop(18).setMarginBottom(0.2f).setMultipliedLeading(1f));
-        for (var line : customer.addressLines()) {
-            document.add(new Paragraph(line)
-                .setFont(fonts.regular).setFontSize(FONT_SIZE_NORMAL)
-                .setMarginBottom(0.2f).setMultipliedLeading(1f));
-        }
-    }
-
-    private static void addInvoiceDetails(Document document, Fonts fonts, InvoiceModel model) {
-        var table = new Table(new float[] {1, 1})
-            .setWidth(UnitValue.createPercentValue(50f))
-            .setHorizontalAlignment(HorizontalAlignment.RIGHT)
-            .setBorder(Border.NO_BORDER);
-        table.addCell(new Cell(2).setBorder(Border.NO_BORDER).setPaddingBottom(2)
-            .add(new Paragraph(model.title()).setFont(fonts.bold).setFontSize(18)));
-        table.addCell(cell(model.labels().numberLabel(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(model.number(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        table.addCell(cell(model.labels().dateLabel(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(model.issueDate(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        if (model.ourReference() != null && !model.ourReference().isBlank()) {
-            table.addCell(cell("Vår ref.:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-            table.addCell(cell(model.ourReference(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        }
-        if (model.buyerReference() != null && !model.buyerReference().isBlank()) {
-            table.addCell(cell("Deres ref.:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-            table.addCell(cell(model.buyerReference(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        }
-        table.addCell(empty(2).setPaddingTop(4));
-        document.add(table);
-    }
-
-    private static void addPaymentDetails(Document document, Fonts fonts, InvoiceModel model) {
-        var table = new Table(new float[] {2, 5})
-            .setWidth(UnitValue.createPercentValue(50f))
-            .setHorizontalAlignment(HorizontalAlignment.RIGHT)
-            .setBorder(Border.NO_BORDER);
-        table.addCell(new Cell(2).setBorder(Border.NO_BORDER).setPaddingBottom(2)
-            .add(new Paragraph(model.labels().paymentInfo()).setFont(fonts.bold)));
-        table.addCell(cell(model.labels().dueDate(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(model.dueDate(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        table.addCell(cell(model.labels().bankName(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(model.bank().name(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        table.addCell(cell(model.labels().accountNumber(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(chunked(model.bank().account()), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        table.addCell(cell(model.labels().iban(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(chunked(model.bank().iban()), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        table.addCell(cell("BIC/SWIFT", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(model.bank().bic(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        document.add(table);
-    }
-
-    private static void addPaymentReceipt(Document document, Fonts fonts, InvoiceModel model) {
-        var receipt = model.paymentReceipt();
-        var table = new Table(new float[] {2, 4})
-            .setWidth(UnitValue.createPercentValue(50f))
-            .setHorizontalAlignment(HorizontalAlignment.RIGHT)
-            .setBorder(Border.NO_BORDER)
-            .setMarginBottom(8);
-        table.addCell(new Cell(2).setBorder(Border.NO_BORDER).setPaddingBottom(2)
-            .add(new Paragraph(model.labels().paymentReceipt()).setFont(fonts.bold)));
-        table.addCell(cell(model.labels().paidAmount(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell("NOK " + receipt.paidAmount(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        table.addCell(cell(model.labels().lastPaymentDate(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(receipt.lastPaymentDate(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        if (receipt.paidViaGateway()) {
-            table.addCell(cell("Betalt med", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-            table.addCell(cell("Betalingskort/betalingsløsning", false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        }
-        document.add(table);
-    }
-
-    private static void addDetails(Document document, Fonts fonts, InvoiceModel model) {
-        if (model.creditFor() != null) {
-            document.add(new Paragraph("Kreditnota for faktura " + model.creditFor().number()
-                + " datert " + model.creditFor().date())
-                .setFont(fonts.regular).setFontSize(FONT_SIZE_NORMAL)
-                .setMarginTop(25).setMarginBottom(0.2f).setMultipliedLeading(1f));
-        }
-        if (model.showPaymentReference()) {
-            document.add(new Paragraph()
-                .add(new org.skaldpdf.layout.element.Text("Vennligst oppgi fakturanummer ").setFont(fonts.regular))
-                .add(new org.skaldpdf.layout.element.Text(model.number()).setFont(fonts.bold))
-                .add(new org.skaldpdf.layout.element.Text(" ved betaling").setFont(fonts.regular))
-                .setFontSize(FONT_SIZE_NORMAL)
-                .setMultipliedLeading(1f)
-                .setMarginTop(20));
-        }
-    }
-
-    private static void addLinesAndSummary(Document document, Fonts fonts, InvoiceModel model) {
-        var showDiscount = model.showDiscount();
-        var columns = showDiscount
-            ? new float[] {20, 15, 10, 12, 8, 12, 9, 14}
-            : new float[] {22, 16, 10, 13, 13, 10, 16};
-        var table = new Table(UnitValue.createPercentArray(columns)).useAllAvailableWidth().setMarginTop(40);
-        for (int index = 0; index < model.labels().lineHeaders().size(); index++) {
-            table.addHeaderCell(cell(model.labels().lineHeaders().get(index), true, FONT_SIZE_SMALL,
-                index <= 1 ? TextAlignment.LEFT : TextAlignment.RIGHT)
-                .setBorder(Border.NO_BORDER)
-                .setBorderBottom(new SolidBorder(0.25f))
-                .setPadding(3));
+    private static NorwegianInvoice.Builder invoiceBuilder(InvoiceModel model, byte[] logo, boolean paymentQr) {
+        var builder = NorwegianInvoice.Model.builder()
+            .kind(kindOf(model))
+            .language(model.language() != null && model.language().startsWith("en")
+                ? NorwegianInvoice.Language.EN : NorwegianInvoice.Language.NB)
+            .company(toCompany(model.company()))
+            .customer(toParty(model.customer()))
+            .bank(toBank(model.bank()))
+            .number(model.number())
+            .title(model.title())
+            .issueDate(parseDate(model.issueDate()))
+            .dueDate(parseDate(model.dueDate()))
+            .ourReference(model.ourReference())
+            .buyerReference(model.buyerReference())
+            .footer(model.labels().branding())
+            .logo(logo)
+            .paymentQr(paymentQr);
+        if (model.title() != null && model.title().toLowerCase().contains("forhåndsvisning")) {
+            builder.watermark("FORHÅNDSVISNING");
         }
         for (var line : model.lines()) {
-            addLine(table, line, showDiscount);
+            var discount = line.discount() == null || line.discount().isBlank()
+                ? null : NorwegianMoney.parse(line.discount().replace("%", "").strip());
+            builder.line(new LineItem(line.name(), line.comment(),
+                new java.math.BigDecimal(line.quantity().replace(" ", "").replace(",", "")),
+                NorwegianMoney.parse(line.unitPrice()),
+                discount,
+                new java.math.BigDecimal(line.vatRate())));
         }
-        var headerCount = model.labels().lineHeaders().size();
-        table.addRule(1.25f);
-        if (model.lines().size() > 1) {
-            table.addCell(cell(model.labels().sum(), true, FONT_SIZE_SMALL, TextAlignment.LEFT, headerCount - 3));
-            table.addCell(cell(model.totals().excl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-            table.addCell(cell(model.totals().vat(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-            table.addCell(cell(model.totals().incl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-            table.addRule(0.4f);
-        }
-        table.addCell(cell(model.labels().vat() + " 25 %", false, FONT_SIZE_SMALL, TextAlignment.LEFT, headerCount - 3));
-        table.addCell(cell(model.totals().excl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-        table.addCell(cell(model.totals().vat(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-        table.addCell(cell(model.totals().incl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-        var payableTitle = model.credit() ? model.labels().amount()
-            : model.paymentReceipt() != null ? model.labels().invoiceAmount()
-            : model.labels().payable();
-        table.addCell(cell(payableTitle, true, FONT_SIZE_SMALL, TextAlignment.LEFT, headerCount - 2));
-        table.addCell(cell("NOK " + model.totals().incl(), true, FONT_SIZE_SMALL, TextAlignment.RIGHT, 2));
         if (model.paymentReceipt() != null) {
-            table.addCell(cell(model.labels().paidAmount(), false, FONT_SIZE_SMALL, TextAlignment.LEFT, headerCount - 2));
-            table.addCell(cell("NOK " + model.paymentReceipt().paidAmount(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT, 2));
-            table.addCell(cell(model.labels().outstanding(), true, FONT_SIZE_SMALL, TextAlignment.LEFT, headerCount - 2));
-            table.addCell(cell("NOK " + model.paymentReceipt().outstanding(), true, FONT_SIZE_SMALL, TextAlignment.RIGHT, 2));
+            builder.paid(model.paymentReceipt().paidAmount(),
+                parseDate(model.paymentReceipt().lastPaymentDate()),
+                model.paymentReceipt().paidViaGateway());
         }
-        table.addRule(1.25f);
-        document.add(table);
-    }
-
-    private static void addLine(Table table, Line line, boolean showDiscount) {
-        table.addCell(cell(line.name(), false, FONT_SIZE_SMALL, TextAlignment.LEFT));
-        table.addCell(cell(line.comment(), false, FONT_SIZE_SMALL, TextAlignment.LEFT));
-        table.addCell(cell(line.quantity(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-        table.addCell(cell(line.unitPrice(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-        if (showDiscount) {
-            table.addCell(cell(line.discount() == null ? "0 %" : line.discount(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
+        if (model.creditFor() != null) {
+            builder.creditFor(model.creditFor().number(), parseDate(model.creditFor().date()));
         }
-        table.addCell(cell(line.excl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-        table.addCell(cell(line.vatRate() + " %", false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-        table.addCell(cell(line.incl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
+        return builder;
     }
 
-    private static void addBranding(Document document, String text) {
-        document.add(new Paragraph(text)
-            .setFontSize(FONT_SIZE_SMALL)
-            .setFontColor(BRAND_GRAY)
-            .setTextAlignment(TextAlignment.CENTER)
-            .setMarginTop(30));
-    }
-
-    private static void headerCell(Table table, String text) {
-        table.addHeaderCell(cell(text, true, FONT_SIZE_SMALL, TextAlignment.LEFT)
-            .setBorder(Border.NO_BORDER)
-            .setBorderBottom(new SolidBorder(0.25f))
-            .setPadding(3));
-    }
-
-    private static void addPlain(Table table, String... values) {
-        for (var value : values) {
-            addPlain(table, value, TextAlignment.LEFT);
+    private static NorwegianInvoice.Kind kindOf(InvoiceModel model) {
+        if (model.credit() || model.title().contains("Kreditnota") || model.title().contains("Credit")) {
+            return NorwegianInvoice.Kind.CREDIT_NOTE;
         }
-    }
-
-    private static void addPlain(Table table, String value, TextAlignment alignment) {
-        table.addCell(cell(value, false, FONT_SIZE_SMALL, alignment)
-            .setBorder(Border.NO_BORDER)
-            .setBorderBottom(new SolidBorder(0.25f)));
-    }
-
-    private static Cell cell(String text, boolean bold, float size, TextAlignment alignment) {
-        return cell(text, bold, size, alignment, 1);
-    }
-
-    private static Cell cell(String text, boolean bold, float size, TextAlignment alignment, int colspan) {
-        var paragraph = new Paragraph(text).setFontSize(size).setMultipliedLeading(1f);
-        if (bold) {
-            paragraph.bold();
+        if (model.title().contains("Betalt") || model.title().contains("Paid")) {
+            return NorwegianInvoice.Kind.PAID_COPY;
         }
-        return new Cell(colspan).add(paragraph)
-            .setTextAlignment(alignment)
-            .setBorder(Border.NO_BORDER)
-            .setPadding(2);
-    }
-
-    private static Cell empty(int colspan) {
-        return new Cell(colspan).setBorder(Border.NO_BORDER);
-    }
-
-    private static Fonts fonts() {
-        return new Fonts(PdfFontFactory.regular(), PdfFontFactory.bold());
-    }
-
-    private static String chunked(String value) {
-        var compact = value.replace(" ", "");
-        var result = new StringBuilder();
-        for (int index = 0; index < compact.length(); index++) {
-            if (index > 0 && index % 4 == 0) {
-                result.append(' ');
-            }
-            result.append(compact.charAt(index));
+        if (model.title().contains("Ordre") || model.title().contains("Order")) {
+            return NorwegianInvoice.Kind.ORDER_CONFIRMATION;
         }
-        return result.toString();
+        return NorwegianInvoice.Kind.INVOICE;
     }
 
-    private static String kidPayload(InvoiceModel model) {
-        return "SPD*1.0*ACC:" + model.bank().iban()
-            + "*AM:" + model.totals().incl().replace(",", "")
-            + "*CC:NOK*MSG:Faktura " + model.number();
+    private static org.skaldpdf.invoice.no.Company toCompany(Company company) {
+        return new org.skaldpdf.invoice.no.Company(company.name(), company.country(),
+            company.organizationNumber(), company.addressLine(), company.vatRegistered());
+    }
+
+    private static org.skaldpdf.invoice.no.Party toParty(Customer customer) {
+        return new org.skaldpdf.invoice.no.Party(customer.name(), customer.addressLines());
+    }
+
+    private static org.skaldpdf.invoice.no.Bank toBank(Bank bank) {
+        return new org.skaldpdf.invoice.no.Bank(bank.name(), bank.account(), bank.iban(), bank.bic());
+    }
+
+    private static LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        if (value.contains("-")) {
+            return LocalDate.parse(value);
+        }
+        return LocalDate.parse(value, DateTimeFormatter.ofPattern("dd.MM.yyyy"));
     }
 
     private static Line line(String name, String comment, String quantity, String unit, String discount,
@@ -581,14 +277,7 @@ public final class ReaiStyleDocuments {
     }
 
     public static String formatMoney(BigDecimal amount) {
-        var rounded = amount.setScale(2, RoundingMode.HALF_UP);
-        var pattern = rounded.stripTrailingZeros().scale() <= 0 ? "#,##0" : "#,##0.00";
-        var format = new DecimalFormat(pattern, DecimalFormatSymbols.getInstance(Locale.US));
-        format.setRoundingMode(RoundingMode.HALF_UP);
-        return format.format(rounded);
-    }
-
-    record Fonts(PdfFont regular, PdfFont bold) {
+        return NorwegianMoney.format(amount);
     }
 
     public record Company(String name, String country, String organizationNumber, String addressLine,

@@ -12,7 +12,7 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = "1.8.0"
+val releaseVersion = "1.9.0"
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-layout" to "Skald Layout",
@@ -21,7 +21,13 @@ val moduleTitles = mapOf(
     "skald-image" to "Skald Image",
     "skald-optimize" to "Skald Optimize",
     "skald-label-sticker" to "Skald Clothing Sticker",
-    "skald-labels" to "Skald Labels"
+    "skald-label-shipping" to "Skald Shipping Label",
+    "skald-invoice-no" to "Skald Norwegian Invoice",
+    "skald-packing-slip-no" to "Skald Norwegian Packing Slip",
+    "skald-reminder-no" to "Skald Norwegian Reminder",
+    "skald-statement-no" to "Skald Norwegian Statement",
+    "skald-receipt-no" to "Skald Norwegian Receipt",
+    "skald-purchase-order-no" to "Skald Norwegian Purchase Order"
 )
 val moduleDescriptions = mapOf(
     "skald-core" to "Native PDF 2.0 writing, reading, fonts, images, and composition",
@@ -31,7 +37,13 @@ val moduleDescriptions = mapOf(
     "skald-image" to "Optional FFM bindings to TurboJPEG, libheif, and libjxl for photo ingest",
     "skald-optimize" to "Optional recompression of image XObjects already stored in a received PDF",
     "skald-label-sticker" to "93×35 mm clothing EAN-13 sticker print stock",
-    "skald-labels" to "Umbrella artifact that pulls in every current Skald print-stock label"
+    "skald-label-shipping" to "100×150 mm shipping label with address and tracking",
+    "skald-invoice-no" to "Opinionated Norwegian invoice theme (faktura, kreditnota, tilbud, ordrebekreftelse)",
+    "skald-packing-slip-no" to "Norwegian packing slip and delivery note",
+    "skald-reminder-no" to "Norwegian payment reminder and collection notice",
+    "skald-statement-no" to "Norwegian statement of account",
+    "skald-receipt-no" to "Norwegian A5 sales receipt",
+    "skald-purchase-order-no" to "Norwegian purchase order"
 )
 
 allprojects {
