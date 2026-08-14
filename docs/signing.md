@@ -30,7 +30,7 @@ was used, or that a qualified certificate was issued.
 Bring the module in only when you need sealing:
 
 ```kotlin
-implementation("no.beint.skaldpdf:skald-sign:1.4.1")
+implementation("no.beint.skaldpdf:skald-sign:1.5.0")
 ```
 
 Core, layout, and barcode stay free of cryptography.

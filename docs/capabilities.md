@@ -15,7 +15,8 @@
 | Composition | merge, copy pages, stamp existing pages, resolve indirect Contents/Annots, strip Launch/JS and other unsafe imported actions |
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |
 | Signatures | reserved signature field in core; optional `skald-sign` CMS / PAdES-B-B integrity seal; verify + tamper tests |
-| Runtime | four focused JPMS modules, JDK 25+, zero third-party runtime dependencies |
+| Native photos | optional `skald-image`: TurboJPEG encode/decode and libheif HEIC/AVIF via FFM; absent libraries are skipped |
+| Runtime | five JPMS modules, JDK 25+, zero third-party *Java* runtime dependencies; native codecs optional |
 
 ## Deliberately deferred
 

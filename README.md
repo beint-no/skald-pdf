@@ -35,9 +35,10 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
 | `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, QR, and product stickers |
 | `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
+| `skald-image` | `org.skaldpdf.codec` | Optional FFM TurboJPEG / libheif photo ingest |
 
-`skald-layout`, `skald-barcode`, and `skald-sign` each depend on core, not on
-one another. An application only pays for the capabilities it selects. The
+`skald-layout`, `skald-barcode`, `skald-sign`, and `skald-image` each depend on
+core, not on one another. An application only pays for the capabilities it selects. The
 complete runtime still depends solely on the JDK.
 
 Signing is an integrity seal, not a qualified eIDAS signature. ReAI and Skald
@@ -45,13 +46,14 @@ are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.4.1` is on Maven Central:
+JDK 25 or newer is required. Release `1.5.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.4.1")
-    implementation("no.beint.skaldpdf:skald-barcode:1.4.1") // optional
-    implementation("no.beint.skaldpdf:skald-sign:1.4.1")    // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-layout:1.5.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.5.0") // optional
+    implementation("no.beint.skaldpdf:skald-sign:1.5.0")    // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.5.0")   // optional HEIC/JPEG natives
 }
 ```
 

@@ -4,6 +4,24 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.5.0
+
+- Optional `skald-image`: FFM bindings to TurboJPEG and libheif. Missing
+  natives fail closed. Core still uses ImageIO. See [native-image.md](docs/native-image.md).
+
+## Next
+
+Ordered by what would make Skald the better business-PDF library, not a
+bigger iText clone:
+
+1. **Imported image XObjects** — read and replace `/XObject /Image` in
+   received files. That unblocks `skald-optimize` (shrink supplier PDFs).
+2. **Visual regression** — Poppler/MuPDF baselines for the ReAI corpus.
+3. **CFF/OTF embedding** — licensed retail faces as PDF 2.0 CID fonts.
+4. **PDF/A-4 module** — archive invoices with output intents.
+5. **PAdES-B-T** — timestamp after a TSA; still not QES.
+6. **High-level text extract** on the existing parser.
+
 ## Shipped in 1.4.1
 
 - Table min-content columns so invoice headers such as `Antall` do not split.

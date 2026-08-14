@@ -7,7 +7,8 @@ into a graph of tiny artifacts.
 ```text
 org.skaldpdf.layout   ──┐
 org.skaldpdf.barcode  ──┼──> org.skaldpdf.core ──> java.desktop ──> java.base
-org.skaldpdf.sign     ──┘
+org.skaldpdf.sign     ──┤
+org.skaldpdf.codec    ──┘  (optional FFM → libturbojpeg / libheif)
 ```
 
 ## Core

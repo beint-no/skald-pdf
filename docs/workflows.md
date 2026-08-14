@@ -15,7 +15,8 @@ what it uses. This is the mapping against the workflows ReAI actually runs.
 | Forms / AcroForm fill | Core forms | Signature field only | Not a priority |
 | Optimize generated files | pdfOptimizer | Compact subset, object streams, JPEG pass-through | Incremental, stays in core |
 | Recompress photos *already inside* a received PDF | pdfOptimizer | Not yet | **Yes — `skald-optimize`** |
-| Downscale/re-encode *before* embedding | Manual | `ImageData.scaledToFit` / `asJpeg` | No extra module |
+| Downscale/re-encode *before* embedding | Manual | `ImageData.scaledToFit` / `asJpeg`; optional `skald-image` for HEIC + TurboJPEG | No |
+| HEIC/AVIF phone photos | ImageIO plugins / none | `skald-image` (`NativeImages.prepare`) | Done, optional |
 
 ## Image compression of existing PDFs
 
