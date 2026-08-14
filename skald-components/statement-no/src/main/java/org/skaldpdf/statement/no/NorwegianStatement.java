@@ -4,6 +4,7 @@ import org.skaldpdf.invoice.no.Company;
 import org.skaldpdf.invoice.no.NorwegianMoney;
 import org.skaldpdf.invoice.no.NorwegianTheme;
 import org.skaldpdf.invoice.no.Party;
+import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.element.Table;
 import org.skaldpdf.layout.properties.TextAlignment;
@@ -109,7 +110,7 @@ public final class NorwegianStatement {
         private final LocalDate periodEnd;
         private final BigDecimal openingBalance;
         private final String footer;
-        private final byte[] logo;
+        private final ImageSource logo;
         private final List<Entry> entries;
 
         Model(Builder builder) {
@@ -167,7 +168,7 @@ public final class NorwegianStatement {
             return footer;
         }
 
-        public byte[] logo() {
+        public ImageSource logo() {
             return logo;
         }
 
@@ -184,7 +185,7 @@ public final class NorwegianStatement {
         private LocalDate periodEnd;
         private BigDecimal openingBalance = BigDecimal.ZERO;
         private String footer;
-        private byte[] logo;
+        private ImageSource logo;
         private final List<Entry> entries = new ArrayList<>();
 
         private Builder() {
@@ -225,7 +226,7 @@ public final class NorwegianStatement {
             return this;
         }
 
-        public Builder logo(byte[] logo) {
+        public Builder logo(ImageSource logo) {
             this.logo = logo;
             return this;
         }

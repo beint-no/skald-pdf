@@ -17,7 +17,7 @@ what it uses. This is the mapping against the workflows ReAI actually runs.
 | Forms / AcroForm fill | Core forms | Signature field only | Not a priority |
 | Optimize generated files | pdfOptimizer | Compact subset, object streams, JPEG pass-through | Incremental, stays in core |
 | Recompress photos *already inside* a received PDF | pdfOptimizer | `skald-optimize` | Done, optional |
-| Downscale/re-encode *before* embedding | Manual | `ImageData.scaledToFit` / `asJpeg`; optional `skald-image` for HEIC / JXL + TurboJPEG | No |
+| Downscale/re-encode *before* embedding | Manual | `skald-image`: `RasterImages.scaleToFit` / `asJpeg`, plus optional native HEIC / JXL / TurboJPEG | No |
 | HEIC/AVIF phone photos | ImageIO plugins / none | `skald-image` (`NativeImages.prepare`) | Done, optional |
 | JPEG XL phone photos | none | `skald-image` decode → DCT JPEG. Not stored as JXL in PDF 2.0 | Ingest only |
 
@@ -27,12 +27,12 @@ This is the one iText add-on that is a no-brainer for accounting.
 
 Supplier invoices and expense attachments often carry 4–12 megapixel phone
 photos as PNG or uncompressed JPEG. Generation-time helpers
-(`scaledToFit`, `asJpeg`) cover files we create. Rewriting *received* PDFs
+(`RasterImages.scaleToFit`, `RasterImages.asJpeg`) cover files we create. Rewriting *received* PDFs
 needs a different path: walk imported XObject image streams, decode, optionally
 downsample, write a new DCT or Flate XObject, keep the page content stream's
 `Do` name.
 
-That work is `skald-optimize`. It depends only on core. `PdfDocument.importedImages()`
+That work is `skald-optimize`. It depends on core and `skald-image`. `PdfDocument.importedImages()`
 lists XObjects; `replaceImportedImage` writes a new DCT/Flate stream under the
 same resource name. `PdfOptimizer.recompress` applies `OptimizeOptions`
 (max edge + JPEG quality) and skips filters it cannot decode (JPX, JBIG2, CCITT).

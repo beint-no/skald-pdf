@@ -3,9 +3,6 @@ package org.skaldpdf.image;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfPage;
 
-import javax.imageio.ImageIO;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -21,7 +18,8 @@ public final class ImageData implements ImageSource {
     private final int components;
     private final boolean jpeg;
 
-    ImageData(byte[] bytes) {
+    /** Creates a pass-through DCT image after validating its header and safe dimensions. */
+    public static ImageData fromJpeg(byte[] bytes) {
         Objects.requireNonNull(bytes, "bytes");
         if (bytes.length == 0) {
             throw new IllegalArgumentException("Image data is empty");
@@ -29,73 +27,21 @@ public final class ImageData implements ImageSource {
         if (bytes.length > MAXIMUM_ENCODED_BYTES) {
             throw new IllegalArgumentException("Image data exceeds the safe encoded-size limit");
         }
-        var header = inspect(bytes);
+        var header = jpegHeader(bytes);
         if (header.width <= 0 || header.height <= 0
             || (long) header.width * header.height > MAXIMUM_PIXELS) {
             throw new IllegalArgumentException("Image dimensions exceed the safe decoding limit");
         }
-        try {
-            var image = ImageIO.read(new ByteArrayInputStream(bytes));
-            if (image == null) {
-                throw new IllegalArgumentException("Unsupported or invalid image data");
-            }
-            width = image.getWidth();
-            height = image.getHeight();
-            if (width <= 0 || height <= 0 || (long) width * height > MAXIMUM_PIXELS) {
-                throw new IllegalArgumentException("Image dimensions exceed the safe decoding limit");
-            }
-            var colorComponents = image.getColorModel().getNumColorComponents();
-            jpeg = bytes.length >= 2 && (bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0xd8
-                && !image.getColorModel().hasAlpha() && (colorComponents == 1 || colorComponents == 3);
-            if (jpeg) {
-                samples = bytes.clone();
-                alpha = null;
-                components = colorComponents;
-            } else {
-                components = 3;
-                var rgb = new byte[Math.multiplyExact(Math.multiplyExact(width, height), components)];
-                var transparency = image.getColorModel().hasAlpha()
-                    ? new byte[Math.multiplyExact(width, height)] : null;
-                var sampleOffset = 0;
-                var alphaOffset = 0;
-                for (int y = 0; y < height; y++) {
-                    for (int x = 0; x < width; x++) {
-                        var pixel = image.getRGB(x, y);
-                        rgb[sampleOffset++] = (byte) (pixel >>> 16);
-                        rgb[sampleOffset++] = (byte) (pixel >>> 8);
-                        rgb[sampleOffset++] = (byte) pixel;
-                        if (transparency != null) {
-                            transparency[alphaOffset++] = (byte) (pixel >>> 24);
-                        }
-                    }
-                }
-                samples = rgb;
-                alpha = transparency != null && isOpaque(transparency) ? null : transparency;
-            }
-        } catch (IOException exception) {
-            throw new IllegalArgumentException("Unable to decode image data", exception);
+        if (header.components != 1 && header.components != 3) {
+            throw new IllegalArgumentException("JPEG must use DeviceGray or DeviceRGB samples");
         }
+        return new ImageData(bytes.clone(), null, header.width, header.height, header.components, true);
     }
 
-    private static ImageHeader inspect(byte[] bytes) {
-        if (bytes.length >= 3 && (bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0xd8) {
-            return jpegDimensions(bytes);
+    private static ImageHeader jpegHeader(byte[] bytes) {
+        if (bytes.length < 3 || (bytes[0] & 0xff) != 0xff || (bytes[1] & 0xff) != 0xd8) {
+            throw new IllegalArgumentException("Unsupported or invalid JPEG data");
         }
-        if (bytes.length >= 24
-            && bytes[0] == (byte) 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4e && bytes[3] == 0x47
-            && bytes[4] == 0x0d && bytes[5] == 0x0a && bytes[6] == 0x1a && bytes[7] == 0x0a) {
-            return new ImageHeader(readInt32Be(bytes, 16), readInt32Be(bytes, 20));
-        }
-        if (bytes.length >= 10 && (startsWith(bytes, "GIF87a") || startsWith(bytes, "GIF89a"))) {
-            return new ImageHeader(readU16Le(bytes, 6), readU16Le(bytes, 8));
-        }
-        if (bytes.length >= 26 && bytes[0] == 'B' && bytes[1] == 'M') {
-            return new ImageHeader(readInt32Le(bytes, 18), Math.abs(readInt32Le(bytes, 22)));
-        }
-        throw new IllegalArgumentException("Unsupported or invalid image data");
-    }
-
-    private static ImageHeader jpegDimensions(byte[] bytes) {
         var index = 2;
         while (index + 8 < bytes.length) {
             if ((bytes[index] & 0xff) != 0xff) {
@@ -122,49 +68,19 @@ public final class ImageData implements ImageSource {
                 throw new IllegalArgumentException("Truncated JPEG");
             }
             if (marker >= 0xc0 && marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc) {
-                if (length < 7) {
+                if (length < 8) {
                     throw new IllegalArgumentException("Truncated JPEG");
                 }
                 var height = ((bytes[index + 3] & 0xff) << 8) | (bytes[index + 4] & 0xff);
                 var width = ((bytes[index + 5] & 0xff) << 8) | (bytes[index + 6] & 0xff);
-                return new ImageHeader(width, height);
+                return new ImageHeader(width, height, bytes[index + 7] & 0xff);
             }
             index += length;
         }
         throw new IllegalArgumentException("JPEG has no frame header");
     }
 
-    private static boolean startsWith(byte[] bytes, String prefix) {
-        if (bytes.length < prefix.length()) {
-            return false;
-        }
-        for (int index = 0; index < prefix.length(); index++) {
-            if (bytes[index] != prefix.charAt(index)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static int readInt32Be(byte[] bytes, int offset) {
-        return ((bytes[offset] & 0xff) << 24)
-            | ((bytes[offset + 1] & 0xff) << 16)
-            | ((bytes[offset + 2] & 0xff) << 8)
-            | (bytes[offset + 3] & 0xff);
-    }
-
-    private static int readInt32Le(byte[] bytes, int offset) {
-        return (bytes[offset] & 0xff)
-            | ((bytes[offset + 1] & 0xff) << 8)
-            | ((bytes[offset + 2] & 0xff) << 16)
-            | ((bytes[offset + 3] & 0xff) << 24);
-    }
-
-    private static int readU16Le(byte[] bytes, int offset) {
-        return (bytes[offset] & 0xff) | ((bytes[offset + 1] & 0xff) << 8);
-    }
-
-    private record ImageHeader(int width, int height) {
+    private record ImageHeader(int width, int height, int components) {
     }
 
     private static boolean isOpaque(byte[] alpha) {
@@ -182,6 +98,16 @@ public final class ImageData implements ImageSource {
      */
     public static ImageData fromRgb(int width, int height, byte[] rgb) {
         return fromRaster(width, height, 3, rgb);
+    }
+
+    /** Creates DeviceRGB samples with a separate 8-bit alpha plane. */
+    public static ImageData fromRgb(int width, int height, byte[] rgb, byte[] alpha) {
+        Objects.requireNonNull(alpha, "alpha");
+        if (alpha.length != Math.multiplyExact(width, height)) {
+            throw new IllegalArgumentException("Alpha sample length does not match its dimensions");
+        }
+        var image = fromRaster(width, height, 3, rgb);
+        return new ImageData(image.samples, isOpaque(alpha) ? null : alpha.clone(), width, height, 3, false);
     }
 
     /**
@@ -237,113 +163,6 @@ public final class ImageData implements ImageSource {
 
     public boolean jpeg() {
         return jpeg;
-    }
-
-    /**
-     * Downscale so both edges fit {@code maxWidth}×{@code maxHeight}. Photos attached
-     * to expense claims should be reduced before embedding.
-     */
-    public ImageData scaledToFit(int maxWidth, int maxHeight) {
-        if (maxWidth < 1 || maxHeight < 1) {
-            throw new IllegalArgumentException("Maximum image size must be at least 1×1");
-        }
-        if (width <= maxWidth && height <= maxHeight) {
-            return this;
-        }
-        var scale = Math.min(maxWidth / (double) width, maxHeight / (double) height);
-        var targetWidth = Math.max(1, (int) Math.round(width * scale));
-        var targetHeight = Math.max(1, (int) Math.round(height * scale));
-        return rasterize(targetWidth, targetHeight, jpeg);
-    }
-
-    /**
-     * Re-encode as JPEG. Alpha is composited on white. Used when a PNG photo
-     * should be stored as a DCT stream.
-     */
-    public ImageData asJpeg(float quality) {
-        if (!(quality > 0) || quality > 1 || !Float.isFinite(quality)) {
-            throw new IllegalArgumentException("JPEG quality must be in (0, 1]");
-        }
-        return rasterize(width, height, true, quality);
-    }
-
-    private ImageData rasterize(int targetWidth, int targetHeight, boolean asJpeg) {
-        return rasterize(targetWidth, targetHeight, asJpeg, 0.82f);
-    }
-
-    private ImageData rasterize(int targetWidth, int targetHeight, boolean asJpeg, float quality) {
-        var source = toBufferedImage();
-        var scaled = new java.awt.image.BufferedImage(targetWidth, targetHeight,
-            asJpeg || alpha == null
-                ? java.awt.image.BufferedImage.TYPE_INT_RGB
-                : java.awt.image.BufferedImage.TYPE_INT_ARGB);
-        var graphics = scaled.createGraphics();
-        graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
-            java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        if (asJpeg || alpha == null) {
-            graphics.setColor(java.awt.Color.WHITE);
-            graphics.fillRect(0, 0, targetWidth, targetHeight);
-        }
-        graphics.drawImage(source, 0, 0, targetWidth, targetHeight, null);
-        graphics.dispose();
-        try {
-            var output = new java.io.ByteArrayOutputStream();
-            if (asJpeg) {
-                var writers = javax.imageio.ImageIO.getImageWritersByFormatName("jpeg");
-                if (!writers.hasNext()) {
-                    throw new IllegalStateException("No JPEG writer is available");
-                }
-                var writer = writers.next();
-                var params = writer.getDefaultWriteParam();
-                params.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
-                params.setCompressionQuality(quality);
-                try (var ios = javax.imageio.ImageIO.createImageOutputStream(output)) {
-                    writer.setOutput(ios);
-                    writer.write(null, new javax.imageio.IIOImage(scaled, null, null), params);
-                } finally {
-                    writer.dispose();
-                }
-            } else {
-                javax.imageio.ImageIO.write(scaled, "png", output);
-            }
-            return new ImageData(output.toByteArray());
-        } catch (java.io.IOException exception) {
-            throw new IllegalStateException("Unable to re-encode image", exception);
-        }
-    }
-
-    private java.awt.image.BufferedImage toBufferedImage() {
-        if (jpeg) {
-            try {
-                var image = javax.imageio.ImageIO.read(new ByteArrayInputStream(samples));
-                if (image == null) {
-                    throw new IllegalStateException("Unable to decode JPEG samples");
-                }
-                return image;
-            } catch (IOException exception) {
-                throw new IllegalStateException("Unable to decode JPEG samples", exception);
-            }
-        }
-        var image = new java.awt.image.BufferedImage(width, height,
-            alpha == null ? java.awt.image.BufferedImage.TYPE_INT_RGB : java.awt.image.BufferedImage.TYPE_INT_ARGB);
-        var offset = 0;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int red;
-                int green;
-                int blue;
-                if (components == 1) {
-                    red = green = blue = samples[offset++] & 0xff;
-                } else {
-                    red = samples[offset++] & 0xff;
-                    green = samples[offset++] & 0xff;
-                    blue = samples[offset++] & 0xff;
-                }
-                var alphaValue = this.alpha == null ? 255 : (this.alpha[y * width + x] & 0xff);
-                image.setRGB(x, y, (alphaValue << 24) | (red << 16) | (green << 8) | blue);
-            }
-        }
-        return image;
     }
 
     @Override

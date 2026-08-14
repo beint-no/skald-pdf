@@ -1,5 +1,6 @@
 package org.skaldpdf.invoice.no;
 
+import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.element.Image;
@@ -282,7 +283,7 @@ public final class NorwegianInvoice {
         private final String footer;
         private final String note;
         private final String watermark;
-        private final byte[] logo;
+        private final ImageSource logo;
         private final boolean paymentQr;
         private final List<LineItem> lines;
         private final Payment payment;
@@ -389,7 +390,7 @@ public final class NorwegianInvoice {
             return watermark;
         }
 
-        public byte[] logo() {
+        public ImageSource logo() {
             return logo;
         }
 
@@ -465,7 +466,7 @@ public final class NorwegianInvoice {
         private String footer;
         private String note;
         private String watermark;
-        private byte[] logo;
+        private ImageSource logo;
         private boolean paymentQr;
         private final List<LineItem> lines = new ArrayList<>();
         private Payment payment;
@@ -549,7 +550,7 @@ public final class NorwegianInvoice {
             return this;
         }
 
-        public Builder logo(byte[] logo) {
+        public Builder logo(ImageSource logo) {
             this.logo = logo;
             return this;
         }

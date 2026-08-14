@@ -1,6 +1,4 @@
 module org.skaldpdf.core {
-    requires java.desktop;
-
     exports org.skaldpdf.colors;
     exports org.skaldpdf.event;
     exports org.skaldpdf.font;

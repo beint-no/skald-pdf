@@ -8,7 +8,7 @@
 | Text | Unicode, embedded subset TrueType, PostScript font names, regular/bold/italic/bold-italic, fallback stack, color, left/center/right/justify, rotation, underline, strikethrough, `.notdef` for missing glyphs |
 | Layout | Paragraphs, lists with custom start index, runs, margins, padding, backgrounds, gradients, rounded borders, dashed rules, divs, nested cell content, fixed position, `keepTogether`, widow/orphan control, fitted-image measure, `AreaBreak` page size, named destinations |
 | Tables | weighted or mixed point/percent columns, min-content honoured before leftover is distributed, column and row spans, repeating headers and footers, inset hairline rules (`addRule`), line-boundary row splits, complete-row checks, nested blocks in cells |
-| Images | JPEG/PNG/GIF/BMP allowlist, encoded-size and pixel gates, JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction, `scaledToFit` / `asJpeg` / `fromRgb` / `fromGray` |
+| Images | Core: JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction, `fromRgb` / `fromGray`; optional `skald-image`: JPEG/PNG/GIF/BMP allowlist, size gates, `scaleToFit` / `asJpeg` |
 | Imported images | list `/XObject /Image` on parsed pages; replace with new DCT/Flate while keeping the `Do` name |
 | Text extract | `PdfText` / `Pdf.extractText` via ToUnicode CMaps (WinAnsi fallback) |
 | Optimize | optional `skald-optimize`: downsample and JPEG-recompress images already inside a received PDF |
@@ -20,7 +20,7 @@
 | Parsing | xref tables/streams, object streams, hybrid references, revisions, predictors |
 | Signatures | reserved signature field in core; optional `skald-sign` CMS / PAdES-B-B; incremental second seal; rewrite of sealed files fails closed |
 | Encryption | PDF 2.0 revision 6 AES-256 (`PdfEncryption`) on write; encrypted input is not parsed |
-| Native photos | optional `skald-image`: TurboJPEG, libheif (HEIC/AVIF), libjxl (JPEG XL ingest only) via FFM; absent libraries are skipped |
+| Image ingest | optional `skald-image`: JDK codecs plus TurboJPEG, libheif (HEIC/AVIF), libjxl (JPEG XL ingest only) via FFM; absent native libraries are skipped |
 | Runtime | published engine + component artifacts, JDK 25+, zero third-party *Java* runtime dependencies; native codecs optional |
 
 ## Deliberately deferred

@@ -5,7 +5,6 @@ import static org.skaldpdf.pdf.CosValue.*;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.geom.Rectangle;
 import org.skaldpdf.image.ImageData;
-import org.skaldpdf.image.ImageDataFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -179,7 +178,7 @@ final class NativePdfParser {
             }
         }
         if (jpeg) {
-            return ImageDataFactory.create(data);
+            return ImageData.fromJpeg(data);
         }
         data = applyPredictor(data, dictionary.get("DecodeParms"), "image");
         var colorSpace = colorSpaceName(dictionary.get("ColorSpace"));

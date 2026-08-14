@@ -2,7 +2,7 @@ package org.skaldpdf.pdf;
 
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.image.ImageData;
-import org.skaldpdf.image.ImageDataFactory;
+import org.skaldpdf.codec.RasterImages;
 import org.junit.jupiter.api.Test;
 
 import javax.imageio.ImageIO;
@@ -32,7 +32,8 @@ class ImportedImageTest {
             assertEquals("DeviceRGB", image.colorSpace());
             assertTrue(image.decode().isPresent());
             resourceName = image.resourceName();
-            var replacement = ImageData.fromRgb(32, 24, solidRgb(32, 24, 200, 40, 40)).asJpeg(0.55f);
+            var replacement = RasterImages.asJpeg(
+                ImageData.fromRgb(32, 24, solidRgb(32, 24, 200, 40, 40)), 0.55f);
             document.replaceImportedImage(1, resourceName, replacement);
         }
         var output = rewritten.toByteArray();
@@ -71,7 +72,7 @@ class ImportedImageTest {
         java.util.Arrays.fill(gray, (byte) 90);
         var image = ImageData.fromGray(8, 8, gray);
         assertEquals(1, image.components());
-        var jpeg = image.asJpeg(0.7f);
+        var jpeg = RasterImages.asJpeg(image, 0.7f);
         assertTrue(jpeg.jpeg());
         assertEquals(8, jpeg.width());
     }
@@ -102,7 +103,7 @@ class ImportedImageTest {
         } finally {
             writer.dispose();
         }
-        return ImageDataFactory.create(output.toByteArray());
+        return RasterImages.decode(output.toByteArray());
     }
 
     private static byte[] solidRgb(int width, int height, int red, int green, int blue) {

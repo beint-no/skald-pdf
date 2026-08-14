@@ -4,7 +4,7 @@ import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.colors.DeviceRgb;
 import org.skaldpdf.fonts.SkaldSans;
 import org.skaldpdf.geom.PageSize;
-import org.skaldpdf.image.ImageDataFactory;
+import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.layout.element.AreaBreak;
 import org.skaldpdf.layout.element.Cell;
 import org.skaldpdf.layout.element.Div;
@@ -157,7 +157,7 @@ class LayoutHonestyTest {
 
     @Test
     void measuresFittedImagesWhenEstimatingBlocks() throws Exception {
-        var image = ImageDataFactory.create(PdfTestSupport.sampleLogo());
+        var image = RasterImages.decode(PdfTestSupport.sampleLogo());
         var bytes = Pdf.create(document -> document.add(
             new Div()
                 .setBackgroundColor(ColorConstants.SURFACE)

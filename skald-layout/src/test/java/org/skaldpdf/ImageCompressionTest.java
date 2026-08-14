@@ -1,7 +1,7 @@
 package org.skaldpdf;
 
 import org.skaldpdf.geom.PageSize;
-import org.skaldpdf.image.ImageDataFactory;
+import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.element.AreaBreak;
 import org.skaldpdf.layout.element.Image;
@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ImageCompressionTest {
     @Test
     void appliesAdaptivePredictionAndPreservesTransparency() throws Exception {
-        var image = ImageDataFactory.create(transparentGradient());
+        var image = RasterImages.decode(transparentGradient());
         var compressed = render(image, Compression.MAXIMUM, 1);
         var stored = render(image, Compression.NONE, 1);
 
@@ -37,7 +37,7 @@ class ImageCompressionTest {
 
     @Test
     void sharesOneImageObjectAcrossPages() throws Exception {
-        var image = ImageDataFactory.create(transparentGradient());
+        var image = RasterImages.decode(transparentGradient());
         var bytes = render(image, Compression.BALANCED, 4);
 
         try (var document = PdfTestSupport.load(bytes)) {

@@ -3,7 +3,7 @@ package org.skaldpdf.optimize;
 import org.apache.pdfbox.Loader;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.image.ImageData;
-import org.skaldpdf.image.ImageDataFactory;
+import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfReader;
 import org.skaldpdf.pdf.PdfWriter;
@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PdfOptimizerTest {
     @Test
     void recompressesALargePngPhotoIntoASmallerJpegXObject() throws Exception {
-        var noisy = ImageDataFactory.create(noisyPng(640, 480));
+        var noisy = RasterImages.decode(noisyPng(640, 480));
         var source = pdfWith(noisy);
         var optimized = PdfOptimizer.recompress(source, new OptimizeOptions(320, 0.55f, true));
 
@@ -95,6 +95,6 @@ class PdfOptimizerTest {
         } finally {
             writer.dispose();
         }
-        return ImageDataFactory.create(output.toByteArray());
+        return RasterImages.decode(output.toByteArray());
     }
 }

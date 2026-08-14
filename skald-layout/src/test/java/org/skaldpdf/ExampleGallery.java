@@ -7,7 +7,7 @@ import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.colors.DeviceRgb;
 import org.skaldpdf.colors.LinearGradient;
 import org.skaldpdf.geom.PageSize;
-import org.skaldpdf.image.ImageDataFactory;
+import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.borders.Border;
 import org.skaldpdf.layout.borders.SolidBorder;
@@ -760,7 +760,7 @@ public final class ExampleGallery {
         return create("Catalog page", document -> {
             heading(document, OCEAN, "Objects for the table");
             try {
-                document.add(new Image(ImageDataFactory.create(PdfTestSupport.sampleLogo())).scaleToFit(180, 60));
+                document.add(new Image(RasterImages.decode(PdfTestSupport.sampleLogo())).scaleToFit(180, 60));
             } catch (IOException exception) {
                 throw new IllegalStateException(exception);
             }

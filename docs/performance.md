@@ -26,8 +26,9 @@ Downsampling or recompressing photographs can reduce files further, but it is
 intentionally not automatic. The correct pixel density and quality depend on
 whether a document is for screens, office printers, archival storage, or evidence.
 Applications should make that policy explicit before passing image bytes.
-`ImageData.scaledToFit` and `ImageData.asJpeg` exist for that policy. Received
-files use `skald-optimize` with an explicit `OptimizeOptions`.
+`RasterImages.scaleToFit` and `RasterImages.asJpeg` in the optional
+`skald-image` module implement that policy. Received files use `skald-optimize`
+with an explicit `OptimizeOptions`.
 
 ## Generation harness
 

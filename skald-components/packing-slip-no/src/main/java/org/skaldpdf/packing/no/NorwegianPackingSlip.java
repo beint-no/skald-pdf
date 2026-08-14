@@ -5,6 +5,7 @@ import org.skaldpdf.invoice.no.Company;
 import org.skaldpdf.invoice.no.NorwegianMoney;
 import org.skaldpdf.invoice.no.NorwegianTheme;
 import org.skaldpdf.invoice.no.Party;
+import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.layout.element.Image;
 import org.skaldpdf.layout.element.Paragraph;
@@ -104,7 +105,7 @@ public final class NorwegianPackingSlip {
         private final String tracking;
         private final String trackingUrl;
         private final String footer;
-        private final byte[] logo;
+        private final ImageSource logo;
         private final List<Line> lines;
 
         Model(Builder builder) {
@@ -160,7 +161,7 @@ public final class NorwegianPackingSlip {
             return footer;
         }
 
-        public byte[] logo() {
+        public ImageSource logo() {
             return logo;
         }
 
@@ -178,7 +179,7 @@ public final class NorwegianPackingSlip {
         private String tracking;
         private String trackingUrl;
         private String footer;
-        private byte[] logo;
+        private ImageSource logo;
         private final List<Line> lines = new ArrayList<>();
 
         private Builder() {
@@ -224,7 +225,7 @@ public final class NorwegianPackingSlip {
             return this;
         }
 
-        public Builder logo(byte[] logo) {
+        public Builder logo(ImageSource logo) {
             this.logo = logo;
             return this;
         }

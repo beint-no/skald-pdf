@@ -1,5 +1,6 @@
 package org.skaldpdf.invoice.no;
 
+import org.skaldpdf.codec.RasterImages;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.DecodeHintType;
@@ -149,7 +150,7 @@ class NorwegianInvoiceTest {
             assertTrue(parsed.getNumberOfPages() >= 2, "28-line invoice should paginate");
         }
 
-        var withQr = NorwegianInvoice.pdf(sample().paymentQr(true).logo(sampleLogo()).build());
+        var withQr = NorwegianInvoice.pdf(sample().paymentQr(true).logo(RasterImages.decode(sampleLogo())).build());
         var payload = decodeQr(withQr);
         assertTrue(payload.contains("NO9315034567890"), payload);
         assertTrue(payload.contains("15625.00"), payload);

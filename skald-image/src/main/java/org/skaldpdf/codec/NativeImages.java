@@ -1,7 +1,6 @@
 package org.skaldpdf.codec;
 
 import org.skaldpdf.image.ImageData;
-import org.skaldpdf.image.ImageDataFactory;
 
 import java.util.Objects;
 
@@ -56,10 +55,10 @@ public final class NativeImages {
         var raster = decode(bytes);
         raster = scaleToFit(raster, options.maxEdge());
         if (TurboJpeg.AVAILABLE) {
-            return ImageDataFactory.create(TurboJpeg.compress(raster, options.jpegQuality()));
+            return ImageData.fromJpeg(TurboJpeg.compress(raster, options.jpegQuality()));
         }
-        return ImageData.fromRgb(raster.width(), raster.height(), raster.rgb())
-            .asJpeg(options.jpegQuality() / 100f);
+        return RasterImages.asJpeg(ImageData.fromRgb(raster.width(), raster.height(), raster.rgb()),
+            options.jpegQuality() / 100f);
     }
 
     static Raster decode(byte[] bytes) {
