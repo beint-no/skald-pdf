@@ -1,8 +1,9 @@
 # Publishing
 
-Skald publishes `skald-core`, `skald-layout`, `skald-barcode`, `skald-labels`,
-`skald-sign`, `skald-image`, and `skald-optimize` to Maven Central under
-`no.beint.skaldpdf`. Java packages remain `org.skaldpdf`.
+Skald publishes `skald-core`, `skald-layout`, `skald-barcode`,
+`skald-label-sticker`, `skald-labels`, `skald-sign`, `skald-image`, and
+`skald-optimize` to Maven Central under `no.beint.skaldpdf`. Java packages remain
+`org.skaldpdf`.
 `org.skaldpdf` is not a registered Central namespace.
 
 ## Secrets

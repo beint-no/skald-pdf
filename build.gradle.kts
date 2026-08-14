@@ -12,7 +12,7 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = "1.7.0"
+val releaseVersion = "1.8.0"
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-layout" to "Skald Layout",
@@ -20,6 +20,7 @@ val moduleTitles = mapOf(
     "skald-sign" to "Skald Sign",
     "skald-image" to "Skald Image",
     "skald-optimize" to "Skald Optimize",
+    "skald-label-sticker" to "Skald Clothing Sticker",
     "skald-labels" to "Skald Labels"
 )
 val moduleDescriptions = mapOf(
@@ -29,7 +30,8 @@ val moduleDescriptions = mapOf(
     "skald-sign" to "Optional PKCS#7/CMS PAdES-B-B sealing for Skald PDF documents",
     "skald-image" to "Optional FFM bindings to TurboJPEG, libheif, and libjxl for photo ingest",
     "skald-optimize" to "Optional recompression of image XObjects already stored in a received PDF",
-    "skald-labels" to "Optional print-stock labels such as 93×35 mm clothing EAN stickers"
+    "skald-label-sticker" to "93×35 mm clothing EAN-13 sticker print stock",
+    "skald-labels" to "Umbrella artifact that pulls in every current Skald print-stock label"
 )
 
 allprojects {

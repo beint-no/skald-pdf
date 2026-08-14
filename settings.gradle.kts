@@ -7,6 +7,7 @@ include(
     "skald-sign",
     "skald-image",
     "skald-optimize",
+    "skald-label-sticker",
     "skald-labels"
 )
 

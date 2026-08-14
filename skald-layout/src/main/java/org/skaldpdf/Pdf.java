@@ -3,6 +3,7 @@ package org.skaldpdf;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.layout.Document;
 import org.skaldpdf.pdf.PdfDocument;
+import org.skaldpdf.pdf.PdfEncryption;
 import org.skaldpdf.pdf.PdfReader;
 import org.skaldpdf.pdf.PdfText;
 import org.skaldpdf.pdf.PdfWriter;
@@ -58,12 +59,21 @@ public final class Pdf {
     }
 
     public static byte[] rewrite(byte[] source, Consumer<PdfDocument> changes) {
+        return rewrite(source, WriterProperties.defaults(), changes);
+    }
+
+    public static byte[] rewrite(byte[] source, WriterProperties properties, Consumer<PdfDocument> changes) {
         Objects.requireNonNull(changes, "changes");
         var output = new ByteArrayOutputStream();
-        try (var document = new PdfDocument(new PdfReader(source), new PdfWriter(output))) {
+        try (var document = new PdfDocument(new PdfReader(source), new PdfWriter(output, properties))) {
             changes.accept(document);
         }
         return output.toByteArray();
+    }
+
+    public static byte[] encrypt(byte[] source, PdfEncryption encryption) {
+        return rewrite(source, WriterProperties.defaults().encrypted(encryption), document -> {
+        });
     }
 
     public static void rewrite(Path source, Path target, Consumer<PdfDocument> changes) {

@@ -1,6 +1,4 @@
-module org.skaldpdf.labels {
-    requires transitive org.skaldpdf.core;
-    requires org.skaldpdf.barcode;
-
-    exports org.skaldpdf.labels;
+/** Umbrella module: every current print-stock label type. */
+module org.skaldpdf.labels.all {
+    requires transitive org.skaldpdf.labels;
 }

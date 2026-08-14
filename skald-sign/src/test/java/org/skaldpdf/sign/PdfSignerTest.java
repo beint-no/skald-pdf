@@ -16,6 +16,7 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PdfSignerTest {
@@ -86,6 +87,30 @@ class PdfSignerTest {
         try (var parsed = Loader.loadPDF(signed)) {
             assertEquals("ETSI.CAdES.detached", parsed.getSignatureDictionaries().getFirst().getSubFilter());
         }
+    }
+
+    @Test
+    void addingASecondSealKeepsTheFirstValid() {
+        var issuer = SigningKey.selfSigned("Issuer");
+        var reviewer = SigningKey.selfSigned("Reviewer");
+        var first = PdfSigner.sign(unsignedInvoice(null), issuer,
+            SignatureField.invisible("Issuer").withReason("Issued"));
+        assertTrue(PdfSigner.verifySingle(first).valid());
+
+        var both = PdfSigner.sign(first, reviewer, SignatureField.invisible("Reviewer").withReason("Reviewed"));
+        var verifications = PdfSigner.verify(both);
+        assertEquals(2, verifications.size());
+        assertTrue(verifications.stream().allMatch(SignatureVerification::valid),
+            verifications.stream().flatMap(item -> item.notes().stream()).toList().toString());
+    }
+
+    @Test
+    void rewriteOfASealedFileFailsClosed() {
+        var signed = PdfSigner.sign(unsignedInvoice(null), SigningKey.selfSigned("Issuer"));
+        var error = assertThrows(IllegalStateException.class, () -> new org.skaldpdf.pdf.PdfDocument(
+            new org.skaldpdf.pdf.PdfReader(signed),
+            new org.skaldpdf.pdf.PdfWriter(new ByteArrayOutputStream())));
+        assertTrue(error.getMessage().contains("sealed"));
     }
 
     @Test

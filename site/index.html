@@ -126,12 +126,11 @@
     <section id="start" class="start">
       <div class="section-head">
         <h2>Start in one dependency.</h2>
-        <p>Release <strong>1.7.0</strong> is on Maven Central. Java packages stay <code>org.skaldpdf</code>.</p>
+        <p>Release <strong>1.8.0</strong> is on Maven Central. Java packages stay <code>org.skaldpdf</code>.</p>
       </div>
       <pre><code>dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.7.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.7.0") // optional symbols
-    implementation("no.beint.skaldpdf:skald-labels:1.7.0")  // optional stickers
+    implementation("no.beint.skaldpdf:skald-layout:1.8.0")
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.8.0") // optional
 }</code></pre>
       <pre><code>byte[] invoice = Pdf.create(document -&gt; {
     document.setMargins(40, 40, 40, 40);

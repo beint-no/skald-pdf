@@ -5,8 +5,8 @@ are two published layers, and a third that is deliberately *not* a Maven
 artifact.
 
 ```text
-Print stock          skald-labels          (optional finished labels)
-                     │
+Print stock          skald-labels              (optional umbrella)
+                     └── skald-label-sticker   (93×35 clothing EAN)
 Engine               layout  barcode  sign  image  optimize
                      └────────────┬────────────────────────┘
                                   core
@@ -24,6 +24,7 @@ These are the building blocks. They have stable, spec-shaped jobs.
 | `skald-sign` | PAdES-B-B integrity seal |
 | `skald-image` | Optional native photo ingest |
 | `skald-optimize` | Recompress images already inside a received PDF |
+| `skald-label-sticker` | One print-stock type: 93×35 mm clothing EAN sticker |
 
 `skald-barcode` draws **symbols**. It does not know SKU, composition, or
 label stock. A warehouse app that only needs a QR on an invoice takes
@@ -35,18 +36,21 @@ sees a clothing sticker.
 A finished label is a *composition* of symbols + type + a physical page
 size. That is not a barcode primitive.
 
-`skald-labels` is the optional batteries-included place for print stock
-that is physically standardized:
+Each print-stock *type* is its own tiny artifact so a warehouse app that
+only prints clothing stickers does not take a future GS1 shipping label.
 
-- 93 mm × 35 mm clothing EAN sticker (`ProductSticker`)
-- A4 n-up sheets of the same label
-- later: shelf tags, GS1 shipping labels, if they share that nature
+| Artifact | Type |
+|---|---|
+| `skald-label-sticker` | 93 mm × 35 mm clothing EAN (`ProductSticker`, A4 n-up) |
+| `skald-labels` | Umbrella that `api`-depends on every current `skald-label-*` |
 
-It depends on core and barcode, not on layout. Fixed-position print stock
-does not need the flow engine.
+A new physical label (GS1 shipping, shelf tag) becomes `skald-label-<name>`,
+not a class dumped into the sticker jar. We do not publish empty
+placeholder modules.
 
-Take `skald-labels` when you want the finished sticker. Take only
-`skald-barcode` when you want to place an EAN on your own page.
+These depend on core and barcode, not on layout. Take
+`skald-label-sticker` for one type, or `skald-labels` if you want
+whatever print stock exists at that version.
 
 ## What does not become a module
 
@@ -73,10 +77,10 @@ Ask which layer it is:
 
 1. **Engine** — does it implement a PDF, font, image, or symbology rule?
    Put it in the matching engine module.
-2. **Print stock** — is the page size physical (label/thermal/ticket) and
-   the field set stable across companies? `skald-labels`, or a *second*
-   print-stock module only if it would force unrelated apps to take a
-   large unused surface.
+2. **Print stock** — is the page size physical and the field set stable
+   across companies? New `skald-label-<type>` artifact. Do not grow
+   `skald-label-sticker`. The `skald-labels` umbrella may depend on the
+   new type.
 3. **Business document** — example or application code. Not a Skald
    artifact.
 

@@ -5,7 +5,7 @@ types. This keeps dependencies small without turning ordinary document creation
 into a graph of tiny artifacts.
 
 ```text
-org.skaldpdf.labels  ──> org.skaldpdf.barcode ──┐
+org.skaldpdf.labels.all ──> org.skaldpdf.labels ──> org.skaldpdf.barcode ──┐
 org.skaldpdf.layout                            │
 org.skaldpdf.sign                              ┼──> org.skaldpdf.core ──> java.desktop
 org.skaldpdf.codec   (optional FFM natives)    │
@@ -41,10 +41,10 @@ page without taking label templates.
 
 ## Labels
 
-`skald-labels` is optional print stock. `ProductSticker` is a 93 mm × 35 mm
-clothing EAN label composed from barcode + core. It does not depend on layout.
-Invoices and packing slips are not modules; they are examples. The layering
-rule is in [modules.md](modules.md).
+`skald-label-sticker` is the 93 mm × 35 mm clothing EAN label. `skald-labels`
+is an umbrella that depends on every current `skald-label-*`. Future print
+stock (GS1 shipping, shelf tags) gets its own artifact. The layering rule is
+in [modules.md](modules.md).
 
 ## Sign
 

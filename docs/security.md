@@ -31,7 +31,13 @@ DER writer. Private keys stay in the caller’s `SigningKey`. The library does
 not contact a timestamp authority, a CA, or a QTSP. A valid CMS seal means
 the ByteRange is intact and the signature verifies with the *embedded*
 certificate; it is not a claim that the certificate is qualified or trusted
-by a national list.
+by a national list. A second seal is appended incrementally. Rewriting a
+sealed file fails closed.
+
+Payslips and similar confidential generated files can use PDF 2.0 revision 6
+AES-256 (`PdfEncryption`, Standard Security Handler). Encrypted output cannot
+be parsed, stamped, or signed by Skald. Passwords are never logged. There is
+no RC4 and no PDF 1.x revision.
 
 Consumers should still apply their own upload-size, media-type, timeout, and
 storage policies. A PDF parser is not a malware scanner.

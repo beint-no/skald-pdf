@@ -19,7 +19,11 @@ Signature (QES). It does **not** replace BankID/Scrive QES, and it does
    default, or `ETSI.CAdES.detached`);
 4. includes the PAdES-B-B signed attributes `content-type`,
    `message-digest`, and ESS `signing-certificate-v2`;
-5. verifies the seal without BouncyCastle.
+5. verifies the seal without BouncyCastle;
+6. appends a second (invisible) seal as a new revision so the first
+   `/ByteRange` stays valid;
+7. refuses `Pdf.rewrite` of a sealed file, which would otherwise silently
+   destroy every existing signature.
 
 That is an **advanced electronic signature (AdES) integrity seal**: after
 the file is issued, a flipped bit in the invoice body fails verification.
@@ -30,7 +34,7 @@ was used, or that a qualified certificate was issued.
 Bring the module in only when you need sealing:
 
 ```kotlin
-implementation("no.beint.skaldpdf:skald-sign:1.7.0")
+implementation("no.beint.skaldpdf:skald-sign:1.8.0")
 ```
 
 Core, layout, and barcode stay free of cryptography.

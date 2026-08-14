@@ -7,7 +7,8 @@ what it uses. This is the mapping against the workflows ReAI actually runs.
 |---|---|---|---|
 | Generate invoices, slips, statements | Core + layout | `skald-layout` | No |
 | Barcode symbols | Third-party or custom | `skald-barcode` | No |
-| Clothing / warehouse labels | Custom iText page | `skald-labels` (`ProductSticker`) | No |
+| Clothing / warehouse labels | Custom iText page | `skald-label-sticker` | No |
+| Password-protect a payslip | Core encryption | `PdfEncryption` (AES-256, PDF 2.0 R=6) | Done |
 | Merge + stamp + watermark | Core | `skald-core` | No |
 | Seal issued PDFs | Signatures add-on | `skald-sign` (PAdES-B-B, not QES) | Timestamp later |
 | HTML/CSS → PDF | pdfHTML | Out of scope | Do not add |

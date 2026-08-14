@@ -37,7 +37,8 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-core` | `org.skaldpdf.core` | Low-level writing, reading, fonts, images, composition, and signature *placeholders* |
 | `skald-layout` | `org.skaldpdf.layout` | Flow layout and the high-level `Pdf` API |
 | `skald-barcode` | `org.skaldpdf.barcode` | Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols |
-| `skald-labels` | `org.skaldpdf.labels` | Optional print-stock labels (93×35 mm clothing EAN sticker, A4 n-up) |
+| `skald-label-sticker` | `org.skaldpdf.labels` | 93×35 mm clothing EAN sticker and A4 n-up sheets |
+| `skald-labels` | `org.skaldpdf.labels.all` | Umbrella that depends on every current `skald-label-*` |
 | `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
 | `skald-image` | `org.skaldpdf.codec` | Optional FFM TurboJPEG / libheif / libjxl photo ingest |
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
@@ -54,16 +55,16 @@ are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.7.0` is on Maven Central:
+JDK 25 or newer is required. Release `1.8.0` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.7.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.7.0") // optional symbols
-    implementation("no.beint.skaldpdf:skald-labels:1.7.0")  // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.7.0")    // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.7.0")   // optional HEIC / JPEG XL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.7.0") // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-layout:1.8.0")
+    implementation("no.beint.skaldpdf:skald-barcode:1.8.0")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.8.0") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.8.0")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.8.0")         // optional HEIC / JPEG XL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.8.0")      // optional received-PDF recompress
 }
 ```
 
@@ -78,7 +79,7 @@ For a modular application:
 ```java
 requires org.skaldpdf.layout;
 requires org.skaldpdf.barcode;  // optional symbols
-requires org.skaldpdf.labels;   // optional print stock
+requires org.skaldpdf.labels;   // optional clothing stickers
 requires org.skaldpdf.sign;     // optional
 requires org.skaldpdf.optimize; // optional
 ```

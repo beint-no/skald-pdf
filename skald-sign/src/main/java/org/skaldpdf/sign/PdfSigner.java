@@ -1,5 +1,6 @@
 package org.skaldpdf.sign;
 
+import org.skaldpdf.pdf.IncrementalUpdate;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfReader;
 import org.skaldpdf.pdf.PdfWriter;
@@ -43,7 +44,9 @@ public final class PdfSigner {
         Objects.requireNonNull(pdf, "pdf");
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(field, "field");
-        var prepared = reserve(pdf, field);
+        var prepared = IncrementalUpdate.isSealed(pdf)
+            ? IncrementalUpdate.appendSignaturePlaceholder(pdf, field)
+            : reserve(pdf, field);
         return sealPrepared(prepared, key, signingTime);
     }
 

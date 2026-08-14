@@ -28,9 +28,12 @@ final class NativePdfWriter {
     private static final byte[] HEADER = "%PDF-2.0\n%\u00e2\u00e3\u00cf\u00d3\n"
         .getBytes(StandardCharsets.ISO_8859_1);
     private final int compressionLevel;
+    private final Revision6Encryption encryption;
 
-    NativePdfWriter(int compressionLevel) {
-        this.compressionLevel = compressionLevel;
+    NativePdfWriter(WriterProperties properties) {
+        Objects.requireNonNull(properties, "properties");
+        this.compressionLevel = properties.compression().deflateLevel();
+        this.encryption = properties.encryption() == null ? null : new Revision6Encryption(properties.encryption());
     }
 
     void write(PdfDocument document, OutputStream target) {
@@ -44,6 +47,9 @@ final class NativePdfWriter {
     }
 
     private ObjectStore buildObjects(PdfDocument document) {
+        if (encryption != null && document.signatureField() != null) {
+            throw new IllegalStateException("A PDF cannot be both encrypted and reserved for signing");
+        }
         var objects = new ObjectStore();
         var fontUsage = collectFonts(document.pages());
         var fontObjects = new IdentityHashMap<PdfFont, Integer>();
@@ -68,7 +74,7 @@ final class NativePdfWriter {
         for (int index = 0; index < document.pages().size(); index++) {
             var imported = document.pages().get(index).importedPage();
             if (imported != null) {
-                importers.computeIfAbsent(imported.source(), source -> new ImportContext(source, objects))
+                importers.computeIfAbsent(imported.source(), source -> new ImportContext(source, objects, encryption))
                     .map(imported.reference(), pageObjects.get(index));
             }
         }
@@ -133,6 +139,10 @@ final class NativePdfWriter {
         }
         var catalogObject = objects.add(ascii(catalog.append(" >>").toString()));
         objects.rootObject = catalogObject;
+        if (encryption != null) {
+            objects.encryptObject = objects.reserveUnpacked();
+            objects.set(objects.encryptObject, ascii("<< " + encryption.dictionary() + " >>"));
+        }
         return objects;
     }
 
@@ -425,7 +435,7 @@ final class NativePdfWriter {
         return result;
     }
 
-    private static List<Integer> addLinks(ObjectStore objects, List<PdfPage.LinkAnnotation> links,
+    private List<Integer> addLinks(ObjectStore objects, List<PdfPage.LinkAnnotation> links,
                                           List<Integer> pageObjects, List<PdfPage> pages) {
         var result = new ArrayList<Integer>(links.size());
         for (var link : links) {
@@ -507,7 +517,7 @@ final class NativePdfWriter {
         body.append(']');
     }
 
-    private static int addNamedDestinations(ObjectStore objects, PdfDocument document, List<Integer> pageObjects) {
+    private int addNamedDestinations(ObjectStore objects, PdfDocument document, List<Integer> pageObjects) {
         var dests = document.namedDestinations().stream()
             .sorted(java.util.Comparator.comparing(NamedDestination::name))
             .toList();
@@ -523,7 +533,7 @@ final class NativePdfWriter {
         return objects.add(ascii("<< /Names " + names.append("] >>")));
     }
 
-    private static int addOutlines(ObjectStore objects, PdfDocument document, List<Integer> pageObjects) {
+    private int addOutlines(ObjectStore objects, PdfDocument document, List<Integer> pageObjects) {
         var items = document.outlines();
         var root = objects.reserve();
         var itemObjects = new ArrayList<Integer>(items.size());
@@ -581,7 +591,10 @@ final class NativePdfWriter {
         var xrefDictionary = format(
             "/Type /XRef /Size %d /Root %d 0 R /ID [<%s> <%s>] /W [1 8 4] /Index [0 %d] ",
             xrefNumber + 1, objects.rootObject, identifier, identifier, xrefNumber + 1);
-        writeIndirect(target, xrefNumber, stream(xrefDictionary, compressedXref, false, "/FlateDecode"));
+        if (objects.encryptObject != 0) {
+            xrefDictionary += "/Encrypt " + objects.encryptObject + " 0 R ";
+        }
+        writeIndirect(target, xrefNumber, stream(xrefDictionary, compressedXref, false, "/FlateDecode", false));
         target.write(ascii(format("startxref\n%d\n%%%%EOF\n", xrefOffset)));
         target.flush();
     }
@@ -620,7 +633,7 @@ final class NativePdfWriter {
             }
             var objectStream = objects.add(stream(
                 format("/Type /ObjStm /N %d /First %d", group.size(), headerBytes.length),
-                payload.toByteArray(), true
+                payload.toByteArray(), true, null, true
             ));
             for (int index = 0; index < group.size(); index++) {
                 result.put(group.get(index), new PackedLocation(objectStream, index));
@@ -644,11 +657,19 @@ final class NativePdfWriter {
     }
 
     private byte[] stream(String dictionary, byte[] bytes, boolean compress) {
-        return stream(dictionary, bytes, compress, null);
+        return stream(dictionary, bytes, compress, null, true);
     }
 
     private byte[] stream(String dictionary, byte[] bytes, boolean compress, String explicitFilter) {
+        return stream(dictionary, bytes, compress, explicitFilter, true);
+    }
+
+    private byte[] stream(String dictionary, byte[] bytes, boolean compress, String explicitFilter,
+                          boolean applyEncryption) {
         var payload = compress ? deflate(bytes) : bytes;
+        if (applyEncryption && encryption != null) {
+            payload = encryption.encrypt(payload);
+        }
         var filter = compress ? "/FlateDecode" : explicitFilter;
         var header = new StringBuilder("<< ").append(dictionary);
         if (filter != null) {
@@ -893,7 +914,10 @@ final class NativePdfWriter {
         return PdfNumbers.format(value);
     }
 
-    private static String literalString(String value) {
+    private String literalString(String value) {
+        if (encryption != null) {
+            return "<" + hex(encryption.encrypt(value.getBytes(StandardCharsets.ISO_8859_1))) + ">";
+        }
         var result = new StringBuilder("(");
         for (int index = 0; index < value.length(); index++) {
             var character = value.charAt(index);
@@ -905,7 +929,11 @@ final class NativePdfWriter {
         return result.append(')').toString();
     }
 
-    private static String textString(String value) {
+    private String textString(String value) {
+        var utf16 = new StringBuilder("\uFEFF").append(value).toString().getBytes(StandardCharsets.UTF_16BE);
+        if (encryption != null) {
+            return "<" + hex(encryption.encrypt(utf16)) + ">";
+        }
         var result = new StringBuilder("<FEFF");
         for (var character : value.toCharArray()) {
             PdfNumbers.appendHex4(result, character);
@@ -915,6 +943,10 @@ final class NativePdfWriter {
 
     private static String hex(int value, int digits) {
         return format("%0" + digits + "X", value);
+    }
+
+    private static String hex(byte[] bytes) {
+        return hex(bytes, bytes.length);
     }
 
     private static String hex(byte[] bytes, int length) {
@@ -947,14 +979,6 @@ final class NativePdfWriter {
         return result.toString();
     }
 
-    private static String hex(byte[] bytes) {
-        var result = new StringBuilder(bytes.length * 2);
-        for (var item : bytes) {
-            result.append(format("%02X", item & 0xff));
-        }
-        return result.toString();
-    }
-
     private static final class FontAggregate {
         private final Set<Integer> glyphs = new LinkedHashSet<>();
         private final Map<Integer, Integer> unicodeByGlyph = new LinkedHashMap<>();
@@ -966,11 +990,13 @@ final class NativePdfWriter {
     private static final class ImportContext {
         private final NativePdfParser source;
         private final ObjectStore target;
+        private final Revision6Encryption encryption;
         private final Map<CosReference, Integer> objects = new LinkedHashMap<>();
 
-        ImportContext(NativePdfParser source, ObjectStore target) {
+        ImportContext(NativePdfParser source, ObjectStore target, Revision6Encryption encryption) {
             this.source = source;
             this.target = target;
+            this.encryption = encryption;
         }
 
         void map(CosReference sourceReference, int targetObject) {
@@ -1023,7 +1049,10 @@ final class NativePdfWriter {
                 case CosBoolean bool -> Boolean.toString(bool.value());
                 case CosNumber number -> number.lexicalValue();
                 case CosName pdfName -> "/" + name(pdfName.value());
-                case CosString string -> "<" + hex(string.bytes()) + ">";
+                case CosString string -> {
+                    var bytes = encryption == null ? string.bytes() : encryption.encrypt(string.bytes());
+                    yield "<" + hex(bytes) + ">";
+                }
                 case CosArray array -> {
                     var result = new StringBuilder("[");
                     array.values().forEach(item -> result.append(direct(item)).append(' '));
@@ -1059,6 +1088,10 @@ final class NativePdfWriter {
         }
 
         private byte[] rawStream(CosStream stream) {
+            var payload = stream.encodedBytes();
+            if (encryption != null) {
+                payload = encryption.encrypt(payload);
+            }
             var dictionary = new StringBuilder("<<");
             stream.dictionary().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
                 if (!entry.getKey().equals("Length")) {
@@ -1066,11 +1099,11 @@ final class NativePdfWriter {
                         .append(direct(entry.getValue()));
                 }
             });
-            dictionary.append(" /Length ").append(stream.encodedBytes().length).append(" >>\nstream\n");
-            var output = new ByteArrayOutputStream(dictionary.length() + stream.encodedBytes().length + 16);
+            dictionary.append(" /Length ").append(payload.length).append(" >>\nstream\n");
+            var output = new ByteArrayOutputStream(dictionary.length() + payload.length + 16);
             try {
                 output.write(ascii(dictionary.toString()));
-                output.write(stream.encodedBytes());
+                output.write(payload);
                 output.write(ascii("\nendstream"));
             } catch (IOException impossible) {
                 throw new AssertionError(impossible);
@@ -1083,6 +1116,7 @@ final class NativePdfWriter {
         private final List<byte[]> objects = new ArrayList<>();
         private final Set<Integer> unpacked = new LinkedHashSet<>();
         private int rootObject;
+        private int encryptObject;
 
         int reserve() {
             objects.add(null);

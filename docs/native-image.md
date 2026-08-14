@@ -5,7 +5,7 @@
 stickers, and signatures work without it.
 
 ```kotlin
-implementation("no.beint.skaldpdf:skald-image:1.7.0")
+implementation("no.beint.skaldpdf:skald-image:1.8.0")
 ```
 
 ```text
@@ -52,3 +52,14 @@ PDF/A and PDF/X still require converting JXL to an existing filter
   `.so` is missing.
 
 Override search paths with `SKALD_TURBOJPEG`, `SKALD_HEIF`, and `SKALD_JXL`.
+
+## Jpegli
+
+Jpegli is a better *JPEG* encoder (still `DCTDecode`). It lives in the
+libjxl tree as a static extra, not as a commonly installed `libjpegli`
+shared library. Homebrew `jpeg-xl` 0.12 ships `libjxl` / `libjxl_cms` /
+`libjxl_threads` only.
+
+A `skald-jpegli` module would be empty on almost every machine. TurboJPEG
+already covers optional fast JPEG encode inside `skald-image`. We will bind
+jpegli when a shared library is a normal install, not before.

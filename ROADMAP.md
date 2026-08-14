@@ -4,6 +4,17 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.8.0
+
+- PDF 2.0 AES-256 encryption (`PdfEncryption`, revision 6) for payslips
+  and similar generated files. Not combined with signatures. Encrypted
+  input still fails closed.
+- Incremental second signature; rewrite of a sealed file throws.
+- `skald-label-sticker` is the clothing-sticker artifact.
+  `skald-labels` is now the umbrella. No empty GS1/shelf modules.
+- Jpegli evaluated and deferred: no shared library to bind; TurboJPEG
+  remains the optional JPEG encoder.
+
 ## Shipped in 1.7.0
 
 - Split print stock out of barcode. `skald-barcode` is symbols only.

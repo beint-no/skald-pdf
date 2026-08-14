@@ -43,7 +43,12 @@ public final class PdfDocument implements AutoCloseable {
         this.reader = Objects.requireNonNull(reader, "reader");
         this.writer = writer;
         try {
-            var parser = new NativePdfParser(reader.bytes());
+            var bytes = reader.bytes();
+            if (writer != null && NativePdfParser.containsSealedSignature(bytes)) {
+                throw new IllegalStateException(
+                    "Rewriting a sealed PDF would invalidate its signatures; use PdfSigner.sign to add another seal");
+            }
+            var parser = new NativePdfParser(bytes);
             parser.pages().forEach(page -> pages.add(new PdfPage(this, page)));
         } catch (RuntimeException exception) {
             reader.close();
@@ -206,7 +211,7 @@ public final class PdfDocument implements AutoCloseable {
             }
             if (writer != null) {
                 try (writer) {
-                    new NativePdfWriter(writer.properties().compression().deflateLevel()).write(this, writer.output());
+                    new NativePdfWriter(writer.properties()).write(this, writer.output());
                 }
             }
         } finally {

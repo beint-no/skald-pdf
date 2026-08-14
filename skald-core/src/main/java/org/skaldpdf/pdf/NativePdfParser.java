@@ -43,6 +43,7 @@ final class NativePdfParser {
     private final Set<CosReference> resolving = new HashSet<>();
     private CosReference root;
     private boolean encrypted;
+    private final int startXref;
     private final List<ImportedPage> pages;
 
     NativePdfParser(byte[] source) {
@@ -51,10 +52,54 @@ final class NativePdfParser {
         }
         this.source = source.clone();
         require(startsWith(this.source, 0, "%PDF-"), "Input does not have a PDF header");
-        readCrossReferences(findStartXref());
+        startXref = Math.toIntExact(findStartXref());
+        readCrossReferences(startXref);
         require(!encrypted, "Encrypted PDFs are not supported");
         require(root != null, "PDF trailer has no Root reference");
         pages = List.copyOf(readPages());
+    }
+
+    static boolean containsSealedSignature(byte[] pdf) {
+        var matcher = java.util.regex.Pattern.compile(
+            "/ByteRange\\s*\\[\\s*(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s*]").matcher(
+            new String(pdf, StandardCharsets.ISO_8859_1));
+        while (matcher.find()) {
+            if (Long.parseLong(matcher.group(2)) > 0 && Long.parseLong(matcher.group(4)) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    int startXref() {
+        return startXref;
+    }
+
+    CosReference catalogReference() {
+        return root;
+    }
+
+    int maximumObjectNumber() {
+        return locations.keySet().stream().mapToInt(Integer::intValue).max().orElse(0);
+    }
+
+    List<CosReference> acroFormFields() {
+        var catalog = dictionary(resolve(root), "catalog");
+        if (catalog.get("AcroForm") == null) {
+            return List.of();
+        }
+        var acroForm = dictionary(resolve(catalog.get("AcroForm")), "AcroForm");
+        if (acroForm.get("Fields") == null) {
+            return List.of();
+        }
+        var fields = array(resolve(acroForm.get("Fields")), "AcroForm Fields");
+        var result = new ArrayList<CosReference>();
+        for (var item : fields.values()) {
+            if (item instanceof CosReference reference) {
+                result.add(reference);
+            }
+        }
+        return List.copyOf(result);
     }
 
     List<ImportedPage> pages() {
