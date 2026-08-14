@@ -1,0 +1,239 @@
+{
+  "samples": [
+    {
+      "name": "reai-credit-note",
+      "bytes": 28877,
+      "pages": 1
+    },
+    {
+      "name": "reai-invoice",
+      "bytes": 30204,
+      "pages": 1
+    },
+    {
+      "name": "reai-long-invoice",
+      "bytes": 33241,
+      "pages": 2
+    },
+    {
+      "name": "reai-packing-slip",
+      "bytes": 29232,
+      "pages": 1
+    },
+    {
+      "name": "reai-paid-copy",
+      "bytes": 29992,
+      "pages": 1
+    },
+    {
+      "name": "reai-reminder",
+      "bytes": 29524,
+      "pages": 1
+    },
+    {
+      "name": "reai-respiro",
+      "bytes": 29631,
+      "pages": 1
+    },
+    {
+      "name": "typical-agreement-cover",
+      "bytes": 21506,
+      "pages": 1
+    },
+    {
+      "name": "typical-audit-letter",
+      "bytes": 18634,
+      "pages": 1
+    },
+    {
+      "name": "typical-barcode-pack",
+      "bytes": 20074,
+      "pages": 1
+    },
+    {
+      "name": "typical-board-minutes",
+      "bytes": 19358,
+      "pages": 1
+    },
+    {
+      "name": "typical-code128-carton",
+      "bytes": 18454,
+      "pages": 1
+    },
+    {
+      "name": "typical-collection-notice",
+      "bytes": 30674,
+      "pages": 1
+    },
+    {
+      "name": "typical-credit-application",
+      "bytes": 19016,
+      "pages": 1
+    },
+    {
+      "name": "typical-credit-note",
+      "bytes": 28877,
+      "pages": 1
+    },
+    {
+      "name": "typical-delivery-note",
+      "bytes": 22105,
+      "pages": 1
+    },
+    {
+      "name": "typical-dunning-run",
+      "bytes": 20487,
+      "pages": 1
+    },
+    {
+      "name": "typical-ean13-sticker",
+      "bytes": 13196,
+      "pages": 1
+    },
+    {
+      "name": "typical-ehf-preview",
+      "bytes": 29914,
+      "pages": 1
+    },
+    {
+      "name": "typical-expense",
+      "bytes": 20424,
+      "pages": 1
+    },
+    {
+      "name": "typical-gs1128-sscc",
+      "bytes": 17665,
+      "pages": 1
+    },
+    {
+      "name": "typical-inventory",
+      "bytes": 21590,
+      "pages": 1
+    },
+    {
+      "name": "typical-invoice-discount",
+      "bytes": 30141,
+      "pages": 1
+    },
+    {
+      "name": "typical-invoice-en",
+      "bytes": 29453,
+      "pages": 1
+    },
+    {
+      "name": "typical-invoice-multipage",
+      "bytes": 33241,
+      "pages": 2
+    },
+    {
+      "name": "typical-invoice-no",
+      "bytes": 30204,
+      "pages": 1
+    },
+    {
+      "name": "typical-invoice-partial",
+      "bytes": 29550,
+      "pages": 1
+    },
+    {
+      "name": "typical-invoice-preview",
+      "bytes": 30118,
+      "pages": 1
+    },
+    {
+      "name": "typical-invoice-qr",
+      "bytes": 32364,
+      "pages": 1
+    },
+    {
+      "name": "typical-order-confirmation",
+      "bytes": 28369,
+      "pages": 1
+    },
+    {
+      "name": "typical-packing-slip",
+      "bytes": 29232,
+      "pages": 1
+    },
+    {
+      "name": "typical-paid-copy",
+      "bytes": 29992,
+      "pages": 1
+    },
+    {
+      "name": "typical-payment-advice",
+      "bytes": 18943,
+      "pages": 1
+    },
+    {
+      "name": "typical-payslip",
+      "bytes": 21953,
+      "pages": 1
+    },
+    {
+      "name": "typical-picking-list",
+      "bytes": 20822,
+      "pages": 1
+    },
+    {
+      "name": "typical-proforma",
+      "bytes": 28872,
+      "pages": 1
+    },
+    {
+      "name": "typical-purchase-order",
+      "bytes": 20273,
+      "pages": 1
+    },
+    {
+      "name": "typical-quote",
+      "bytes": 19631,
+      "pages": 1
+    },
+    {
+      "name": "typical-receipt",
+      "bytes": 20520,
+      "pages": 1
+    },
+    {
+      "name": "typical-reminder",
+      "bytes": 29524,
+      "pages": 1
+    },
+    {
+      "name": "typical-reminder-en",
+      "bytes": 18704,
+      "pages": 1
+    },
+    {
+      "name": "typical-shipping-label",
+      "bytes": 19643,
+      "pages": 1
+    },
+    {
+      "name": "typical-statement",
+      "bytes": 23420,
+      "pages": 1
+    },
+    {
+      "name": "typical-sticker-sheet",
+      "bytes": 13358,
+      "pages": 1
+    },
+    {
+      "name": "typical-timesheet",
+      "bytes": 19643,
+      "pages": 1
+    },
+    {
+      "name": "typical-upca-shelf",
+      "bytes": 9601,
+      "pages": 1
+    },
+    {
+      "name": "typical-vat-return",
+      "bytes": 20020,
+      "pages": 1
+    }
+  ]
+}

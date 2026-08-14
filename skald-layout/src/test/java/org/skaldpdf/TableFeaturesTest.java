@@ -54,6 +54,26 @@ class TableFeaturesTest {
     }
 
     @Test
+    void keepsShortHeaderWordsIntactAndDrawsHairlineRules() throws Exception {
+        var table = new Table(UnitValue.createPercentArray(new float[] {22, 16, 8, 14, 14, 11, 15}))
+            .useAllAvailableWidth();
+        table.addHeaderRow("Beskrivelse", "Kommentar", "Antall", "Enhetspris", "Beløp", "MVA", "Beløp");
+        table.addRow("Regnskapstjeneste august", "Kreditert", "8", "-1,250.00", "-10,000.00", "25 %", "-12,500.00");
+        table.addRule(1.25f);
+        table.addRow("Beløp", "", "", "", "", "", "NOK -12,500.00");
+        table.addRule(1.25f);
+        var bytes = Pdf.create(document -> {
+            document.setMargins(40);
+            document.add(table);
+        });
+        var text = PdfTestSupport.text(bytes);
+        assertTrue(text.contains("Antall"));
+        assertTrue(!text.contains("Antal\nl") && !text.matches("(?s).*Antal\\s+l\\b.*"), text);
+        PdfTestSupport.assertNoHeavyHorizontalBars(PdfTestSupport.renderFirstPage(bytes));
+        PdfTestSupport.saveArtifacts("table-hairline-rules", bytes);
+    }
+
+    @Test
     void resolvesMixedPointAndPercentColumns() throws Exception {
         var table = Table.withColumns(
             UnitValue.createPointValue(90),

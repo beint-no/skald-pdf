@@ -408,8 +408,8 @@ public final class LayoutEngine {
             availableWidth - style.marginLeft() - style.marginRight());
         var tableX = alignedX(x + style.marginLeft(), availableWidth - style.marginLeft() - style.marginRight(),
             tableWidth, style.horizontalAlignment(HorizontalAlignment.LEFT));
-        var columnWidths = resolvedColumnWidths(table, tableWidth);
         var context = resolveTextContext(style, inherited);
+        var columnWidths = resolvedColumnWidths(table, tableWidth, context);
         var headerRows = rows(table.headerCells(), table.numberOfColumns());
         var bodyRows = rows(table.cells(), table.numberOfColumns());
         var footerRows = rows(table.footerCells(), table.numberOfColumns());
@@ -703,7 +703,7 @@ public final class LayoutEngine {
             }
             case Table table -> {
                 var tableWidth = resolveWidth(style.width(), width, width);
-                var columns = resolvedColumnWidths(table, tableWidth);
+                var columns = resolvedColumnWidths(table, tableWidth, inherited);
                 var context = resolveTextContext(style, inherited);
                 yield style.marginTop()
                     + sum(rowHeights(rows(table.headerCells(), table.numberOfColumns()), columns, context))
@@ -763,7 +763,20 @@ public final class LayoutEngine {
         var style = cell.style();
         var innerWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight());
         var content = cellContentHeight(cell, innerWidth, resolveTextContext(style, inherited));
-        return Math.max(floatOr(style.height(), 0), style.paddingTop() + content + style.paddingBottom());
+        return Math.max(floatOr(style.height(), 0),
+            style.paddingTop() + content + style.paddingBottom() + verticalBorderSpace(style));
+    }
+
+    private static float verticalBorderSpace(Style style) {
+        return borderWidth(style.borderTop()) + borderWidth(style.borderBottom());
+    }
+
+    private static float horizontalBorderSpace(Style style) {
+        return borderWidth(style.borderLeft()) + borderWidth(style.borderRight());
+    }
+
+    private static float borderWidth(org.skaldpdf.layout.borders.Border border) {
+        return border != null && border.visible() ? border.width() : 0f;
     }
 
     private float cellContentHeight(Cell cell, float innerWidth, TextContext context) {
@@ -793,9 +806,7 @@ public final class LayoutEngine {
                 lines.add(builder.finish(inherited, false));
                 builder = new LineBuilder();
             }
-            if (tokenWidth > width && !token.value().isBlank()) {
-                builder = addByCodePoint(token, width, inherited, lines, builder);
-            } else if (!builder.empty() || !token.value().isBlank()) {
+            if (!builder.empty() || !token.value().isBlank()) {
                 builder.add(token, tokenWidth);
             }
         }
@@ -1070,7 +1081,13 @@ public final class LayoutEngine {
         return false;
     }
 
-    private static float[] resolvedColumnWidths(Table table, float tableWidth) {
+    private float[] resolvedColumnWidths(Table table, float tableWidth, TextContext inherited) {
+        var preferred = preferredColumnWidths(table, tableWidth);
+        var mins = columnMinContentWidths(table, inherited);
+        return honorMinContent(preferred, mins, tableWidth);
+    }
+
+    private static float[] preferredColumnWidths(Table table, float tableWidth) {
         var units = table.columnUnits();
         if (units == null) {
             return resolvedColumnWidths(table.columnWidths(), tableWidth);
@@ -1094,6 +1111,76 @@ public final class LayoutEngine {
             result[index] = unit.unitType() == UnitValue.UnitType.POINT
                 ? unit.value()
                 : percentTotal == 0 ? 0f : percentBudget * unit.value() / percentTotal;
+        }
+        return result;
+    }
+
+    private float[] columnMinContentWidths(Table table, TextContext inherited) {
+        var mins = new float[table.numberOfColumns()];
+        addColumnMins(mins, table.headerCells(), inherited);
+        addColumnMins(mins, table.cells(), inherited);
+        addColumnMins(mins, table.footerCells(), inherited);
+        return mins;
+    }
+
+    private void addColumnMins(float[] mins, List<Cell> cells, TextContext inherited) {
+        if (cells.isEmpty()) {
+            return;
+        }
+        for (var row : rows(cells, mins.length)) {
+            for (var placed : row.cells()) {
+                if (placed.cell().columnSpan() != 1) {
+                    continue;
+                }
+                mins[placed.column()] = Math.max(mins[placed.column()],
+                    minCellContentWidth(placed.cell(), inherited));
+            }
+        }
+    }
+
+    private float minCellContentWidth(Cell cell, TextContext inherited) {
+        var style = cell.style();
+        var context = resolveTextContext(style, inherited);
+        var content = 0f;
+        for (var child : cell.children()) {
+            if (child instanceof Paragraph paragraph) {
+                for (var token : tokens(paragraph, context)) {
+                    if ("\n".equals(token.value()) || token.value().isBlank()) {
+                        continue;
+                    }
+                    content = Math.max(content, token.font().getWidth(token.value(), token.fontSize()));
+                }
+            }
+        }
+        return style.paddingLeft() + content + style.paddingRight() + horizontalBorderSpace(style);
+    }
+
+    private static float[] honorMinContent(float[] preferred, float[] mins, float tableWidth) {
+        var result = preferred.clone();
+        var minTotal = 0f;
+        for (int index = 0; index < result.length; index++) {
+            mins[index] = Math.max(mins[index], 1f);
+            result[index] = Math.max(result[index], mins[index]);
+            minTotal += mins[index];
+        }
+        var total = sum(result);
+        if (total <= tableWidth) {
+            return result;
+        }
+        if (minTotal >= tableWidth) {
+            for (int index = 0; index < result.length; index++) {
+                result[index] = mins[index] * tableWidth / minTotal;
+            }
+            return result;
+        }
+        var surplus = 0f;
+        for (int index = 0; index < result.length; index++) {
+            surplus += Math.max(0f, result[index] - mins[index]);
+        }
+        var overflow = total - tableWidth;
+        for (int index = 0; index < result.length; index++) {
+            var extra = Math.max(0f, result[index] - mins[index]);
+            result[index] -= surplus == 0f ? 0f : overflow * extra / surplus;
         }
         return result;
     }

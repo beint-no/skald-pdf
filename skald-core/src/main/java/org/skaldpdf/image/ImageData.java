@@ -200,6 +200,106 @@ public final class ImageData implements ImageSource {
         return jpeg;
     }
 
+    /**
+     * Downscale so both edges fit {@code maxWidth}×{@code maxHeight}. Photos attached
+     * to expense claims should be reduced before embedding.
+     */
+    public ImageData scaledToFit(int maxWidth, int maxHeight) {
+        if (maxWidth < 1 || maxHeight < 1) {
+            throw new IllegalArgumentException("Maximum image size must be at least 1×1");
+        }
+        if (width <= maxWidth && height <= maxHeight) {
+            return this;
+        }
+        var scale = Math.min(maxWidth / (double) width, maxHeight / (double) height);
+        var targetWidth = Math.max(1, (int) Math.round(width * scale));
+        var targetHeight = Math.max(1, (int) Math.round(height * scale));
+        return rasterize(targetWidth, targetHeight, jpeg);
+    }
+
+    /**
+     * Re-encode as JPEG. Alpha is composited on white. Used when a PNG photo
+     * should be stored as a DCT stream.
+     */
+    public ImageData asJpeg(float quality) {
+        if (!(quality > 0) || quality > 1 || !Float.isFinite(quality)) {
+            throw new IllegalArgumentException("JPEG quality must be in (0, 1]");
+        }
+        return rasterize(width, height, true, quality);
+    }
+
+    private ImageData rasterize(int targetWidth, int targetHeight, boolean asJpeg) {
+        return rasterize(targetWidth, targetHeight, asJpeg, 0.82f);
+    }
+
+    private ImageData rasterize(int targetWidth, int targetHeight, boolean asJpeg, float quality) {
+        var source = toBufferedImage();
+        var scaled = new java.awt.image.BufferedImage(targetWidth, targetHeight,
+            asJpeg || alpha == null
+                ? java.awt.image.BufferedImage.TYPE_INT_RGB
+                : java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        var graphics = scaled.createGraphics();
+        graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+            java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        if (asJpeg || alpha == null) {
+            graphics.setColor(java.awt.Color.WHITE);
+            graphics.fillRect(0, 0, targetWidth, targetHeight);
+        }
+        graphics.drawImage(source, 0, 0, targetWidth, targetHeight, null);
+        graphics.dispose();
+        try {
+            var output = new java.io.ByteArrayOutputStream();
+            if (asJpeg) {
+                var writers = javax.imageio.ImageIO.getImageWritersByFormatName("jpeg");
+                if (!writers.hasNext()) {
+                    throw new IllegalStateException("No JPEG writer is available");
+                }
+                var writer = writers.next();
+                var params = writer.getDefaultWriteParam();
+                params.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+                params.setCompressionQuality(quality);
+                try (var ios = javax.imageio.ImageIO.createImageOutputStream(output)) {
+                    writer.setOutput(ios);
+                    writer.write(null, new javax.imageio.IIOImage(scaled, null, null), params);
+                } finally {
+                    writer.dispose();
+                }
+            } else {
+                javax.imageio.ImageIO.write(scaled, "png", output);
+            }
+            return new ImageData(output.toByteArray());
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("Unable to re-encode image", exception);
+        }
+    }
+
+    private java.awt.image.BufferedImage toBufferedImage() {
+        if (jpeg) {
+            try {
+                var image = javax.imageio.ImageIO.read(new ByteArrayInputStream(samples));
+                if (image == null) {
+                    throw new IllegalStateException("Unable to decode JPEG samples");
+                }
+                return image;
+            } catch (IOException exception) {
+                throw new IllegalStateException("Unable to decode JPEG samples", exception);
+            }
+        }
+        var image = new java.awt.image.BufferedImage(width, height,
+            alpha == null ? java.awt.image.BufferedImage.TYPE_INT_RGB : java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        var offset = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                var red = samples[offset++] & 0xff;
+                var green = samples[offset++] & 0xff;
+                var blue = samples[offset++] & 0xff;
+                var alphaValue = this.alpha == null ? 255 : (this.alpha[y * width + x] & 0xff);
+                image.setRGB(x, y, (alphaValue << 24) | (red << 16) | (green << 8) | blue);
+            }
+        }
+        return image;
+    }
+
     @Override
     public float intrinsicWidth() {
         return width;

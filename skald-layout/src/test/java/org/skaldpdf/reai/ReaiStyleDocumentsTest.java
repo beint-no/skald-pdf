@@ -22,15 +22,21 @@ class ReaiStyleDocumentsTest {
     Stream<DynamicTest> rendersEveryReaiReplica() throws Exception {
         var logo = PdfTestSupport.sampleLogo();
         var documents = ReaiStyleDocuments.all(logo);
-        assertEquals(15, documents.size());
+        assertEquals(16, documents.size());
         return documents.entrySet().stream().map(entry -> DynamicTest.dynamicTest(entry.getKey(), () -> {
             var bytes = entry.getValue();
             assertTrue(new String(bytes, 0, 8, StandardCharsets.US_ASCII).startsWith("%PDF-2.0"));
             var text = PdfTestSupport.text(bytes);
-            assertTrue(text.contains("Nordlys Handel AS"), entry.getKey() + " missing company");
-            assertTrue(text.contains("Fjordbutikken AS"), entry.getKey() + " missing customer");
-            assertTrue(text.contains("NO999888777MVA") || text.contains("999888777"),
-                entry.getKey() + " missing organisation number");
+            if (entry.getKey().contains("respiro")) {
+                assertTrue(text.contains("Respiro As"), entry.getKey() + " missing company");
+                assertTrue(text.contains("Famme As"), entry.getKey() + " missing customer");
+                assertTrue(text.contains("RF41202600033"), entry.getKey() + " missing invoice number");
+            } else {
+                assertTrue(text.contains("Nordlys Handel AS"), entry.getKey() + " missing company");
+                assertTrue(text.contains("Fjordbutikken AS"), entry.getKey() + " missing customer");
+                assertTrue(text.contains("NO999888777MVA") || text.contains("999888777"),
+                    entry.getKey() + " missing organisation number");
+            }
             PdfTestSupport.assertVisibleInk(PdfTestSupport.renderFirstPage(bytes));
             PdfTestSupport.saveArtifacts("reai-" + entry.getKey(), bytes);
         }));
@@ -101,6 +107,47 @@ class ReaiStyleDocumentsTest {
         var collection = PdfTestSupport.text(ReaiStyleDocuments.reminder(true, PdfTestSupport.sampleLogo()));
         assertTrue(collection.contains("Betalingsoppfordring"));
         assertTrue(collection.contains("tvangsfullbyrdelsesloven"));
+    }
+
+    @Test
+    void creditNoteDoesNotWrapAntallOrPaintRulesThroughText() throws Exception {
+        var bytes = ReaiStyleDocuments.invoice(ReaiStyleDocuments.creditNote(), PdfTestSupport.sampleLogo());
+        var text = PdfTestSupport.text(bytes);
+        assertTrue(text.contains("Antall"), text);
+        assertTrue(!text.contains("Antal\nl") && !text.matches("(?s).*Antal\\s+l\\b.*"),
+            "Antall must stay on one line:\n" + text);
+        var image = PdfTestSupport.renderFirstPage(bytes);
+        PdfTestSupport.assertVisibleInk(image);
+        PdfTestSupport.assertNoHeavyHorizontalBars(image);
+        PdfTestSupport.saveArtifacts("reai-credit-note-rules", bytes);
+    }
+
+    @Test
+    void copiesProductionInvoiceBesideTheReplica() throws Exception {
+        var replica = ReaiStyleDocuments.invoice(ReaiStyleDocuments.respiroPaidCopy(), PdfTestSupport.sampleLogo());
+        var text = PdfTestSupport.text(replica);
+        assertTrue(text.contains("Respiro As"));
+        assertTrue(text.contains("Famme As"));
+        assertTrue(text.contains("RF41202600033"));
+        assertTrue(text.contains("CS AI utvikling"));
+        PdfTestSupport.assertNoHeavyHorizontalBars(PdfTestSupport.renderFirstPage(replica));
+
+        var compare = Path.of("build", "reai-compare");
+        Files.createDirectories(compare);
+        Files.write(compare.resolve("17-respiro-rf41202600033.pdf"), replica);
+        var prod = Path.of(System.getProperty("user.home"), "Downloads", "invoice-RF41202600033.pdf");
+        if (Files.isRegularFile(prod)) {
+            Files.copy(prod, compare.resolve("00-prod-RF41202600033.pdf"),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            var downloads = Path.of(System.getProperty("user.home"), "Downloads", "skald-reai-compare");
+            Files.createDirectories(downloads);
+            Files.copy(prod, downloads.resolve("00-prod-RF41202600033.pdf"),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.write(downloads.resolve("17-respiro-rf41202600033.pdf"), replica);
+            assertTrue(Files.size(prod) < 8_000, "Production iText invoice is tiny because Helvetica is unembedded");
+            assertTrue(replica.length > Files.size(prod),
+                "Skald must embed a font subset and is therefore larger than the 2 KiB Helvetica file");
+        }
     }
 
     @Test

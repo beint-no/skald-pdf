@@ -65,6 +65,7 @@ public final class ReaiStyleDocuments {
         documents.put("13-ehf-forhandsvisning", ehfPreview(logo));
         documents.put("14-faktura-delbetalt", invoice(partiallyPaidInvoice(), logo));
         documents.put("15-faktura-qr", invoiceWithQr(sampleInvoice(), logo));
+        documents.put("17-respiro-rf41202600033", invoice(respiroPaidCopy(), logo));
         return documents;
     }
 
@@ -213,6 +214,30 @@ public final class ReaiStyleDocuments {
         });
     }
 
+    public static InvoiceModel respiroPaidCopy() {
+        return new InvoiceModel(
+            new Company("Respiro As", "NO", "922989451", "Almeveien 28, 0855, Oslo, Norge", true),
+            new Customer("Famme As", List.of("Søndre Kullerød 8", "3241 Sandefjord")),
+            Bank.dnb(),
+            Labels.norwegian(false),
+            "RF41202600033",
+            "Betalt fakturakopi",
+            "2026-07-02",
+            "2026-07-02",
+            "",
+            "",
+            "nb-NO",
+            false,
+            false,
+            false,
+            List.of(
+                line("CS AI utvikling", "Mai", "1", "100,000", null, "100,000", "25.0", "125,000"),
+                line("CS AI utvikling", "Juni", "1", "100,000", null, "100,000", "25.0", "125,000")
+            ),
+            totals("200,000", "50,000", "250,000")
+        ).withPayment("250,000", "2026-07-02", false, "0");
+    }
+
     public static InvoiceModel sampleInvoice() {
         return InvoiceModel.norwegian("1001", "Faktura", false, false, false, List.of(
             line("Regnskapstjeneste august", "Løpende avtale", "8", "1,250.00", null, "10,000.00", "25", "12,500.00"),
@@ -320,6 +345,7 @@ public final class ReaiStyleDocuments {
         var labelWidth = fonts.bold.getWidth(labels.companyNumber(), FONT_SIZE_NORMAL) + 8;
         var valueWidth = fonts.regular.getWidth(orgValue, FONT_SIZE_NORMAL) + 8;
         var org = Table.withColumns(UnitValue.createPointValue(labelWidth), UnitValue.createPointValue(valueWidth))
+            .setWidth(UnitValue.createPointValue(labelWidth + valueWidth))
             .setHorizontalAlignment(HorizontalAlignment.RIGHT)
             .setBorder(Border.NO_BORDER)
             .setMarginTop(10);
@@ -350,10 +376,14 @@ public final class ReaiStyleDocuments {
         table.addCell(cell(model.number(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
         table.addCell(cell(model.labels().dateLabel(), false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
         table.addCell(cell(model.issueDate(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        table.addCell(cell("Vår ref.:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(model.ourReference(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
-        table.addCell(cell("Deres ref.:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
-        table.addCell(cell(model.buyerReference(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
+        if (model.ourReference() != null && !model.ourReference().isBlank()) {
+            table.addCell(cell("Vår ref.:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
+            table.addCell(cell(model.ourReference(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
+        }
+        if (model.buyerReference() != null && !model.buyerReference().isBlank()) {
+            table.addCell(cell("Deres ref.:", false, FONT_SIZE_NORMAL, TextAlignment.LEFT));
+            table.addCell(cell(model.buyerReference(), false, FONT_SIZE_NORMAL, TextAlignment.RIGHT));
+        }
         table.addCell(empty(2).setPaddingTop(4));
         document.add(table);
     }
@@ -419,8 +449,8 @@ public final class ReaiStyleDocuments {
     private static void addLinesAndSummary(Document document, Fonts fonts, InvoiceModel model) {
         var showDiscount = model.showDiscount();
         var columns = showDiscount
-            ? new float[] {20, 16, 6, 13, 8, 13, 10, 14}
-            : new float[] {22, 18, 6, 14, 14, 11, 15};
+            ? new float[] {20, 15, 10, 12, 8, 12, 9, 14}
+            : new float[] {22, 16, 10, 13, 13, 10, 16};
         var table = new Table(UnitValue.createPercentArray(columns)).useAllAvailableWidth().setMarginTop(40);
         for (int index = 0; index < model.labels().lineHeaders().size(); index++) {
             table.addHeaderCell(cell(model.labels().lineHeaders().get(index), true, FONT_SIZE_SMALL,
@@ -433,13 +463,13 @@ public final class ReaiStyleDocuments {
             addLine(table, line, showDiscount);
         }
         var headerCount = model.labels().lineHeaders().size();
-        table.addCell(empty(headerCount).setBorderTop(new SolidBorder(2f)).setHeight(1));
+        table.addRule(1.25f);
         if (model.lines().size() > 1) {
             table.addCell(cell(model.labels().sum(), true, FONT_SIZE_SMALL, TextAlignment.LEFT, headerCount - 3));
             table.addCell(cell(model.totals().excl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
             table.addCell(cell(model.totals().vat(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
             table.addCell(cell(model.totals().incl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
-            table.addCell(empty(headerCount).setBorderTop(new SolidBorder(0.25f)));
+            table.addRule(0.4f);
         }
         table.addCell(cell(model.labels().vat() + " 25 %", false, FONT_SIZE_SMALL, TextAlignment.LEFT, headerCount - 3));
         table.addCell(cell(model.totals().excl(), false, FONT_SIZE_SMALL, TextAlignment.RIGHT));
@@ -456,7 +486,7 @@ public final class ReaiStyleDocuments {
             table.addCell(cell(model.labels().outstanding(), true, FONT_SIZE_SMALL, TextAlignment.LEFT, headerCount - 2));
             table.addCell(cell("NOK " + model.paymentReceipt().outstanding(), true, FONT_SIZE_SMALL, TextAlignment.RIGHT, 2));
         }
-        table.addCell(empty(headerCount).setBorderTop(new SolidBorder(2f)).setHeight(1));
+        table.addRule(1.25f);
         document.add(table);
     }
 
@@ -512,7 +542,7 @@ public final class ReaiStyleDocuments {
         return new Cell(colspan).add(paragraph)
             .setTextAlignment(alignment)
             .setBorder(Border.NO_BORDER)
-            .setPadding(1);
+            .setPadding(2);
     }
 
     private static Cell empty(int colspan) {

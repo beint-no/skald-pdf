@@ -176,22 +176,31 @@ public final class PdfDrawing {
                 PdfNumbers.append(operators, top.gap());
                 operators.append("] 0 d\n1 J\n");
             }
-            appendRectPath(operators, x, y, width, height, radius);
+            var inset = top.width() / 2f;
+            appendRectPath(operators, x + inset, y + inset,
+                Math.max(0, width - top.width()), Math.max(0, height - top.width()), radius);
             page.append(operators.append("S\nQ\n").toString());
             return;
         }
         if (top != null && top.visible()) {
-            line(document, page, top.color(), top.width(), x, y + height, x + width, y + height, top.dash(), top.gap());
+            var inset = top.width() / 2f;
+            line(document, page, top.color(), top.width(), x, y + height - inset, x + width, y + height - inset,
+                top.dash(), top.gap());
         }
         if (right != null && right.visible()) {
-            line(document, page, right.color(), right.width(), x + width, y, x + width, y + height,
+            var inset = right.width() / 2f;
+            line(document, page, right.color(), right.width(), x + width - inset, y, x + width - inset, y + height,
                 right.dash(), right.gap());
         }
         if (bottom != null && bottom.visible()) {
-            line(document, page, bottom.color(), bottom.width(), x, y, x + width, y, bottom.dash(), bottom.gap());
+            var inset = bottom.width() / 2f;
+            line(document, page, bottom.color(), bottom.width(), x, y + inset, x + width, y + inset,
+                bottom.dash(), bottom.gap());
         }
         if (left != null && left.visible()) {
-            line(document, page, left.color(), left.width(), x, y, x, y + height, left.dash(), left.gap());
+            var inset = left.width() / 2f;
+            line(document, page, left.color(), left.width(), x + inset, y, x + inset, y + height,
+                left.dash(), left.gap());
         }
     }
 

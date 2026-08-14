@@ -48,6 +48,10 @@ this module writes detached CMS SignedData, patches `/ByteRange` and
 The module is an AdES integrity seal. It is not a QTSP and does not mint
 qualified certificates. See [signing.md](signing.md).
 
+Workflow-to-module mapping against iText's suite is in [workflows.md](workflows.md).
+The next optional module, if any, is `skald-optimize` for recompressing images
+already stored in a received PDF.
+
 ## Dependency policy
 
 Every published artifact has a build-time check that fails if a third-party

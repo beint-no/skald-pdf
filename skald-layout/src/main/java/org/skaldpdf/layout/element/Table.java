@@ -1,5 +1,7 @@
 package org.skaldpdf.layout.element;
 
+import org.skaldpdf.layout.borders.Border;
+import org.skaldpdf.layout.borders.SolidBorder;
 import org.skaldpdf.layout.properties.UnitValue;
 
 import java.util.ArrayList;
@@ -138,6 +140,22 @@ public final class Table extends AbstractElement<Table> {
     public Table useAllAvailableWidth() {
         setWidth(UnitValue.createPercentValue(100f));
         return this;
+    }
+
+    /**
+     * Full-width hairline. The stroke sits at the bottom of a short spacer row so
+     * it cannot paint through the previous row's baseline.
+     */
+    public Table addRule(float width) {
+        if (!(width > 0) || !Float.isFinite(width)) {
+            throw new IllegalArgumentException("Rule width must be positive and finite");
+        }
+        var clearance = Math.max(3.5f, width);
+        return addCell(new Cell(numberOfColumns())
+            .setBorder(Border.NO_BORDER)
+            .setBorderBottom(new SolidBorder(width))
+            .setPadding(0)
+            .setHeight(width + clearance));
     }
 
     public int numberOfColumns() {

@@ -7,8 +7,8 @@
 | Documents | PDF 2.0 output, XMP metadata, optional Create/Modify dates, language, outlines, DisplayDocTitle, ISO/US/custom mm-in pages, rotation, first/rest headers, draft watermark |
 | Text | Unicode, embedded subset TrueType, PostScript font names, regular/bold/italic/bold-italic, fallback stack, color, left/center/right/justify, rotation, underline, strikethrough, `.notdef` for missing glyphs |
 | Layout | Paragraphs, lists with custom start index, runs, margins, padding, backgrounds, gradients, rounded borders, dashed rules, divs, nested cell content, fixed position, `keepTogether`, widow/orphan control, fitted-image measure, `AreaBreak` page size, named destinations |
-| Tables | weighted or mixed point/percent columns, column and row spans, repeating headers and footers, line-boundary row splits, complete-row checks, nested blocks in cells |
-| Images | JPEG/PNG/GIF/BMP allowlist, encoded-size and pixel gates, JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction |
+| Tables | weighted or mixed point/percent columns, min-content honoured before leftover is distributed, column and row spans, repeating headers and footers, inset hairline rules (`addRule`), line-boundary row splits, complete-row checks, nested blocks in cells |
+| Images | JPEG/PNG/GIF/BMP allowlist, encoded-size and pixel gates, JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction, `scaledToFit` / `asJpeg` |
 | Drawing | fills, rounded paths, axial shadings, dashed lines, opacity, canvas overlays, end-page events, watermarks, URI and GoTo links |
 | Barcodes | validated EAN-13, UPC-A, Code 128, GS1-128, and QR (versions 1–16) with independent decode tests |
 | Product stickers | 93 mm × 35 mm EAN-13 clothing labels; A4 n-up print sheets |

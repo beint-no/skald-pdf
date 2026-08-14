@@ -12,7 +12,7 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = "1.4.0"
+val releaseVersion = "1.4.1"
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-layout" to "Skald Layout",

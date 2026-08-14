@@ -26,6 +26,27 @@ Downsampling or recompressing photographs can reduce files further, but it is
 intentionally not automatic. The correct pixel density and quality depend on
 whether a document is for screens, office printers, archival storage, or evidence.
 Applications should make that policy explicit before passing image bytes.
+`ImageData.scaledToFit` and `ImageData.asJpeg` exist for that policy.
+
+## Generation harness
+
+`GenerationHarness` times and sizes the ReAI + typical document corpus. Tests
+write `build/benchmarks/latest.{json,md}` (and `~/Downloads/skald-benchmarks`
+when present). Size is asserted against
+`skald-layout/src/test/resources/benchmarks/baseline.json`. Wall-clock is
+recorded and bounded generously so CI machines do not flake.
+
+A production ReAI invoice that uses unembedded Helvetica is about 2 KiB. Skald
+will not match that number: PDF 2.0 output embeds a compact TrueType subset, so
+an ordinary invoice lands around 25–40 KiB. That is the size of correctness, not
+a regression.
+
+## Table layout
+
+Percent columns now honour min-content (the longest unbreakable header/body
+token plus padding) before leftover width is distributed. Hairline rules are
+stroked *inside* the cell so a 1.25 pt separator cannot paint through the
+previous row. `Table.addRule` is the invoice-style separator.
 
 The current writer retains encoded page streams and the final object table until
 close. Incremental layout bounds the much larger semantic element graph, but

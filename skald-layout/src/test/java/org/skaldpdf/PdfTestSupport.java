@@ -40,6 +40,37 @@ public final class PdfTestSupport {
         }
     }
 
+    public static void assertNoHeavyHorizontalBars(BufferedImage image) {
+        var width = image.getWidth();
+        var height = image.getHeight();
+        var darkRows = 0;
+        var longestDarkRun = 0;
+        var run = 0;
+        for (int y = 0; y < height; y++) {
+            var dark = 0;
+            for (int x = 0; x < width; x += 2) {
+                var rgb = image.getRGB(x, y) & 0x00ff_ffff;
+                var red = (rgb >> 16) & 0xff;
+                var green = (rgb >> 8) & 0xff;
+                var blue = rgb & 0xff;
+                if (red < 40 && green < 40 && blue < 40) {
+                    dark++;
+                }
+            }
+            var ratio = dark / (width / 2.0);
+            if (ratio > 0.45) {
+                darkRows++;
+                run++;
+                longestDarkRun = Math.max(longestDarkRun, run);
+            } else {
+                run = 0;
+            }
+        }
+        assertTrue(longestDarkRun < 8,
+            "A horizontal rule should be a hairline, not a bar through text. dark-run="
+                + longestDarkRun + " dark-rows=" + darkRows);
+    }
+
     public static void assertVisibleInk(BufferedImage image) {
         var nonWhitePixels = 0L;
         var totalPixels = (long) image.getWidth() * image.getHeight();

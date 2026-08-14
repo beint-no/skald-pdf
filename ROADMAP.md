@@ -4,6 +4,15 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.4.1
+
+- Table min-content columns so invoice headers such as `Antall` do not split.
+- Inset hairline rules; `Table.addRule` for summary separators.
+- `ImageData.scaledToFit` / `asJpeg` for generation-time photo policy.
+- Generation speed/size harness (`build/benchmarks/latest.json`).
+- Documented `skald-optimize` (recompress images *inside* received PDFs) as
+  the next optional module. Not a pdfHTML clone.
+
 ## Shipped in 1.4.0
 
 - Optional `skald-sign` module: detached CMS SignedData, SHA-256, RSA,

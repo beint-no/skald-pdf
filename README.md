@@ -45,13 +45,13 @@ are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.4.0` is on Maven Central:
+JDK 25 or newer is required. Release `1.4.1` is on Maven Central:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.4.0")
-    implementation("no.beint.skaldpdf:skald-barcode:1.4.0") // optional
-    implementation("no.beint.skaldpdf:skald-sign:1.4.0")    // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-layout:1.4.1")
+    implementation("no.beint.skaldpdf:skald-barcode:1.4.1") // optional
+    implementation("no.beint.skaldpdf:skald-sign:1.4.1")    // optional integrity seals
 }
 ```
 
@@ -166,7 +166,8 @@ See the [website](https://beint-no.github.io/skald-pdf/),
 [capability matrix](docs/capabilities.md), [architecture](docs/architecture.md),
 [standards policy](docs/standards.md), [signing / eIDAS](docs/signing.md),
 [security model](docs/security.md),
-[performance notes](docs/performance.md), and [roadmap](ROADMAP.md).
+[performance notes](docs/performance.md),
+[workflow modules](docs/workflows.md), and [roadmap](ROADMAP.md).
 
 ## Verify generated PDFs
 
