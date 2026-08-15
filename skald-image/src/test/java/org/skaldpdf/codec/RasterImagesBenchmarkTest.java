@@ -33,20 +33,6 @@ class RasterImagesBenchmarkTest {
             "Direct DataBufferInt unpack should beat per-pixel getRGB. " + report);
     }
 
-    @Test
-    void lazyConstantIsNotFasterThanAHolderClassForFontLoad() throws Exception {
-        var holder = medianNanos(40, HolderFont::get);
-        var lazy = medianNanos(40, LazyFont.FONT::get);
-        var report = "Font-style singleton: holder " + holder + " ns, LazyConstant.get "
-            + lazy + " ns (already-initialized path)\n";
-        Files.createDirectories(Path.of("build", "benchmarks"));
-        Files.writeString(Path.of("build", "benchmarks", "jdk26-lazy-constant.md"), report);
-        // After init both should be in the same nanosecond noise band. We keep
-        // the holder idiom in SkaldSans because it is already lazy per face
-        // without a preview type and is not slower.
-        assertTrue(holder < 50_000 && lazy < 50_000, report);
-    }
-
     private static long medianNanos(int runs, Runnable action) {
         var samples = new long[runs];
         for (int index = 0; index < runs; index++) {
@@ -67,17 +53,5 @@ class RasterImagesBenchmarkTest {
         }
         image.setRGB(0, 0, width, height, pixels, 0, width);
         return image;
-    }
-
-    private static final class HolderFont {
-        private static final Object FONT = new Object();
-
-        static Object get() {
-            return FONT;
-        }
-    }
-
-    private static final class LazyFont {
-        static final java.lang.LazyConstant<Object> FONT = java.lang.LazyConstant.of(Object::new);
     }
 }

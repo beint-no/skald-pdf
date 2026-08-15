@@ -76,24 +76,17 @@ subprojects {
 
     tasks.withType<JavaCompile>().configureEach {
         options.release = 26
-        options.compilerArgs.addAll(listOf(
-            "-Xlint:all,-preview",
-            "-Werror",
-            "--enable-preview"
-        ))
+        options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
     }
 
     tasks.withType<Javadoc>().configureEach {
         (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all,-missing", true)
-        (options as StandardJavadocDocletOptions).addBooleanOption("-enable-preview", true)
-        (options as StandardJavadocDocletOptions).addStringOption("-release", "26")
     }
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         workingDir = rootProject.projectDir
         systemProperty("java.awt.headless", "true")
-        jvmArgs("--enable-preview")
     }
 
     val verifyNoRuntimeDependencies = tasks.register("verifyNoRuntimeDependencies") {

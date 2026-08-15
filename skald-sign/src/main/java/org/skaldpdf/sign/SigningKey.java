@@ -11,8 +11,6 @@ import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
-import java.security.PEMDecoder;
-import java.security.PEMEncoder;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
@@ -41,43 +39,6 @@ public final class SigningKey {
 
     public static SigningKey of(PrivateKey privateKey, X509Certificate... certificates) {
         return new SigningKey(privateKey, List.of(certificates));
-    }
-
-    /**
-     * Loads an unencrypted PKCS#8 private key and an X.509 certificate from PEM.
-     * Uses the JDK 26 {@link PEMDecoder} preview API.
-     */
-    public static SigningKey fromPem(String privateKeyPem, String certificatePem) {
-        return fromPem(privateKeyPem, null, certificatePem);
-    }
-
-    /**
-     * Loads a PEM private key (optionally encrypted) and an X.509 certificate.
-     * Uses the JDK 26 {@link PEMDecoder} preview API.
-     */
-    public static SigningKey fromPem(String privateKeyPem, char[] password, String certificatePem) {
-        Objects.requireNonNull(privateKeyPem, "privateKeyPem");
-        Objects.requireNonNull(certificatePem, "certificatePem");
-        try {
-            var decoder = password == null || password.length == 0
-                ? PEMDecoder.of()
-                : PEMDecoder.of().withDecryption(password);
-            var privateKey = decoder.decode(privateKeyPem, PrivateKey.class);
-            var certificate = PEMDecoder.of().decode(certificatePem, X509Certificate.class);
-            return new SigningKey(privateKey, List.of(certificate));
-        } catch (RuntimeException exception) {
-            throw new IllegalArgumentException("Unable to decode PEM signing key", exception);
-        }
-    }
-
-    /** PKCS#8 private key as PEM text. */
-    public String privateKeyPem() {
-        return PEMEncoder.of().encodeToString(privateKey);
-    }
-
-    /** Leaf certificate as PEM text. */
-    public String certificatePem() {
-        return PEMEncoder.of().encodeToString(certificate());
     }
 
     public static SigningKey fromPkcs12(Path path, char[] password) {

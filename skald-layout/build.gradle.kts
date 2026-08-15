@@ -25,5 +25,4 @@ tasks.register<JavaExec>("writeSiteDemos") {
     mainClass.set("org.skaldpdf.SiteDemos")
     args(rootProject.layout.projectDirectory.dir("site/demos").asFile.absolutePath)
     dependsOn(tasks.named("testClasses"))
-    jvmArgs("--enable-preview")
 }

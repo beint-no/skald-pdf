@@ -6,13 +6,12 @@ practical document coverage it adds.
 
 ## Shipped in 1.10.0
 
-- JDK 26 + `--enable-preview`.
-- `RasterImages` uses bulk `getRGB`/`setRGB` instead of per-pixel accessors
-  (measured faster on 1280×720 ARGB).
-- `SigningKey.fromPem` / `privateKeyPem` / `certificatePem` via the JDK
-  `PEMDecoder` / `PEMEncoder` preview API.
-- `LazyConstant` was measured for already-initialized singletons and is
-  not faster than the holder classes already used by `SkaldSans`.
+- JDK 26 (no preview APIs).
+- `RasterImages` reads packed ARGB from `DataBufferInt` instead of
+  per-pixel `getRGB` (measured faster on 1280×720 ARGB).
+- Preview PEM and `LazyConstant` were evaluated and dropped: PEM was the
+  only preview consumer, and `LazyConstant.get` matched the holder
+  classes already used by `SkaldSans`.
 
 ## Shipped in 1.9.0
 
