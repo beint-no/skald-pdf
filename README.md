@@ -6,7 +6,7 @@
 [Maven Central](https://central.sonatype.com/search?q=no.beint.skaldpdf)
 
 Skald PDF is a modern Java library for creating and composing PDF 2.0 documents.
-It targets JDK 25+, uses named Java modules, and has no third-party runtime
+It targets JDK 26+ with preview APIs, uses named Java modules, and has no third-party runtime
 dependencies.
 
 Use it for invoices, statements, reports, receipts, agreements, labels, tickets,
@@ -62,18 +62,18 @@ are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 25 or newer is required. Release `1.9.0` is on Maven Central:
+JDK 26 or newer is required (`--enable-preview`). Release `1.10.0` is the current line:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.9.0")
-    implementation("no.beint.skaldpdf:skald-fonts:1.9.0")         // direct SkaldSans API access
-    implementation("no.beint.skaldpdf:skald-barcode:1.9.0")        // optional symbols
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.9.0")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.9.0") // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.9.0")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.9.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.9.0")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-layout:1.10.0")
+    implementation("no.beint.skaldpdf:skald-fonts:1.10.0")         // direct SkaldSans API access
+    implementation("no.beint.skaldpdf:skald-barcode:1.10.0")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.10.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.10.0") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.10.0")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.10.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.10.0")      // optional received-PDF recompress
 }
 ```
 

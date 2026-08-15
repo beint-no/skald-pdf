@@ -28,7 +28,9 @@ whether a document is for screens, office printers, archival storage, or evidenc
 Applications should make that policy explicit before passing image bytes.
 `RasterImages.scaleToFit` and `RasterImages.asJpeg` in the optional
 `skald-image` module implement that policy. Received files use `skald-optimize`
-with an explicit `OptimizeOptions`.
+with an explicit `OptimizeOptions`. Raster conversion uses a bulk
+`BufferedImage.getRGB` / `setRGB` path; the old per-pixel accessors are kept
+only as a measured baseline in tests.
 
 ## Generation harness
 

@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 25
+          java-version: 26
       - uses: gradle/actions/setup-gradle@v5
       - name: Generate demo PDFs and previews
         run: ./gradlew :skald-layout:writeSiteDemos

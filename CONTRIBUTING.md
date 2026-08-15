@@ -14,7 +14,7 @@ and implementation proposals.
 
 ## Build and test
 
-Use JDK 25 or newer:
+Use JDK 26 or newer with `--enable-preview`:
 
 ```shell
 ./gradlew clean build

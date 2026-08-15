@@ -4,6 +4,16 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.10.0
+
+- JDK 26 + `--enable-preview`.
+- `RasterImages` uses bulk `getRGB`/`setRGB` instead of per-pixel accessors
+  (measured faster on 1280×720 ARGB).
+- `SigningKey.fromPem` / `privateKeyPem` / `certificatePem` via the JDK
+  `PEMDecoder` / `PEMEncoder` preview API.
+- `LazyConstant` was measured for already-initialized singletons and is
+  not faster than the holder classes already used by `SkaldSans`.
+
 ## Shipped in 1.9.0
 
 - One module per component under `skald-components/`. The `skald-labels`

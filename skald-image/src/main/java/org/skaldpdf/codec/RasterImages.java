@@ -7,6 +7,7 @@ import javax.imageio.ImageWriteParam;
 import java.awt.Color;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -127,7 +128,7 @@ public final class RasterImages {
         }
     }
 
-    private static BufferedImage toBufferedImage(ImageData source) {
+    static BufferedImage toBufferedImage(ImageData source) {
         if (source.jpeg()) {
             try {
                 var image = ImageIO.read(new ByteArrayInputStream(source.samples()));
@@ -139,31 +140,97 @@ public final class RasterImages {
                 throw new IllegalStateException("Unable to decode JPEG samples", exception);
             }
         }
+        var width = source.width();
+        var height = source.height();
         var alpha = source.alpha();
-        var image = new BufferedImage(source.width(), source.height(),
-            alpha == null ? BufferedImage.TYPE_INT_RGB : BufferedImage.TYPE_INT_ARGB);
         var samples = source.samples();
-        var offset = 0;
-        for (int y = 0; y < source.height(); y++) {
-            for (int x = 0; x < source.width(); x++) {
-                int red;
-                int green;
-                int blue;
-                if (source.components() == 1) {
-                    red = green = blue = samples[offset++] & 0xff;
-                } else {
-                    red = samples[offset++] & 0xff;
-                    green = samples[offset++] & 0xff;
-                    blue = samples[offset++] & 0xff;
-                }
-                var alphaValue = alpha == null ? 255 : alpha[y * source.width() + x] & 0xff;
-                image.setRGB(x, y, alphaValue << 24 | red << 16 | green << 8 | blue);
+        var pixels = new int[Math.multiplyExact(width, height)];
+        var gray = source.components() == 1;
+        var sampleOffset = 0;
+        for (int index = 0; index < pixels.length; index++) {
+            int red;
+            int green;
+            int blue;
+            if (gray) {
+                red = green = blue = samples[sampleOffset++] & 0xff;
+            } else {
+                red = samples[sampleOffset++] & 0xff;
+                green = samples[sampleOffset++] & 0xff;
+                blue = samples[sampleOffset++] & 0xff;
             }
+            var alphaValue = alpha == null ? 255 : alpha[index] & 0xff;
+            pixels[index] = alphaValue << 24 | red << 16 | green << 8 | blue;
+        }
+        var type = alpha == null ? BufferedImage.TYPE_INT_RGB : BufferedImage.TYPE_INT_ARGB;
+        var image = new BufferedImage(width, height, type);
+        var dest = argbPixels(image, true);
+        if (dest != null) {
+            System.arraycopy(pixels, 0, dest, 0, pixels.length);
+        } else {
+            image.setRGB(0, 0, width, height, pixels, 0, width);
         }
         return image;
     }
 
-    private static ImageData fromBufferedImage(BufferedImage image) {
+    static ImageData fromBufferedImage(BufferedImage image) {
+        var width = image.getWidth();
+        var height = image.getHeight();
+        var pixels = argbPixels(image, false);
+        var owned = pixels;
+        if (owned == null) {
+            owned = image.getRGB(0, 0, width, height, null, 0, width);
+        }
+        var rgb = new byte[Math.multiplyExact(owned.length, 3)];
+        var hasAlpha = image.getColorModel().hasAlpha();
+        var alpha = hasAlpha ? new byte[owned.length] : null;
+        unpackArgb(owned, rgb, alpha);
+        return alpha == null
+            ? ImageData.fromRgb(width, height, rgb)
+            : ImageData.fromRgb(width, height, rgb, alpha);
+    }
+
+    /**
+     * Direct ARGB/RGB int storage when the image is already a packed int raster.
+     * Returns {@code null} when a copy via {@code getRGB} is required.
+     */
+    static int[] argbPixels(BufferedImage image, boolean requireWritable) {
+        if (image.getType() != BufferedImage.TYPE_INT_ARGB
+            && image.getType() != BufferedImage.TYPE_INT_RGB
+            && image.getType() != BufferedImage.TYPE_INT_ARGB_PRE) {
+            return null;
+        }
+        if (!(image.getRaster().getDataBuffer() instanceof DataBufferInt buffer)) {
+            return null;
+        }
+        if (requireWritable && buffer.getNumBanks() != 1) {
+            return null;
+        }
+        var data = buffer.getData();
+        return data.length >= image.getWidth() * image.getHeight() ? data : null;
+    }
+
+    /** Unpacks packed ARGB ints into DeviceRGB bytes and an optional alpha plane. */
+    static void unpackArgb(int[] pixels, byte[] rgb, byte[] alpha) {
+        var sampleOffset = 0;
+        if (alpha == null) {
+            for (var pixel : pixels) {
+                rgb[sampleOffset++] = (byte) (pixel >>> 16);
+                rgb[sampleOffset++] = (byte) (pixel >>> 8);
+                rgb[sampleOffset++] = (byte) pixel;
+            }
+            return;
+        }
+        for (int index = 0; index < pixels.length; index++) {
+            var pixel = pixels[index];
+            rgb[sampleOffset++] = (byte) (pixel >>> 16);
+            rgb[sampleOffset++] = (byte) (pixel >>> 8);
+            rgb[sampleOffset++] = (byte) pixel;
+            alpha[index] = (byte) (pixel >>> 24);
+        }
+    }
+
+    /** Per-pixel ImageIO accessors kept as the measured baseline, not the production path. */
+    static ImageData fromBufferedImagePixelAtATime(BufferedImage image) {
         var width = image.getWidth();
         var height = image.getHeight();
         var rgb = new byte[Math.multiplyExact(Math.multiplyExact(width, height), 3)];

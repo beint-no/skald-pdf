@@ -12,7 +12,7 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = "1.9.0"
+val releaseVersion = "1.10.0"
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-fonts" to "Skald Fonts",
@@ -64,8 +64,8 @@ subprojects {
     }
 
     extensions.configure<JavaPluginExtension> {
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
+        sourceCompatibility = JavaVersion.VERSION_26
+        targetCompatibility = JavaVersion.VERSION_26
     }
 
     dependencies {
@@ -75,18 +75,25 @@ subprojects {
     }
 
     tasks.withType<JavaCompile>().configureEach {
-        options.release = 25
-        options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
+        options.release = 26
+        options.compilerArgs.addAll(listOf(
+            "-Xlint:all,-preview",
+            "-Werror",
+            "--enable-preview"
+        ))
     }
 
     tasks.withType<Javadoc>().configureEach {
         (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all,-missing", true)
+        (options as StandardJavadocDocletOptions).addBooleanOption("-enable-preview", true)
+        (options as StandardJavadocDocletOptions).addStringOption("-release", "26")
     }
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         workingDir = rootProject.projectDir
         systemProperty("java.awt.headless", "true")
+        jvmArgs("--enable-preview")
     }
 
     val verifyNoRuntimeDependencies = tasks.register("verifyNoRuntimeDependencies") {

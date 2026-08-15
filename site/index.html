@@ -31,7 +31,7 @@
       <p class="lede">
         Skald writes compact, Unicode, PDF&nbsp;2.0 documents with no third-party runtime
         dependencies. Invoices, statements, clothing stickers, packing slips, tickets,
-        and reports — generated on JDK&nbsp;25, verified by independent renderers.
+        and reports — generated on JDK&nbsp;26, verified by independent renderers.
       </p>
       <div class="actions">
         <a class="button primary" href="#start">Add the Maven dependency</a>
@@ -126,12 +126,12 @@
     <section id="start" class="start">
       <div class="section-head">
         <h2>Start in one dependency.</h2>
-        <p>Release <strong>1.9.0</strong> is on Maven Central. Java packages stay <code>org.skaldpdf</code>.</p>
+        <p>Release <strong>1.10.0</strong> requires JDK 26 and <code>--enable-preview</code>. Java packages stay <code>org.skaldpdf</code>.</p>
       </div>
       <pre><code>dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.9.0")
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.9.0")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.9.0") // optional
+    implementation("no.beint.skaldpdf:skald-layout:1.10.0")
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.10.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.10.0") // optional
 }</code></pre>
       <pre><code>byte[] invoice = Pdf.create(document -&gt; {
     document.setMargins(40, 40, 40, 40);
@@ -142,7 +142,7 @@
     document.add(new Image(new QrCode("https://pay.example/inv/2026-1001")).scaleToFit(72, 72));
 });</code></pre>
       <p class="fine">
-        Requires JDK 25+. See the
+        Requires JDK 26+ (<code>--enable-preview</code>). See the
         <a href="https://github.com/beint-no/skald-pdf">repository</a>,
         <a href="https://github.com/beint-no/skald-pdf/blob/main/docs/capabilities.md">capability matrix</a>,
         and <a href="https://github.com/beint-no/skald-pdf/blob/main/ROADMAP.md">roadmap</a>.

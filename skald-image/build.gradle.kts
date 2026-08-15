@@ -9,5 +9,5 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.withType<Test>().configureEach {
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    jvmArgs("--enable-preview", "--enable-native-access=ALL-UNNAMED")
 }
