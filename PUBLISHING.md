@@ -37,10 +37,24 @@ SIGNING_IN_MEMORY_KEY_ID
 SIGNING_IN_MEMORY_KEY_PASSWORD
 ```
 
-Team members with permission to run repository workflows can then open
-Actions → Publish to Maven Central → Run workflow, enter the version, and start
-the release. The workflow always publishes the current `main` branch, so merge
-the intended changes before running it. No local Maven credentials are needed.
+The normal release path is a matching version tag. Set the version in
+`build.gradle.kts`, merge the change to `main`, and push the tag:
+
+```shell
+git tag v1.11.0
+git push origin v1.11.0
+```
+
+The workflow verifies that the tag matches the Gradle version, then builds and
+publishes that exact tagged commit. No local Maven credentials are needed.
+
+For an API/manual fallback, run the workflow from `main` and provide the
+version input. An agent can do this with:
+
+```shell
+gh workflow run publish.yml --repo beint-no/skald-pdf --ref main \
+  -f version=1.11.0
+```
 
 ## Release
 

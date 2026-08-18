@@ -1,6 +1,9 @@
 name: Publish to Maven Central
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -17,13 +20,13 @@ concurrency:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: maven-central
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: main
+          ref: ${{ github.ref }}
 
       - uses: actions/setup-java@v5
         with:
@@ -32,12 +35,38 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
+      - name: Check release version
+        env:
+          RELEASE_VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            version="$(./gradlew -q printReleaseVersion)"
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [[ "$tag_version" != "$version" ]]; then
+              echo "Tag version $tag_version does not match Gradle version $version" >&2
+              exit 1
+            fi
+          else
+            version="$RELEASE_VERSION_INPUT"
+          fi
+
+          [[ -n "$version" && "$version" != *-SNAPSHOT ]] || {
+            echo "A non-SNAPSHOT release version is required" >&2
+            exit 1
+          }
+          echo "Publishing version $version"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+
       - name: Build and publish release
         env:
-          RELEASE_VERSION: ${{ inputs.version }}
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_IN_MEMORY_KEY_ID }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
-        run: ./gradlew clean build publishAndReleaseToMavenCentral "-PreleaseVersion=${RELEASE_VERSION}"
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            ./gradlew clean build publishAndReleaseToMavenCentral
+          else
+            ./gradlew clean build publishAndReleaseToMavenCentral "-PreleaseVersion=${RELEASE_VERSION}"
+          fi
