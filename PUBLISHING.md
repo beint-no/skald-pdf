@@ -9,9 +9,8 @@ Skald publishes `skald-core`, `skald-fonts`, `skald-layout`, `skald-barcode`,
 
 ## Secrets
 
-Do not put tokens or the private signing key in the repository. Export them as
-environment variables (see `~/.config/maven-central.env` on a release
-machine):
+Do not put tokens or the private signing key in the repository. Set these
+environment variables in the shell or CI environment:
 
 ```text
 MAVEN_CENTRAL_USERNAME
@@ -20,11 +19,6 @@ SIGNING_IN_MEMORY_KEY
 SIGNING_IN_MEMORY_KEY_ID
 SIGNING_IN_MEMORY_KEY_PASSWORD
 ```
-
-Gradle also accepts the same values as `ORG_GRADLE_PROJECT_mavenCentralUsername`,
-`ORG_GRADLE_PROJECT_mavenCentralPassword`, `ORG_GRADLE_PROJECT_signingInMemoryKey`,
-`ORG_GRADLE_PROJECT_signingInMemoryKeyId`, and
-`ORG_GRADLE_PROJECT_signingInMemoryKeyPassword`.
 
 Generate a Central Portal user token at
 <https://central.sonatype.com/usertoken>.
