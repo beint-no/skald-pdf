@@ -62,7 +62,12 @@ are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 26 or newer is required. Release `1.10.0` is the current line:
+JDK 26 or newer is required. The latest line is the tip of Oracle's
+tip-and-tail model: it always targets the current JDK feature release,
+compiles with `--release 26`, and uses finalized APIs only when they
+reduce maintenance or improve generation. Preview and incubator APIs stay
+out of production modules. Older Skald revisions remain the tail for older
+JDKs. Release `1.10.0` is the current line:
 
 ```kotlin
 dependencies {

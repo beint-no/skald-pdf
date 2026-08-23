@@ -141,10 +141,14 @@ public final class SigningKey {
     }
 
     public String signatureAlgorithm() {
-        return "EC".equalsIgnoreCase(privateKey.getAlgorithm()) ? "SHA256withECDSA" : "SHA256withRSA";
+        return ellipticCurve() ? "SHA256withECDSA" : "SHA256withRSA";
     }
 
     public byte[] signatureEncryptionOid() {
-        return "EC".equalsIgnoreCase(privateKey.getAlgorithm()) ? Oids.ECDSA_WITH_SHA256 : Oids.RSA_ENCRYPTION;
+        return ellipticCurve() ? Oids.ECDSA_WITH_SHA256 : Oids.RSA_ENCRYPTION;
+    }
+
+    private boolean ellipticCurve() {
+        return "EC".equalsFoldCase(privateKey.getAlgorithm());
     }
 }

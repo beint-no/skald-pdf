@@ -14,7 +14,9 @@ and implementation proposals.
 
 ## Build and test
 
-Use JDK 26 or newer:
+Use JDK 26 or newer. `main` is the tip: it always targets the current JDK
+feature release. Do not lower `--release` to keep older JDKs on the latest
+artifact, and do not add `--enable-preview` to production modules.
 
 ```shell
 ./gradlew clean build

@@ -16,7 +16,14 @@ optimizer:
 - compact CID width ranges reduce font dictionaries;
 - content-stream numbers are encoded without temporary formatted strings;
 - batched barcode and QR rectangles reduce content operators;
-- bounded parsers reject decompression and object-count abuse early.
+- bounded parsers reject decompression and object-count abuse early;
+- Deflate uses try-with-resources on `java.util.zip.Deflater`.
+
+Generation is measured on JDK 26. Compact object headers and the JDK 26 G1
+throughput work apply without extra flags. Preview APIs (`LazyConstant`,
+Vector, PEM) were measured or reviewed and are not used: they do not beat
+the current holder-class, packed-int, and JCA paths enough to justify
+`--enable-preview`.
 
 Compression has four immutable policies: `NONE`, `FAST`, `BALANCED`, and
 `MAXIMUM`. `BALANCED` is the default. Deflate level changes CPU/size trade-offs;

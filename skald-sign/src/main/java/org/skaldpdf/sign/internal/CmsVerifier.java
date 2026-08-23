@@ -70,7 +70,7 @@ public final class CmsVerifier {
             }
 
             var algorithm = certificate.getPublicKey().getAlgorithm();
-            var signatureAlgorithm = "EC".equalsIgnoreCase(algorithm) ? "SHA256withECDSA" : "SHA256withRSA";
+            var signatureAlgorithm = "EC".equalsFoldCase(algorithm) ? "SHA256withECDSA" : "SHA256withRSA";
             var signature = Signature.getInstance(signatureAlgorithm);
             signature.initVerify(certificate.getPublicKey());
             signature.update(signedAttrsDer);

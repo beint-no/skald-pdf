@@ -15,10 +15,10 @@ public final class PageSize extends Rectangle {
     public static final PageSize RECEIPT_80MM = new PageSize(226.77f, 841.89f);
 
     public PageSize(float width, float height) {
-        super(width, height);
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("Page dimensions must be positive");
         }
+        super(width, height);
     }
 
     public static PageSize ofMillimetres(float width, float height) {

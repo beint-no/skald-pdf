@@ -689,13 +689,11 @@ final class NativePdfWriter {
 
     private byte[] deflate(byte[] bytes) {
         var output = new ByteArrayOutputStream(Math.max(64, bytes.length / 2));
-        var deflater = new Deflater(compressionLevel);
-        try (var compressed = new DeflaterOutputStream(output, deflater)) {
+        try (var deflater = new Deflater(compressionLevel);
+             var compressed = new DeflaterOutputStream(output, deflater)) {
             compressed.write(bytes);
         } catch (IOException impossible) {
             throw new AssertionError(impossible);
-        } finally {
-            deflater.end();
         }
         return output.toByteArray();
     }

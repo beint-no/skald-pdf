@@ -13,9 +13,9 @@ public final class DashedBorder extends Border {
     }
 
     public DashedBorder(Color color, float width, float dash, float gap) {
-        super(color, width, true, dash, gap);
         if (!(dash > 0) || !(gap > 0)) {
             throw new IllegalArgumentException("Dash and gap must be positive");
         }
+        super(color, width, true, dash, gap);
     }
 }

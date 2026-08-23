@@ -860,7 +860,7 @@ public final class ExampleGallery {
         return create("Spec sheet", document -> {
             heading(document, OCEAN, "Skald layout module");
             var table = styledTable(OCEAN, new float[] {2, 4}, "Item", "Value");
-            table.addRow("Runtime", "JDK 25+, zero third-party deps");
+            table.addRow("Runtime", "JDK 26+, zero third-party deps");
             table.addRow("Output", "PDF 2.0 only");
             table.addRow("Fonts", "Embedded subset TrueType");
             document.add(table);

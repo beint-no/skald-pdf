@@ -4,6 +4,16 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## After 1.10.0
+
+- Tip-and-tail policy: latest `main` always targets the current JDK feature
+  release (JDK 26). GitHub description, topics, and generated copy say
+  JDK 26+ rather than 25+.
+- `Deflater` is closed with try-with-resources.
+- `PageSize` and `DashedBorder` validate in the constructor body before `super`.
+- Signing algorithm names use `String.equalsFoldCase` (locale-independent).
+- Gradle compiles with a JDK 26 toolchain plus `--release 26`.
+
 ## Shipped in 1.10.0
 
 - JDK 26 (no preview APIs).

@@ -66,7 +66,7 @@ class ConcurrencyAndEfficiencyTest {
             table.addHeaderCell(cell("Amount"));
             for (int index = 0; index < rows; index++) {
                 table.addCell(cell(Integer.toString(index)));
-                table.addCell(cell("Row " + index + " generated efficiently on JDK 25"));
+                table.addCell(cell("Row " + index + " generated efficiently on JDK 26"));
                 table.addCell(cell("1 250.00"));
             }
             document.add(table);
