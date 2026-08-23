@@ -2,12 +2,14 @@ package org.skaldpdf.pdf;
 
 import static org.skaldpdf.pdf.CosValue.*;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.font.PdfFont;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -120,7 +122,7 @@ final class NativePdfWriter {
         var catalog = new StringBuilder("<< /Type /Catalog /Version /2.0 /Pages ")
             .append(pagesObject).append(" 0 R /Metadata ").append(metadataObject)
             .append(" 0 R /ViewerPreferences << /DisplayDocTitle true >>");
-        if (document.language() != null) {
+        if (!document.language().isEmpty()) {
             catalog.append(" /Lang ").append(literalString(document.language()));
         }
         if (!document.outlines().isEmpty()) {
@@ -850,15 +852,15 @@ final class NativePdfWriter {
     }
 
     private static String xmp(PdfDocumentInfo information, String language) {
-        var title = xml(information.getTitle() == null ? "" : information.getTitle());
-        var author = xml(information.getAuthor() == null ? "" : information.getAuthor());
-        var subject = information.getSubject() == null ? "" : """
+        var title = xml(information.getTitle());
+        var author = xml(information.getAuthor());
+        var subject = information.getSubject().isEmpty() ? "" : """
                   <dc:description><rdf:Alt><rdf:li xml:lang="x-default">%s</rdf:li></rdf:Alt></dc:description>
             """.formatted(xml(information.getSubject()));
-        var keywords = information.getKeywords() == null ? "" : """
+        var keywords = information.getKeywords().isEmpty() ? "" : """
                   <pdf:Keywords>%s</pdf:Keywords>
             """.formatted(xml(information.getKeywords()));
-        var languageTag = language == null ? "" : """
+        var languageTag = language.isEmpty() ? "" : """
                   <dc:language><rdf:Bag><rdf:li>%s</rdf:li></rdf:Bag></dc:language>
             """.formatted(xml(language));
         var created = xmpDate("xmp:CreateDate", information.getCreationDate());
@@ -884,7 +886,7 @@ final class NativePdfWriter {
             """.formatted(title, author, subject, keywords, languageTag, created, modified);
     }
 
-    private static String xmpDate(String tag, java.time.Instant instant) {
+    private static String xmpDate(String tag, @Nullable Instant instant) {
         if (instant == null) {
             return "";
         }

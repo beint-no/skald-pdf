@@ -1,5 +1,6 @@
 package org.skaldpdf.image;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfPage;
 
@@ -12,7 +13,7 @@ public final class ImageData implements ImageSource {
     private static final int MAXIMUM_ENCODED_BYTES = 32 * 1024 * 1024;
 
     private final byte[] samples;
-    private final byte[] alpha;
+    private final byte @Nullable [] alpha;
     private final int width;
     private final int height;
     private final int components;
@@ -132,7 +133,7 @@ public final class ImageData implements ImageSource {
         return new ImageData(samples.clone(), null, width, height, components, false);
     }
 
-    private ImageData(byte[] samples, byte[] alpha, int width, int height, int components, boolean jpeg) {
+    private ImageData(byte[] samples, byte @Nullable [] alpha, int width, int height, int components, boolean jpeg) {
         this.samples = samples;
         this.alpha = alpha;
         this.width = width;
@@ -145,7 +146,7 @@ public final class ImageData implements ImageSource {
         return samples.clone();
     }
 
-    public byte[] alpha() {
+    public byte @Nullable [] alpha() {
         return alpha == null ? null : alpha.clone();
     }
 

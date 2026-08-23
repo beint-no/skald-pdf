@@ -40,7 +40,8 @@ public final class PdfSigner {
      * @param signingTime included in signed attributes when non-null; omit for
      *                    deterministic test output
      */
-    public static byte[] sign(byte[] pdf, SigningKey key, SignatureField field, Instant signingTime) {
+    public static byte[] sign(byte[] pdf, SigningKey key, SignatureField field,
+                             @org.jspecify.annotations.Nullable Instant signingTime) {
         Objects.requireNonNull(pdf, "pdf");
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(field, "field");

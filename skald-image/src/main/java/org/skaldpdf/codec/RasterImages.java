@@ -1,5 +1,6 @@
 package org.skaldpdf.codec;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.image.ImageData;
 
 import javax.imageio.ImageIO;
@@ -193,7 +194,7 @@ public final class RasterImages {
      * Direct ARGB/RGB int storage when the image is already a packed int raster.
      * Returns {@code null} when a copy via {@code getRGB} is required.
      */
-    static int[] argbPixels(BufferedImage image, boolean requireWritable) {
+    static int @Nullable [] argbPixels(BufferedImage image, boolean requireWritable) {
         if (image.getType() != BufferedImage.TYPE_INT_ARGB
             && image.getType() != BufferedImage.TYPE_INT_RGB
             && image.getType() != BufferedImage.TYPE_INT_ARGB_PRE) {
@@ -210,7 +211,7 @@ public final class RasterImages {
     }
 
     /** Unpacks packed ARGB ints into DeviceRGB bytes and an optional alpha plane. */
-    static void unpackArgb(int[] pixels, byte[] rgb, byte[] alpha) {
+    static void unpackArgb(int[] pixels, byte[] rgb, byte @Nullable [] alpha) {
         var sampleOffset = 0;
         if (alpha == null) {
             for (var pixel : pixels) {

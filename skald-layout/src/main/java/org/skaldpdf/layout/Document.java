@@ -1,5 +1,6 @@
 package org.skaldpdf.layout;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.font.PdfFont;
 import org.skaldpdf.fonts.SkaldSans;
@@ -27,12 +28,12 @@ public final class Document implements AutoCloseable {
     private float headerHeight;
     private float firstHeaderHeight;
     private float footerHeight;
-    private Function<PageNumbering, LayoutElement> header;
-    private Function<PageNumbering, LayoutElement> firstHeader;
-    private Function<PageNumbering, LayoutElement> footer;
-    private String watermark;
-    private LayoutEngine layout;
-    private LayoutElement pending;
+    private @Nullable Function<PageNumbering, LayoutElement> header;
+    private @Nullable Function<PageNumbering, LayoutElement> firstHeader;
+    private @Nullable Function<PageNumbering, LayoutElement> footer;
+    private @Nullable String watermark;
+    private @Nullable LayoutEngine layout;
+    private @Nullable LayoutElement pending;
     private boolean closed;
 
     public Document(PdfDocument pdfDocument) {
@@ -161,7 +162,8 @@ public final class Document implements AutoCloseable {
 
     public Document setWatermark(String value) {
         requireLayoutNotStarted();
-        if (value != null && value.isBlank()) {
+        Objects.requireNonNull(value, "value");
+        if (value.isBlank()) {
             throw new IllegalArgumentException("Watermark text must not be blank");
         }
         watermark = value;
@@ -171,27 +173,27 @@ public final class Document implements AutoCloseable {
     public Document setHeader(float height, Function<PageNumbering, LayoutElement> content) {
         requireLayoutNotStarted();
         headerHeight = nonNegativeBand(height, "Header height");
-        header = content;
+        header = Objects.requireNonNull(content, "content");
         return this;
     }
 
     public Document setFooter(float height, Function<PageNumbering, LayoutElement> content) {
         requireLayoutNotStarted();
         footerHeight = nonNegativeBand(height, "Footer height");
-        footer = content;
+        footer = Objects.requireNonNull(content, "content");
         return this;
     }
 
     public Document setFirstHeader(Function<PageNumbering, LayoutElement> content) {
         requireLayoutNotStarted();
-        firstHeader = content;
+        firstHeader = Objects.requireNonNull(content, "content");
         return this;
     }
 
     public Document setFirstHeader(float height, Function<PageNumbering, LayoutElement> content) {
         requireLayoutNotStarted();
         firstHeaderHeight = nonNegativeBand(height, "First header height");
-        firstHeader = content;
+        firstHeader = Objects.requireNonNull(content, "content");
         return this;
     }
 

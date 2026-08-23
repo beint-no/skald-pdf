@@ -1,5 +1,8 @@
 package org.skaldpdf.invoice.no;
 
+import org.jspecify.annotations.Nullable;
+
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -18,10 +21,10 @@ public record Company(
 ) {
     public Company {
         name = requireText(name, "name");
-        country = requireText(country, "country").toUpperCase();
+        country = requireText(country, "country").toUpperCase(Locale.ROOT);
         organizationNumber = requireText(organizationNumber, "organizationNumber")
             .replace(" ", "");
-        addressLine = Objects.requireNonNullElse(addressLine, "");
+        addressLine = optionalText(addressLine);
     }
 
     /** {@code NO999888777MVA} when VAT registered. */
@@ -36,5 +39,10 @@ public record Company(
             throw new IllegalArgumentException(field + " must not be blank");
         }
         return stripped;
+    }
+
+    /** Missing or blank text becomes empty, never {@code null}. */
+    public static String optionalText(@Nullable String value) {
+        return value == null ? "" : value.strip();
     }
 }

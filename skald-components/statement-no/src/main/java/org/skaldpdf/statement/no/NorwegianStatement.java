@@ -1,5 +1,6 @@
 package org.skaldpdf.statement.no;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.invoice.no.Company;
 import org.skaldpdf.invoice.no.NorwegianMoney;
 import org.skaldpdf.invoice.no.NorwegianTheme;
@@ -29,7 +30,7 @@ public final class NorwegianStatement {
                         BigDecimal debit, BigDecimal credit) {
         public Entry {
             Objects.requireNonNull(date, "date");
-            reference = reference == null ? "" : reference.strip();
+            reference = Company.optionalText(reference);
             description = Company.requireText(description, "description");
             debit = debit == null ? BigDecimal.ZERO.setScale(2) : NorwegianMoney.amount(debit);
             credit = credit == null ? BigDecimal.ZERO.setScale(2) : NorwegianMoney.amount(credit);
@@ -110,7 +111,7 @@ public final class NorwegianStatement {
         private final LocalDate periodEnd;
         private final BigDecimal openingBalance;
         private final String footer;
-        private final ImageSource logo;
+        private final @Nullable ImageSource logo;
         private final List<Entry> entries;
 
         Model(Builder builder) {
@@ -123,7 +124,7 @@ public final class NorwegianStatement {
                 throw new IllegalArgumentException("periodEnd must not be before periodStart");
             }
             this.openingBalance = NorwegianMoney.amount(builder.openingBalance);
-            this.footer = builder.footer;
+            this.footer = Company.optionalText(builder.footer);
             this.logo = builder.logo;
             this.entries = List.copyOf(builder.entries);
         }
@@ -168,7 +169,7 @@ public final class NorwegianStatement {
             return footer;
         }
 
-        public ImageSource logo() {
+        public @Nullable ImageSource logo() {
             return logo;
         }
 
@@ -177,6 +178,7 @@ public final class NorwegianStatement {
         }
     }
 
+    @org.jspecify.annotations.NullUnmarked
     public static final class Builder {
         private Company company;
         private Party customer;

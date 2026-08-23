@@ -1,5 +1,6 @@
 package org.skaldpdf.packing.no;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.invoice.no.Company;
 import org.skaldpdf.invoice.no.NorwegianMoney;
@@ -36,12 +37,12 @@ public final class NorwegianPackingSlip {
     public record Line(String description, String sku, BigDecimal quantity, String location) {
         public Line {
             description = Company.requireText(description, "description");
-            sku = sku == null ? "" : sku.strip();
+            sku = Company.optionalText(sku);
             quantity = Objects.requireNonNull(quantity, "quantity");
             if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("quantity must be positive");
             }
-            location = location == null ? "" : location.strip();
+            location = Company.optionalText(location);
         }
 
         public Line(String description, String sku, int quantity, String location) {
@@ -90,7 +91,7 @@ public final class NorwegianPackingSlip {
             table.addCell(NorwegianTheme.cell("☐", false, NorwegianTheme.FONT_SMALL, TextAlignment.LEFT));
         }
         document.add(table);
-        if (model.trackingUrl() != null) {
+        if (!model.trackingUrl().isEmpty()) {
             document.add(new Image(new QrCode(model.trackingUrl())).scaleInto(72, 72).setMarginTop(18));
         }
         NorwegianTheme.branding(document, model.footer());
@@ -105,7 +106,7 @@ public final class NorwegianPackingSlip {
         private final String tracking;
         private final String trackingUrl;
         private final String footer;
-        private final ImageSource logo;
+        private final @Nullable ImageSource logo;
         private final List<Line> lines;
 
         Model(Builder builder) {
@@ -114,10 +115,9 @@ public final class NorwegianPackingSlip {
             this.recipient = Objects.requireNonNull(builder.recipient, "recipient");
             this.number = Company.requireText(builder.number, "number");
             this.deliveryDate = Objects.requireNonNull(builder.deliveryDate, "deliveryDate");
-            this.tracking = builder.tracking == null ? "" : builder.tracking.strip();
-            this.trackingUrl = builder.trackingUrl == null || builder.trackingUrl.isBlank()
-                ? null : builder.trackingUrl.strip();
-            this.footer = builder.footer;
+            this.tracking = Company.optionalText(builder.tracking);
+            this.trackingUrl = Company.optionalText(builder.trackingUrl);
+            this.footer = Company.optionalText(builder.footer);
             this.logo = builder.logo;
             this.lines = List.copyOf(builder.lines);
             if (this.lines.isEmpty()) {
@@ -161,7 +161,7 @@ public final class NorwegianPackingSlip {
             return footer;
         }
 
-        public ImageSource logo() {
+        public @Nullable ImageSource logo() {
             return logo;
         }
 
@@ -170,6 +170,7 @@ public final class NorwegianPackingSlip {
         }
     }
 
+    @org.jspecify.annotations.NullUnmarked
     public static final class Builder {
         private Kind kind = Kind.PACKING_SLIP;
         private Company company;

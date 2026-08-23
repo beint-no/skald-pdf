@@ -1,5 +1,6 @@
 package org.skaldpdf.layout.internal;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.colors.Color;
 import org.skaldpdf.colors.ColorConstants;
 import org.skaldpdf.font.PdfFont;
@@ -28,6 +29,7 @@ import org.skaldpdf.pdf.PdfPage;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 public final class LayoutEngine {
     private static final float DEFAULT_FONT_SIZE = 12f;
@@ -99,7 +101,7 @@ public final class LayoutEngine {
         }
     }
 
-    public void render(LayoutElement element, LayoutElement next) {
+    public void render(LayoutElement element, @Nullable LayoutElement next) {
         ensurePage();
         if (element.style().fixedPosition() != null) {
             renderFixed(element, element.style().fixedPosition(), 1f);
@@ -115,16 +117,16 @@ public final class LayoutEngine {
         renderFlow(element, defaultText, leftMargin, contentWidth());
     }
 
-    public void finishPages(java.util.function.Function<PageNumbering, LayoutElement> header,
-                            java.util.function.Function<PageNumbering, LayoutElement> firstHeader,
-                            java.util.function.Function<PageNumbering, LayoutElement> footer) {
+    public void finishPages(@Nullable Function<PageNumbering, LayoutElement> header,
+                            @Nullable Function<PageNumbering, LayoutElement> firstHeader,
+                            @Nullable Function<PageNumbering, LayoutElement> footer) {
         finishPages(header, firstHeader, footer, null);
     }
 
-    public void finishPages(java.util.function.Function<PageNumbering, LayoutElement> header,
-                            java.util.function.Function<PageNumbering, LayoutElement> firstHeader,
-                            java.util.function.Function<PageNumbering, LayoutElement> footer,
-                            String watermark) {
+    public void finishPages(@Nullable Function<PageNumbering, LayoutElement> header,
+                            @Nullable Function<PageNumbering, LayoutElement> firstHeader,
+                            @Nullable Function<PageNumbering, LayoutElement> footer,
+                            @Nullable String watermark) {
         var count = document.getNumberOfPages();
         if (count == 0) {
             return;

@@ -69,6 +69,8 @@ subprojects {
     }
 
     dependencies {
+        add("compileOnly", "org.jspecify:jspecify:1.0.0")
+        add("testImplementation", "org.jspecify:jspecify:1.0.0")
         add("testImplementation", platform("org.junit:junit-bom:6.0.3"))
         add("testImplementation", "org.junit.jupiter:junit-jupiter")
         add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")

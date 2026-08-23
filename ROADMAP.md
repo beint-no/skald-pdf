@@ -13,6 +13,10 @@ practical document coverage it adds.
 - `PageSize` and `DashedBorder` validate in the constructor body before `super`.
 - Signing algorithm names use `String.equalsFoldCase` (locale-independent).
 - Gradle compiles with a JDK 26 toolchain plus `--release 26`.
+- JSpecify `@NullMarked` on every module. Optional strings are empty, not
+  null. `@Nullable` is reserved for real absences (logo, bank, due date,
+  encryption, inherit-unset style).
+- `Pdf.merge(byte[]...)`. Invoice `LineItem` quantity 0 is a text-only row.
 
 ## Shipped in 1.10.0
 

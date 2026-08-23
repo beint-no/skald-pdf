@@ -41,7 +41,7 @@ public final class PdfOptimizer {
         return output.toByteArray();
     }
 
-    private static ImageData recompress(EmbeddedImage image, OptimizeOptions options) {
+    private static @org.jspecify.annotations.Nullable ImageData recompress(EmbeddedImage image, OptimizeOptions options) {
         var decoded = image.decode();
         if (decoded.isEmpty()) {
             return null;

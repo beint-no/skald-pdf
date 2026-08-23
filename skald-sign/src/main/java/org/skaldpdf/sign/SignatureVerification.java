@@ -26,6 +26,17 @@ public record SignatureVerification(
     List<String> notes
 ) {
     public SignatureVerification {
+        fieldName = Objects.requireNonNullElse(fieldName, "");
+        reason = Objects.requireNonNullElse(reason, "");
+        location = Objects.requireNonNullElse(location, "");
+        contact = Objects.requireNonNullElse(contact, "");
+        pdfDate = Objects.requireNonNullElse(pdfDate, "");
+        subFilter = Objects.requireNonNullElse(subFilter, "");
+        profile = Objects.requireNonNullElse(profile, "");
+        subject = Objects.requireNonNullElse(subject, "");
+        issuer = Objects.requireNonNullElse(issuer, "");
+        serialHex = Objects.requireNonNullElse(serialHex, "");
+        digestAlgorithm = Objects.requireNonNullElse(digestAlgorithm, "");
         notes = List.copyOf(Objects.requireNonNull(notes, "notes"));
     }
 }

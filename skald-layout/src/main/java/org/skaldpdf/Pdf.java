@@ -87,6 +87,11 @@ public final class Pdf {
         return PdfText.extract(source);
     }
 
+    public static byte[] merge(byte[]... sources) {
+        Objects.requireNonNull(sources, "sources");
+        return merge(List.of(sources));
+    }
+
     public static byte[] merge(List<byte[]> sources) {
         Objects.requireNonNull(sources, "sources");
         var output = new ByteArrayOutputStream();

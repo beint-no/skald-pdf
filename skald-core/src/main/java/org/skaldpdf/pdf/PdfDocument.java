@@ -1,5 +1,6 @@
 package org.skaldpdf.pdf;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.event.AbstractPdfDocumentEventHandler;
 import org.skaldpdf.event.PdfDocumentEvent;
 import org.skaldpdf.geom.PageSize;
@@ -17,15 +18,15 @@ import java.util.Objects;
  * generated on virtual threads.
  */
 public final class PdfDocument implements AutoCloseable {
-    private final PdfWriter writer;
-    private final PdfReader reader;
+    private final @Nullable PdfWriter writer;
+    private final @Nullable PdfReader reader;
     private final PdfDocumentInfo documentInfo = new PdfDocumentInfo();
     private final Map<String, List<AbstractPdfDocumentEventHandler>> eventHandlers = new LinkedHashMap<>();
     private final List<PdfPage> pages = new ArrayList<>();
     private final List<OutlineItem> outlines = new ArrayList<>();
     private final Map<String, NamedDestination> namedDestinations = new LinkedHashMap<>();
-    private String language;
-    private SignatureField signatureField;
+    private String language = "";
+    private @Nullable SignatureField signatureField;
     private final Map<ImportedImageKey, ImageData> importedImageReplacements = new LinkedHashMap<>();
     private boolean closed;
     private boolean closing;
@@ -39,7 +40,7 @@ public final class PdfDocument implements AutoCloseable {
         this(reader, null);
     }
 
-    public PdfDocument(PdfReader reader, PdfWriter writer) {
+    public PdfDocument(PdfReader reader, @Nullable PdfWriter writer) {
         this.reader = Objects.requireNonNull(reader, "reader");
         this.writer = writer;
         try {
@@ -106,7 +107,7 @@ public final class PdfDocument implements AutoCloseable {
         return this;
     }
 
-    public SignatureField signatureField() {
+    public @Nullable SignatureField signatureField() {
         return signatureField;
     }
 

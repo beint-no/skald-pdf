@@ -1,5 +1,6 @@
 package org.skaldpdf.reminder.no;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.invoice.no.Company;
 import org.skaldpdf.invoice.no.NorwegianMoney;
 import org.skaldpdf.invoice.no.NorwegianTheme;
@@ -118,7 +119,7 @@ public final class NorwegianReminder {
         private final int interestDays;
         private final String body;
         private final String footer;
-        private final ImageSource logo;
+        private final @Nullable ImageSource logo;
 
         Model(Builder builder) {
             this.kind = builder.kind;
@@ -128,17 +129,18 @@ public final class NorwegianReminder {
             this.invoiceDate = Objects.requireNonNull(builder.invoiceDate, "invoiceDate");
             this.dueDate = Objects.requireNonNull(builder.dueDate, "dueDate");
             this.noticeDate = Objects.requireNonNull(builder.noticeDate, "noticeDate");
-            this.currency = builder.currency == null || builder.currency.isBlank()
-                ? NorwegianMoney.NOK : builder.currency.strip();
+            var currency = Company.optionalText(builder.currency);
+            this.currency = currency.isEmpty() ? NorwegianMoney.NOK : currency;
             this.originalAmount = NorwegianMoney.amount(builder.originalAmount);
             this.lateFee = NorwegianMoney.amount(builder.lateFee);
             this.interest = NorwegianMoney.amount(builder.interest);
             this.interestRate = builder.interestRate;
             this.interestDays = builder.interestDays;
-            this.body = builder.body == null || builder.body.isBlank()
+            var body = Company.optionalText(builder.body);
+            this.body = body.isEmpty()
                 ? (kind == Kind.COLLECTION ? COLLECTION_BODY : REMINDER_BODY)
-                : builder.body.strip();
-            this.footer = builder.footer;
+                : body;
+            this.footer = Company.optionalText(builder.footer);
             this.logo = builder.logo;
             if (interestDays < 0) {
                 throw new IllegalArgumentException("interestDays must not be negative");
@@ -213,11 +215,12 @@ public final class NorwegianReminder {
             return footer;
         }
 
-        public ImageSource logo() {
+        public @Nullable ImageSource logo() {
             return logo;
         }
     }
 
+    @org.jspecify.annotations.NullUnmarked
     public static final class Builder {
         private Kind kind = Kind.REMINDER;
         private Company company;

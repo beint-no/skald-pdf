@@ -1,5 +1,6 @@
 package org.skaldpdf.invoice.no;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.Pdf;
 import org.skaldpdf.colors.DeviceRgb;
 import org.skaldpdf.font.PdfFont;
@@ -79,11 +80,11 @@ public final class NorwegianTheme {
         document.setTitle(title).setAuthor(author).setLanguage(language);
     }
 
-    public static void header(Document document, Company company, String organizationLabel, ImageSource logo) {
+    public static void header(Document document, Company company, String organizationLabel,
+                              @Nullable ImageSource logo) {
         Objects.requireNonNull(company, "company");
         var fonts = fonts();
-        var label = organizationLabel == null || organizationLabel.isBlank()
-            ? ORG_NUMBER_NB : organizationLabel;
+        var label = organizationLabel.isBlank() ? ORG_NUMBER_NB : organizationLabel;
         if (logo == null) {
             document.add(new Paragraph(company.name())
                 .setFont(fonts.bold)
@@ -133,7 +134,7 @@ public final class NorwegianTheme {
             .setFont(fonts.regular).setFontSize(FONT_NORMAL)
             .setMarginTop(18).setMarginBottom(0.2f).setMultipliedLeading(1f));
         for (var line : party.addressLines()) {
-            if (line == null || line.isBlank()) {
+            if (line.isBlank()) {
                 continue;
             }
             document.add(new Paragraph(line)
@@ -186,7 +187,7 @@ public final class NorwegianTheme {
     }
 
     public static void branding(Document document, String text) {
-        if (text == null || text.isBlank()) {
+        if (text.isBlank()) {
             return;
         }
         document.add(new Paragraph(text)

@@ -1,5 +1,6 @@
 package org.skaldpdf.layout.element;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.colors.Color;
 import org.skaldpdf.colors.LinearGradient;
 import org.skaldpdf.font.PdfFont;
@@ -10,6 +11,8 @@ import org.skaldpdf.layout.properties.OverflowWrap;
 import org.skaldpdf.layout.properties.TextAlignment;
 import org.skaldpdf.layout.properties.UnitValue;
 import org.skaldpdf.layout.properties.VerticalAlignment;
+
+import java.util.Objects;
 
 public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> implements LayoutElement {
     private final Style style = new Style();
@@ -25,7 +28,7 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
     }
 
     public final T setFont(PdfFont value) {
-        style.font(value);
+        style.font(Objects.requireNonNull(value, "value"));
         return self();
     }
 
@@ -35,7 +38,7 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
     }
 
     public final T setFontColor(Color value) {
-        style.setFontColor(value);
+        style.setFontColor(Objects.requireNonNull(value, "value"));
         return self();
     }
 
@@ -60,47 +63,47 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
     }
 
     public final T setTextAlignment(TextAlignment value) {
-        style.setTextAlignment(value);
+        style.setTextAlignment(Objects.requireNonNull(value, "value"));
         return self();
     }
 
     public final T setVerticalAlignment(VerticalAlignment value) {
-        style.setVerticalAlignment(value);
+        style.setVerticalAlignment(Objects.requireNonNull(value, "value"));
         return self();
     }
 
     public final T setHorizontalAlignment(HorizontalAlignment value) {
-        style.setHorizontalAlignment(value);
+        style.setHorizontalAlignment(Objects.requireNonNull(value, "value"));
         return self();
     }
 
     public final T setBackgroundColor(Color value) {
-        style.backgroundColor(value);
+        style.backgroundColor(Objects.requireNonNull(value, "value"));
         return self();
     }
 
     public final T setBorder(Border value) {
-        style.border(value);
+        style.border(Objects.requireNonNull(value, "value"));
         return self();
     }
 
     public final T setBorderTop(Border value) {
-        style.borderTop(value);
+        style.borderTop(Objects.requireNonNull(value, "value"));
         return self();
     }
 
     public final T setBorderRight(Border value) {
-        style.borderRight(value);
+        style.borderRight(Objects.requireNonNull(value, "value"));
         return self();
     }
 
     public final T setBorderBottom(Border value) {
-        style.borderBottom(value);
+        style.borderBottom(Objects.requireNonNull(value, "value"));
         return self();
     }
 
     public final T setBorderLeft(Border value) {
-        style.borderLeft(value);
+        style.borderLeft(Objects.requireNonNull(value, "value"));
         return self();
     }
 
@@ -161,11 +164,11 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
     }
 
     public final T setWidth(UnitValue value) {
-        style.width(value);
+        style.width(Objects.requireNonNull(value, "value"));
         return self();
     }
 
-    public final UnitValue getWidth() {
+    public final @Nullable UnitValue getWidth() {
         return style.width();
     }
 
@@ -210,7 +213,7 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
     }
 
     public final T setDestinationUri(String value) {
-        style.destinationUri(value);
+        style.destinationUri(Objects.requireNonNull(value, "value"));
         return self();
     }
 
@@ -220,17 +223,17 @@ public abstract non-sealed class AbstractElement<T extends AbstractElement<T>> i
     }
 
     public final T setNamedDestination(String name) {
-        style.namedDestination(name);
+        style.namedDestination(Objects.requireNonNull(name, "name"));
         return self();
     }
 
     public final T setLocalDestination(String name) {
-        style.localDestination(name);
+        style.localDestination(Objects.requireNonNull(name, "name"));
         return self();
     }
 
     public final T setBackground(LinearGradient value) {
-        style.backgroundGradient(value);
+        style.backgroundGradient(Objects.requireNonNull(value, "value"));
         return self();
     }
 

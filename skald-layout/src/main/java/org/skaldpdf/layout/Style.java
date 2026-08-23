@@ -1,5 +1,6 @@
 package org.skaldpdf.layout;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.colors.Color;
 import org.skaldpdf.colors.LinearGradient;
 import org.skaldpdf.font.PdfFont;
@@ -11,18 +12,18 @@ import org.skaldpdf.layout.properties.UnitValue;
 import org.skaldpdf.layout.properties.VerticalAlignment;
 
 public final class Style {
-    private PdfFont font;
+    private @Nullable PdfFont font;
     private float fontSize = Float.NaN;
-    private Color fontColor;
-    private Color backgroundColor;
-    private TextAlignment textAlignment;
-    private VerticalAlignment verticalAlignment;
-    private HorizontalAlignment horizontalAlignment;
-    private Border border = null;
-    private Border borderTop = null;
-    private Border borderRight = null;
-    private Border borderBottom = null;
-    private Border borderLeft = null;
+    private @Nullable Color fontColor;
+    private @Nullable Color backgroundColor;
+    private @Nullable TextAlignment textAlignment;
+    private @Nullable VerticalAlignment verticalAlignment;
+    private @Nullable HorizontalAlignment horizontalAlignment;
+    private @Nullable Border border;
+    private @Nullable Border borderTop;
+    private @Nullable Border borderRight;
+    private @Nullable Border borderBottom;
+    private @Nullable Border borderLeft;
     private float marginTop;
     private float marginRight;
     private float marginBottom;
@@ -31,7 +32,7 @@ public final class Style {
     private float paddingRight;
     private float paddingBottom;
     private float paddingLeft;
-    private UnitValue width;
+    private @Nullable UnitValue width;
     private float height = Float.NaN;
     private float multipliedLeading = Float.NaN;
     private OverflowWrap overflowWrap = OverflowWrap.NORMAL;
@@ -42,12 +43,12 @@ public final class Style {
     private boolean keepTogether;
     private boolean keepWithNext;
     private float borderRadius;
-    private String destinationUri;
+    private @Nullable String destinationUri;
     private int destinationPage;
-    private String namedDestination;
-    private String localDestination;
-    private LinearGradient backgroundGradient;
-    private FixedPosition fixedPosition;
+    private @Nullable String namedDestination;
+    private @Nullable String localDestination;
+    private @Nullable LinearGradient backgroundGradient;
+    private @Nullable FixedPosition fixedPosition;
 
     public Style() {
     }
@@ -61,11 +62,11 @@ public final class Style {
         }
     }
 
-    public PdfFont font() {
+    public @Nullable PdfFont font() {
         return font;
     }
 
-    public void font(PdfFont value) {
+    public void font(@Nullable PdfFont value) {
         font = value;
     }
 
@@ -86,11 +87,11 @@ public final class Style {
         fontColor = value;
     }
 
-    public Color backgroundColor() {
+    public @Nullable Color backgroundColor() {
         return backgroundColor;
     }
 
-    public void backgroundColor(Color value) {
+    public void backgroundColor(@Nullable Color value) {
         backgroundColor = value;
     }
 
@@ -118,43 +119,43 @@ public final class Style {
         horizontalAlignment = value;
     }
 
-    public Border border() {
+    public @Nullable Border border() {
         return border;
     }
 
-    public void border(Border value) {
+    public void border(@Nullable Border value) {
         border = value;
     }
 
-    public Border borderTop() {
+    public @Nullable Border borderTop() {
         return borderTop == null ? border : borderTop;
     }
 
-    public void borderTop(Border value) {
+    public void borderTop(@Nullable Border value) {
         borderTop = value;
     }
 
-    public Border borderRight() {
+    public @Nullable Border borderRight() {
         return borderRight == null ? border : borderRight;
     }
 
-    public void borderRight(Border value) {
+    public void borderRight(@Nullable Border value) {
         borderRight = value;
     }
 
-    public Border borderBottom() {
+    public @Nullable Border borderBottom() {
         return borderBottom == null ? border : borderBottom;
     }
 
-    public void borderBottom(Border value) {
+    public void borderBottom(@Nullable Border value) {
         borderBottom = value;
     }
 
-    public Border borderLeft() {
+    public @Nullable Border borderLeft() {
         return borderLeft == null ? border : borderLeft;
     }
 
-    public void borderLeft(Border value) {
+    public void borderLeft(@Nullable Border value) {
         borderLeft = value;
     }
 
@@ -230,11 +231,11 @@ public final class Style {
         paddingLeft = value;
     }
 
-    public UnitValue width() {
+    public @Nullable UnitValue width() {
         return width;
     }
 
-    public void width(UnitValue value) {
+    public void width(@Nullable UnitValue value) {
         width = value;
     }
 
@@ -269,11 +270,11 @@ public final class Style {
         borderRadius = value;
     }
 
-    public String destinationUri() {
+    public @Nullable String destinationUri() {
         return destinationUri;
     }
 
-    public void destinationUri(String value) {
+    public void destinationUri(@Nullable String value) {
         destinationUri = value;
     }
 
@@ -288,27 +289,27 @@ public final class Style {
         destinationPage = value;
     }
 
-    public String namedDestination() {
+    public @Nullable String namedDestination() {
         return namedDestination;
     }
 
-    public void namedDestination(String value) {
+    public void namedDestination(@Nullable String value) {
         namedDestination = value;
     }
 
-    public String localDestination() {
+    public @Nullable String localDestination() {
         return localDestination;
     }
 
-    public void localDestination(String value) {
+    public void localDestination(@Nullable String value) {
         localDestination = value;
     }
 
-    public LinearGradient backgroundGradient() {
+    public @Nullable LinearGradient backgroundGradient() {
         return backgroundGradient;
     }
 
-    public void backgroundGradient(LinearGradient value) {
+    public void backgroundGradient(@Nullable LinearGradient value) {
         backgroundGradient = value;
     }
 
@@ -368,11 +369,11 @@ public final class Style {
         keepWithNext = value;
     }
 
-    public FixedPosition fixedPosition() {
+    public @Nullable FixedPosition fixedPosition() {
         return fixedPosition;
     }
 
-    public void fixedPosition(FixedPosition value) {
+    public void fixedPosition(@Nullable FixedPosition value) {
         fixedPosition = value;
     }
 

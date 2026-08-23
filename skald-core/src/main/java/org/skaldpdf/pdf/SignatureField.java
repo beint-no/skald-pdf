@@ -27,6 +27,10 @@ public record SignatureField(
 
     public SignatureField {
         Objects.requireNonNull(fieldName, "fieldName");
+        reason = reason == null ? "" : reason;
+        location = location == null ? "" : location;
+        contact = contact == null ? "" : contact;
+        pdfDate = pdfDate == null ? "" : pdfDate;
         if (fieldName.isBlank() || fieldName.codePoints().anyMatch(code -> code < 0x20 || code > 0x7e)) {
             throw new IllegalArgumentException("Signature field names must be printable ASCII");
         }
@@ -45,7 +49,7 @@ public record SignatureField(
 
     public static SignatureField invisible(String fieldName) {
         return new SignatureField(fieldName, 1, new Rectangle(0, 0, 0, 0),
-            null, null, null, null, DEFAULT_RESERVED_BYTES, ADOBE_PKCS7);
+            "", "", "", "", DEFAULT_RESERVED_BYTES, ADOBE_PKCS7);
     }
 
     public SignatureField onPage(int page) {

@@ -1,4 +1,9 @@
+import org.jspecify.annotations.NullMarked;
+
+@NullMarked
 module org.skaldpdf.core {
+    requires static transitive org.jspecify;
+
     exports org.skaldpdf.colors;
     exports org.skaldpdf.event;
     exports org.skaldpdf.font;

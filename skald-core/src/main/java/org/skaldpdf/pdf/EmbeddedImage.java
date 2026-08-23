@@ -1,5 +1,6 @@
 package org.skaldpdf.pdf;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.image.ImageData;
 
 import java.util.Objects;
@@ -23,7 +24,7 @@ public final class EmbeddedImage {
     private final byte[] encodedBytes;
     private final NativePdfParser parser;
     private final CosValue.CosStream stream;
-    private ImageData decoded;
+    private @Nullable ImageData decoded;
     private boolean decodeAttempted;
 
     EmbeddedImage(int pageNumber, String resourceName, int width, int height, String filter,

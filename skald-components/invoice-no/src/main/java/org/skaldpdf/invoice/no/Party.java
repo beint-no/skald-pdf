@@ -7,7 +7,10 @@ import java.util.Objects;
 public record Party(String name, List<String> addressLines) {
     public Party {
         name = Company.requireText(name, "name");
-        addressLines = List.copyOf(Objects.requireNonNullElse(addressLines, List.of()));
+        addressLines = Objects.requireNonNullElse(addressLines, List.<String>of()).stream()
+            .filter(Objects::nonNull)
+            .map(String::strip)
+            .toList();
     }
 
     public Party(String name, String... addressLines) {

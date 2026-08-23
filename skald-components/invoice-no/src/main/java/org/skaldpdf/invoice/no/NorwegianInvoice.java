@@ -1,5 +1,6 @@
 package org.skaldpdf.invoice.no;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.image.ImageSource;
 import org.skaldpdf.barcode.QrCode;
 import org.skaldpdf.layout.Document;
@@ -92,7 +93,7 @@ public final class NorwegianInvoice {
     private static void render(Document document, Model model) {
         var copy = Copy.of(model.kind(), model.language());
         NorwegianTheme.metadata(document, model.documentTitle(), model.company().name(), copy.locale);
-        if (model.watermark() != null) {
+        if (!model.watermark().isEmpty()) {
             document.setWatermark(model.watermark());
         }
         NorwegianTheme.header(document, model.company(), copy.companyNumber, model.logo());
@@ -164,7 +165,7 @@ public final class NorwegianInvoice {
                 .setMultipliedLeading(1f)
                 .setMarginTop(20));
         }
-        if (model.note() != null && !model.note().isBlank()) {
+        if (!model.note().isEmpty()) {
             document.add(new Paragraph(model.note())
                 .setFont(fonts.regular()).setFontSize(NorwegianTheme.FONT_NORMAL)
                 .setMarginTop(12).setMultipliedLeading(1.15f));
@@ -233,6 +234,17 @@ public final class NorwegianInvoice {
     private static void addLine(Table table, LineItem line, boolean discount) {
         table.addCell(NorwegianTheme.cell(line.description(), false, NorwegianTheme.FONT_SMALL, TextAlignment.LEFT));
         table.addCell(NorwegianTheme.cell(line.comment(), false, NorwegianTheme.FONT_SMALL, TextAlignment.LEFT));
+        if (line.textOnly()) {
+            table.addCell(NorwegianTheme.cell("", false, NorwegianTheme.FONT_SMALL, TextAlignment.RIGHT));
+            table.addCell(NorwegianTheme.cell("", false, NorwegianTheme.FONT_SMALL, TextAlignment.RIGHT));
+            if (discount) {
+                table.addCell(NorwegianTheme.cell("", false, NorwegianTheme.FONT_SMALL, TextAlignment.RIGHT));
+            }
+            table.addCell(NorwegianTheme.cell("", false, NorwegianTheme.FONT_SMALL, TextAlignment.RIGHT));
+            table.addCell(NorwegianTheme.cell("", false, NorwegianTheme.FONT_SMALL, TextAlignment.RIGHT));
+            table.addCell(NorwegianTheme.cell("", false, NorwegianTheme.FONT_SMALL, TextAlignment.RIGHT));
+            return;
+        }
         table.addCell(NorwegianTheme.cell(NorwegianMoney.quantity(line.quantity()), false,
             NorwegianTheme.FONT_SMALL, TextAlignment.RIGHT));
         table.addCell(NorwegianTheme.cell(NorwegianMoney.format(line.unitPriceExVat()), false,
@@ -272,22 +284,22 @@ public final class NorwegianInvoice {
         private final Language language;
         private final Company company;
         private final Party customer;
-        private final Bank bank;
+        private final @Nullable Bank bank;
         private final String number;
         private final String titleOverride;
         private final LocalDate issueDate;
-        private final LocalDate dueDate;
+        private final @Nullable LocalDate dueDate;
         private final String ourReference;
         private final String buyerReference;
         private final String currency;
         private final String footer;
         private final String note;
         private final String watermark;
-        private final ImageSource logo;
+        private final @Nullable ImageSource logo;
         private final boolean paymentQr;
         private final List<LineItem> lines;
-        private final Payment payment;
-        private final CreditFor creditFor;
+        private final @Nullable Payment payment;
+        private final @Nullable CreditFor creditFor;
         private final Totals totals;
 
         Model(Builder builder) {
@@ -297,16 +309,16 @@ public final class NorwegianInvoice {
             this.customer = Objects.requireNonNull(builder.customer, "customer");
             this.bank = builder.bank;
             this.number = Company.requireText(builder.number, "number");
-            this.titleOverride = blankToNull(builder.titleOverride);
+            this.titleOverride = Company.optionalText(builder.titleOverride);
             this.issueDate = Objects.requireNonNull(builder.issueDate, "issueDate");
             this.dueDate = builder.dueDate;
-            this.ourReference = blankToNull(builder.ourReference);
-            this.buyerReference = blankToNull(builder.buyerReference);
-            this.currency = builder.currency == null || builder.currency.isBlank()
-                ? NorwegianMoney.NOK : builder.currency.strip();
-            this.footer = blankToNull(builder.footer);
-            this.note = blankToNull(builder.note);
-            this.watermark = blankToNull(builder.watermark);
+            this.ourReference = Company.optionalText(builder.ourReference);
+            this.buyerReference = Company.optionalText(builder.buyerReference);
+            var currency = Company.optionalText(builder.currency);
+            this.currency = currency.isEmpty() ? NorwegianMoney.NOK : currency;
+            this.footer = Company.optionalText(builder.footer);
+            this.note = Company.optionalText(builder.note);
+            this.watermark = Company.optionalText(builder.watermark);
             this.logo = builder.logo;
             this.paymentQr = builder.paymentQr;
             this.lines = List.copyOf(builder.lines);
@@ -350,7 +362,7 @@ public final class NorwegianInvoice {
             return customer;
         }
 
-        public Bank bank() {
+        public @Nullable Bank bank() {
             return bank;
         }
 
@@ -362,7 +374,7 @@ public final class NorwegianInvoice {
             return issueDate;
         }
 
-        public LocalDate dueDate() {
+        public @Nullable LocalDate dueDate() {
             return dueDate;
         }
 
@@ -390,7 +402,7 @@ public final class NorwegianInvoice {
             return watermark;
         }
 
-        public ImageSource logo() {
+        public @Nullable ImageSource logo() {
             return logo;
         }
 
@@ -402,11 +414,11 @@ public final class NorwegianInvoice {
             return lines;
         }
 
-        public Payment payment() {
+        public @Nullable Payment payment() {
             return payment;
         }
 
-        public CreditFor creditFor() {
+        public @Nullable CreditFor creditFor() {
             return creditFor;
         }
 
@@ -415,7 +427,7 @@ public final class NorwegianInvoice {
         }
 
         public String displayedTitle() {
-            return titleOverride != null ? titleOverride : Copy.of(kind, language).title;
+            return titleOverride.isEmpty() ? Copy.of(kind, language).title : titleOverride;
         }
 
         public String documentTitle() {
@@ -441,15 +453,9 @@ public final class NorwegianInvoice {
             return NorwegianMoney.amount(totals.incVat().subtract(payment.paidAmount()));
         }
 
-        private static String blankToNull(String value) {
-            if (value == null) {
-                return null;
-            }
-            var stripped = value.strip();
-            return stripped.isEmpty() ? null : stripped;
-        }
     }
 
+    @org.jspecify.annotations.NullUnmarked
     public static final class Builder {
         private Kind kind = Kind.INVOICE;
         private Language language = Language.NB;
@@ -495,7 +501,7 @@ public final class NorwegianInvoice {
             return this;
         }
 
-        public Builder bank(Bank bank) {
+        public Builder bank(@Nullable Bank bank) {
             this.bank = bank;
             return this;
         }
@@ -515,7 +521,7 @@ public final class NorwegianInvoice {
             return this;
         }
 
-        public Builder dueDate(LocalDate dueDate) {
+        public Builder dueDate(@Nullable LocalDate dueDate) {
             this.dueDate = dueDate;
             return this;
         }
@@ -550,7 +556,7 @@ public final class NorwegianInvoice {
             return this;
         }
 
-        public Builder logo(ImageSource logo) {
+        public Builder logo(@Nullable ImageSource logo) {
             this.logo = logo;
             return this;
         }

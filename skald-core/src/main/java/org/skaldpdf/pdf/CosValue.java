@@ -1,5 +1,7 @@
 package org.skaldpdf.pdf;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
 import java.util.Map;
 
@@ -38,7 +40,7 @@ sealed interface CosValue {
             values = Map.copyOf(values);
         }
 
-        CosValue get(String name) {
+        @Nullable CosValue get(String name) {
             return values.get(name);
         }
     }

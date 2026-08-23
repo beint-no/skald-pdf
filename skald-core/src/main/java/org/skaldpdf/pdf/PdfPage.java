@@ -1,5 +1,6 @@
 package org.skaldpdf.pdf;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.colors.Color;
 import org.skaldpdf.font.PdfFont;
 import org.skaldpdf.geom.PageSize;
@@ -25,7 +26,7 @@ public final class PdfPage {
     private final Map<Float, String> opacities = new LinkedHashMap<>();
     private final List<LinkAnnotation> links = new ArrayList<>();
     private final List<ShadingResource> shadings = new ArrayList<>();
-    private final ImportedPage importedPage;
+    private final @Nullable ImportedPage importedPage;
     private PageSize pageSize;
     private Rectangle cropBox;
     private boolean ignorePageRotationForContent;
@@ -164,7 +165,7 @@ public final class PdfPage {
         return List.copyOf(shadings);
     }
 
-    ImportedPage importedPage() {
+    @Nullable ImportedPage importedPage() {
         return importedPage;
     }
 

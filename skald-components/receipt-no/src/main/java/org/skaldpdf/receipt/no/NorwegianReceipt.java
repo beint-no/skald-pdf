@@ -1,5 +1,6 @@
 package org.skaldpdf.receipt.no;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.Pdf;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.invoice.no.Company;
@@ -104,7 +105,7 @@ public final class NorwegianReceipt {
         table.addCell(NorwegianTheme.cell(NorwegianMoney.format(model.currency(), totals.incVat()),
             true, NorwegianTheme.FONT_NORMAL, TextAlignment.RIGHT));
         document.add(table);
-        if (model.paymentMethod() != null) {
+        if (!model.paymentMethod().isEmpty()) {
             document.add(new Paragraph("Betalt med " + model.paymentMethod())
                 .setFontSize(NorwegianTheme.FONT_SMALL).setMarginTop(14));
         }
@@ -113,7 +114,7 @@ public final class NorwegianReceipt {
 
     public static final class Model {
         private final Company company;
-        private final Party customer;
+        private final @Nullable Party customer;
         private final String number;
         private final LocalDateTime issuedAt;
         private final String currency;
@@ -126,11 +127,10 @@ public final class NorwegianReceipt {
             this.customer = builder.customer;
             this.number = Company.requireText(builder.number, "number");
             this.issuedAt = Objects.requireNonNull(builder.issuedAt, "issuedAt");
-            this.currency = builder.currency == null || builder.currency.isBlank()
-                ? NorwegianMoney.NOK : builder.currency.strip();
-            this.paymentMethod = builder.paymentMethod == null || builder.paymentMethod.isBlank()
-                ? null : builder.paymentMethod.strip();
-            this.footer = builder.footer;
+            var currency = Company.optionalText(builder.currency);
+            this.currency = currency.isEmpty() ? NorwegianMoney.NOK : currency;
+            this.paymentMethod = Company.optionalText(builder.paymentMethod);
+            this.footer = Company.optionalText(builder.footer);
             this.lines = List.copyOf(builder.lines);
             if (this.lines.isEmpty()) {
                 throw new IllegalArgumentException("A receipt needs at least one line");
@@ -145,7 +145,7 @@ public final class NorwegianReceipt {
             return company;
         }
 
-        public Party customer() {
+        public @Nullable Party customer() {
             return customer;
         }
 
@@ -174,6 +174,7 @@ public final class NorwegianReceipt {
         }
     }
 
+    @org.jspecify.annotations.NullUnmarked
     public static final class Builder {
         private Company company;
         private Party customer;

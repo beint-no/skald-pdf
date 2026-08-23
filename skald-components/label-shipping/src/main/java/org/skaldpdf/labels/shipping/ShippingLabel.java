@@ -38,7 +38,10 @@ public final class ShippingLabel {
     public record Address(String name, List<String> lines) {
         public Address {
             name = requireText(name, "name");
-            lines = List.copyOf(Objects.requireNonNullElse(lines, List.of()));
+            lines = Objects.requireNonNullElse(lines, List.<String>of()).stream()
+                .filter(Objects::nonNull)
+                .map(String::strip)
+                .toList();
         }
 
         public Address(String name, String... lines) {
@@ -60,7 +63,7 @@ public final class ShippingLabel {
             tracking = requireText(tracking, "tracking").replace(" ", "");
             service = service == null ? "" : service.strip();
             reference = reference == null ? "" : reference.strip();
-            trackingUrl = trackingUrl == null || trackingUrl.isBlank() ? null : trackingUrl.strip();
+            trackingUrl = trackingUrl == null || trackingUrl.isBlank() ? "" : trackingUrl.strip();
         }
     }
 
@@ -97,7 +100,7 @@ public final class ShippingLabel {
         document.add(new Image(barcode).scaleToFit(PAGE_SIZE.getWidth() - 28, 56)
             .setHorizontalAlignment(HorizontalAlignment.CENTER)
             .setMarginTop(14));
-        if (spec.trackingUrl() != null) {
+        if (!spec.trackingUrl().isEmpty()) {
             document.add(new Image(new QrCode(spec.trackingUrl())).scaleInto(64, 64)
                 .setHorizontalAlignment(HorizontalAlignment.CENTER)
                 .setMarginTop(10));
@@ -107,7 +110,7 @@ public final class ShippingLabel {
     private static void addAddress(Document document, Address address, float nameSize) {
         document.add(new Paragraph(address.name()).bold().setFontSize(nameSize).setMarginBottom(1));
         for (var line : address.lines()) {
-            if (line != null && !line.isBlank()) {
+            if (!line.isBlank()) {
                 document.add(new Paragraph(line).setFontSize(9).setMarginBottom(0.4f).setMultipliedLeading(1f));
             }
         }
@@ -124,7 +127,7 @@ public final class ShippingLabel {
             .setBorderTop(new SolidBorder(0.4f));
         cell.add(new Paragraph(label).setFontSize(7)
             .setFontColor(new org.skaldpdf.colors.DeviceRgb(110, 110, 110)));
-        if (value != null && !value.isBlank()) {
+        if (!value.isBlank()) {
             cell.add(new Paragraph(value).bold().setFontSize(10).setMarginTop(1));
         }
         return cell;

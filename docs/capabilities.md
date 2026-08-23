@@ -21,7 +21,7 @@
 | Signatures | reserved signature field in core; optional `skald-sign` CMS / PAdES-B-B; incremental second seal; rewrite of sealed files fails closed |
 | Encryption | PDF 2.0 revision 6 AES-256 (`PdfEncryption`) on write; encrypted input is not parsed |
 | Image ingest | optional `skald-image`: JDK codecs plus TurboJPEG, libheif (HEIC/AVIF), libjxl (JPEG XL ingest only) via FFM; absent native libraries are skipped |
-| Runtime | published engine + component artifacts, JDK 26+, zero third-party *Java* runtime dependencies; native codecs optional |
+| Runtime | published engine + component artifacts, JDK 26+, JSpecify `@NullMarked` APIs, zero third-party *Java* runtime dependencies; native codecs optional |
 
 ## Deliberately deferred
 

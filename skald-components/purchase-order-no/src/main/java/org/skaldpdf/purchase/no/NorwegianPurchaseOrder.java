@@ -1,5 +1,6 @@
 package org.skaldpdf.purchase.no;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.invoice.no.Company;
 import org.skaldpdf.invoice.no.LineItem;
 import org.skaldpdf.invoice.no.NorwegianInvoice;
@@ -91,7 +92,7 @@ public final class NorwegianPurchaseOrder {
         table.addCell(NorwegianTheme.cell(NorwegianMoney.format(model.currency(), totals.incVat()), true,
             NorwegianTheme.FONT_SMALL, TextAlignment.RIGHT, 2));
         document.add(table);
-        if (model.notes() != null) {
+        if (!model.notes().isEmpty()) {
             document.add(new Paragraph(model.notes())
                 .setFontSize(NorwegianTheme.FONT_NORMAL).setMarginTop(16).setMultipliedLeading(1.15f));
         }
@@ -101,15 +102,15 @@ public final class NorwegianPurchaseOrder {
     public static final class Model {
         private final Company company;
         private final Party supplier;
-        private final Party shipTo;
+        private final @Nullable Party shipTo;
         private final String number;
         private final LocalDate orderDate;
-        private final LocalDate neededBy;
+        private final @Nullable LocalDate neededBy;
         private final String reference;
         private final String currency;
         private final String notes;
         private final String footer;
-        private final ImageSource logo;
+        private final @Nullable ImageSource logo;
         private final List<LineItem> lines;
 
         Model(Builder builder) {
@@ -119,12 +120,11 @@ public final class NorwegianPurchaseOrder {
             this.number = Company.requireText(builder.number, "number");
             this.orderDate = Objects.requireNonNull(builder.orderDate, "orderDate");
             this.neededBy = builder.neededBy;
-            this.reference = builder.reference == null || builder.reference.isBlank()
-                ? null : builder.reference.strip();
-            this.currency = builder.currency == null || builder.currency.isBlank()
-                ? NorwegianMoney.NOK : builder.currency.strip();
-            this.notes = builder.notes == null || builder.notes.isBlank() ? null : builder.notes.strip();
-            this.footer = builder.footer;
+            this.reference = Company.optionalText(builder.reference);
+            var currency = Company.optionalText(builder.currency);
+            this.currency = currency.isEmpty() ? NorwegianMoney.NOK : currency;
+            this.notes = Company.optionalText(builder.notes);
+            this.footer = Company.optionalText(builder.footer);
             this.logo = builder.logo;
             this.lines = List.copyOf(builder.lines);
             if (this.lines.isEmpty()) {
@@ -144,7 +144,7 @@ public final class NorwegianPurchaseOrder {
             return supplier;
         }
 
-        public Party shipTo() {
+        public @Nullable Party shipTo() {
             return shipTo;
         }
 
@@ -156,7 +156,7 @@ public final class NorwegianPurchaseOrder {
             return orderDate;
         }
 
-        public LocalDate neededBy() {
+        public @Nullable LocalDate neededBy() {
             return neededBy;
         }
 
@@ -176,7 +176,7 @@ public final class NorwegianPurchaseOrder {
             return footer;
         }
 
-        public ImageSource logo() {
+        public @Nullable ImageSource logo() {
             return logo;
         }
 
@@ -185,6 +185,7 @@ public final class NorwegianPurchaseOrder {
         }
     }
 
+    @org.jspecify.annotations.NullUnmarked
     public static final class Builder {
         private Company company;
         private Party supplier;

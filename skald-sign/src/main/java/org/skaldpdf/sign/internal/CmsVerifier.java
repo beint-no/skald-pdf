@@ -111,7 +111,7 @@ public final class CmsVerifier {
         notes.add(error);
         return new SignatureVerification(false, false, false, fieldName, reason, location, contact,
             pdfDate, subFilter, SignatureFieldProfiles.profileName(subFilter),
-            null, null, null, "SHA-256", List.copyOf(notes));
+            "", "", "", "SHA-256", List.copyOf(notes));
     }
 
     private static X509Certificate parseCertificate(byte[] encoded) throws GeneralSecurityException {

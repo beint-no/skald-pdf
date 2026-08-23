@@ -16,7 +16,9 @@ and implementation proposals.
 
 Use JDK 26 or newer. `main` is the tip: it always targets the current JDK
 feature release. Do not lower `--release` to keep older JDKs on the latest
-artifact, and do not add `--enable-preview` to production modules.
+artifact, and do not add `--enable-preview` to production modules. Keep
+JSpecify `@NullMarked` accurate: do not return or store null for optional
+text (use empty), and mark `@Nullable` only when absence is a real value.
 
 ```shell
 ./gradlew clean build

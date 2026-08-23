@@ -5,7 +5,9 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LineItemTest {
     @Test
@@ -36,9 +38,26 @@ class LineItemTest {
     }
 
     @Test
-    void rejectsZeroQuantityAndNegativeVat() {
+    void treatsZeroQuantityAsTextOnly() {
+        var line = new LineItem("Merknad", "Ingen vare", BigDecimal.ZERO,
+            BigDecimal.ZERO, new BigDecimal("25"));
+        assertTrue(line.textOnly());
+        assertEquals(new BigDecimal("0.00"), line.amountExVat());
+        assertEquals(new BigDecimal("0.00"), line.amountIncVat());
+    }
+
+    @Test
+    void treatsMissingDiscountAsZero() {
+        var line = new LineItem("Timer", "", BigDecimal.ONE,
+            new BigDecimal("100.00"), null, new BigDecimal("25"));
+        assertEquals(BigDecimal.ZERO, line.discountPercent());
+        assertFalse(line.hasDiscount());
+    }
+
+    @Test
+    void rejectsNegativeQuantityAndVat() {
         assertThrows(IllegalArgumentException.class, () -> new LineItem("x", "",
-            BigDecimal.ZERO, new BigDecimal("1.00"), new BigDecimal("25")));
+            new BigDecimal("-1"), new BigDecimal("1.00"), new BigDecimal("25")));
         assertThrows(IllegalArgumentException.class, () -> new LineItem("x", "",
             BigDecimal.ONE, new BigDecimal("1.00"), new BigDecimal("-1")));
     }

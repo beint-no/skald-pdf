@@ -86,6 +86,24 @@ class NorwegianInvoiceTest {
     }
 
     @Test
+    void optionalTextIsEmptyNeverNullAndTextOnlyLinesOmitAmounts() {
+        var model = sample()
+            .note(null)
+            .footer("  ")
+            .ourReference(null)
+            .line(new LineItem("Fritekst", "Ingen varelinje", BigDecimal.ZERO,
+                BigDecimal.ZERO, new BigDecimal("25")))
+            .build();
+        assertEquals("", model.note());
+        assertEquals("", model.footer());
+        assertEquals("", model.ourReference());
+        assertEquals("", model.watermark());
+        var text = Pdf.extractText(NorwegianInvoice.pdf(model));
+        assertTrue(text.contains("Fritekst"));
+        assertTrue(text.contains("Ingen varelinje"));
+    }
+
+    @Test
     void quoteOrderAndProformaChangeChrome() {
         var quote = Pdf.extractText(NorwegianInvoice.pdf(sample()
             .kind(NorwegianInvoice.Kind.QUOTE)
