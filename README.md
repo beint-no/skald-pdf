@@ -70,18 +70,18 @@ out of production modules. Published APIs are JSpecify `@NullMarked`: Kotlin
 and other consumers see non-null types by default, and `@Nullable` only where
 absence is a real value (logo, bank, due date, encryption). Optional text is
 empty, never null. Older Skald revisions remain the tail for older JDKs.
-Release `1.10.0` is the current line:
+Release `1.11.0` is the current line:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.10.0")
-    implementation("no.beint.skaldpdf:skald-fonts:1.10.0")         // direct SkaldSans API access
-    implementation("no.beint.skaldpdf:skald-barcode:1.10.0")        // optional symbols
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.10.0")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.10.0") // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.10.0")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.10.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.10.0")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-layout:1.11.0")
+    implementation("no.beint.skaldpdf:skald-fonts:1.11.0")         // direct SkaldSans API access
+    implementation("no.beint.skaldpdf:skald-barcode:1.11.0")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.11.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.11.0") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.11.0")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.11.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.11.0")      // optional received-PDF recompress
 }
 ```
 

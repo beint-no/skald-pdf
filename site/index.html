@@ -126,12 +126,12 @@
     <section id="start" class="start">
       <div class="section-head">
         <h2>Start in one dependency.</h2>
-        <p>Release <strong>1.10.0</strong> requires JDK 26. Java packages stay <code>org.skaldpdf</code>.</p>
+        <p>Release <strong>1.11.0</strong> requires JDK 26. Java packages stay <code>org.skaldpdf</code>.</p>
       </div>
       <pre><code>dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.10.0")
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.10.0")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.10.0") // optional
+    implementation("no.beint.skaldpdf:skald-layout:1.11.0")
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.11.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.11.0") // optional
 }</code></pre>
       <pre><code>byte[] invoice = Pdf.create(document -&gt; {
     document.setMargins(40, 40, 40, 40);

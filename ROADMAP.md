@@ -4,7 +4,7 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
-## After 1.10.0
+## Shipped in 1.11.0
 
 - Tip-and-tail policy: latest `main` always targets the current JDK feature
   release (JDK 26). GitHub description, topics, and generated copy say
