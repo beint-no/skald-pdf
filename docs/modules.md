@@ -15,7 +15,7 @@ Components           skald-components/          (folder, not one jar)
                      ├── label-sticker          skald-label-sticker
                      └── label-shipping         skald-label-shipping
 
-Engine               layout  barcode  sign  image  optimize
+Engine               layout  barcode  sign  image  optimize ─ jpegli
                        │       │      └───┬─────┘
                        └─ fonts           │
                             └─────────────┴── core
@@ -34,8 +34,11 @@ These are the building blocks. They have stable, spec-shaped jobs.
 | `skald-sign` | PAdES-B-B integrity seal |
 | `skald-image` | Optional JDK raster processing and native photo ingest; requires `java.desktop` |
 | `skald-optimize` | Recompress images already inside a received PDF using `skald-image` |
+| `skald-optimize-jpegli` | Plug Glimt's bundled JPEGli encoder into `skald-optimize` |
 
-Layout and human-readable barcodes depend on `skald-fonts`; low-level core,
+The JPEGli adapter is the only engine artifact with a non-Skald runtime module:
+it deliberately uses Glimt's FFM API and bundled native resources. Consumers
+that prefer JDK ImageIO stop at `skald-optimize`. Layout and human-readable barcodes depend on `skald-fonts`; low-level core,
 signing, and composition do not include the bundled TTF resources.
 
 `skald-barcode` draws **symbols**. It does not know SKU, composition, or

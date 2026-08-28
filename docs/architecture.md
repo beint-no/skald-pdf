@@ -69,20 +69,29 @@ qualified certificates. See [signing.md](signing.md).
 
 ## Optimize
 
-`skald-optimize` rewrites imported image XObjects. Core lists and replaces
-them; the optional image module supplies its downsample / JPEG policy. JPEG XL
-is never written into the file.
+`skald-optimize` traverses nested image and Form XObjects, then asks an
+`ImageRecompressor` for approved replacements. The canonical core writer copies
+the complete reachable COS graph, preserves unknown dictionaries and streams,
+packs small objects, reparses its output, and compares an object-number-
+independent SHA-256 semantic digest before returning it. JPEG XL is never
+written into the file.
+
+The default recompressor uses JDK ImageIO. `skald-optimize-jpegli` is a separate
+adapter around Glimt so PDFBox and native codec concerns never enter core.
+Signed, encrypted, linearized, incrementally revised, and declared conformance
+profiles are returned untouched.
 
 Workflow-to-module mapping against iText's suite is in [workflows.md](workflows.md).
 
 ## Dependency policy
 
-Every published artifact has a build-time check that fails if a third-party
+Every ordinary published artifact has a build-time check that fails if a third-party
 module enters its production runtime classpath. Test dependencies are kept out of
 published POMs and are intentionally independent implementations: PDFBox renders
 and extracts, ZXing decodes barcodes, and external validators check serialized
 PDF structure.
 
-New modules are justified only when they make a substantial capability optional,
+The explicit exception is `skald-optimize-jpegli`, which permits only
+`no.beint.glimt` runtime modules. New modules are justified only when they make a substantial capability optional,
 such as accessibility, archival profiles, cryptography, or a complex shaping
 engine. Internal packages remain unexported by JPMS.

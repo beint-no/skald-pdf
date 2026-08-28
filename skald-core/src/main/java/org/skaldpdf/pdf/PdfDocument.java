@@ -7,6 +7,7 @@ import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.image.ImageData;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,9 +26,11 @@ public final class PdfDocument implements AutoCloseable {
     private final List<PdfPage> pages = new ArrayList<>();
     private final List<OutlineItem> outlines = new ArrayList<>();
     private final Map<String, NamedDestination> namedDestinations = new LinkedHashMap<>();
+    private final IdentityHashMap<CosValue.CosStream, ImageData> importedImageReplacements = new IdentityHashMap<>();
+    private final Map<ImportedImageKey, ImageData> importedPageImageReplacements = new LinkedHashMap<>();
     private String language = "";
     private @Nullable SignatureField signatureField;
-    private final Map<ImportedImageKey, ImageData> importedImageReplacements = new LinkedHashMap<>();
+    private @Nullable NativePdfParser sourceParser;
     private boolean closed;
     private boolean closing;
 
@@ -49,8 +52,8 @@ public final class PdfDocument implements AutoCloseable {
                 throw new IllegalStateException(
                     "Rewriting a sealed PDF would invalidate its signatures; use PdfSigner.sign to add another seal");
             }
-            var parser = new NativePdfParser(bytes);
-            parser.pages().forEach(page -> pages.add(new PdfPage(this, page)));
+            sourceParser = new NativePdfParser(bytes);
+            sourceParser.pages().forEach(page -> pages.add(new PdfPage(this, page)));
         } catch (RuntimeException exception) {
             reader.close();
             throw exception;
@@ -136,19 +139,35 @@ public final class PdfDocument implements AutoCloseable {
     }
 
     /**
-     * Image XObjects on imported pages, in page order. Generated pages that
-     * were never parsed contribute nothing; reopen the file first.
+     * Distinct image XObjects reachable from imported pages and Forms, in
+     * first-use order. A stream shared by several resources is returned once.
+     * Generated pages that were never parsed contribute nothing; reopen the file first.
      */
     public List<EmbeddedImage> importedImages() {
         ensureOpen();
         var result = new ArrayList<EmbeddedImage>();
+        var streams = java.util.Collections.newSetFromMap(
+            new IdentityHashMap<CosValue.CosStream, Boolean>());
         for (int index = 0; index < pages.size(); index++) {
             var imported = pages.get(index).importedPage();
             if (imported != null) {
-                result.addAll(imported.source().imageXObjects(imported, index + 1));
+                for (var image : imported.source().imageXObjects(imported, index + 1)) {
+                    if (streams.add(image.stream())) {
+                        result.add(image);
+                    }
+                }
             }
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * Whether an untouched imported document may be normalized without removing
+     * linearization, incremental history, signatures, or declared conformance.
+     */
+    public boolean isSafeForCanonicalOptimization() {
+        ensureOpen();
+        return sourceParser != null && sourceParser.isSafeForCanonicalOptimization();
     }
 
     /**
@@ -164,18 +183,35 @@ public final class PdfDocument implements AutoCloseable {
         if (page.importedPage() == null) {
             throw new IllegalArgumentException("Only imported pages can replace image XObjects");
         }
-        var present = importedImages().stream()
-            .anyMatch(candidate -> candidate.pageNumber() == pageNumber
-                && candidate.resourceName().equals(resourceName));
-        if (!present) {
+        var embedded = page.importedPage().source().imageXObjects(page.importedPage(), pageNumber).stream()
+            .filter(candidate -> candidate.resourceName().equals(resourceName))
+            .findFirst().orElse(null);
+        if (embedded == null) {
             throw new IllegalArgumentException("No imported image named " + resourceName + " on page " + pageNumber);
         }
-        importedImageReplacements.put(new ImportedImageKey(pageNumber, resourceName), image);
+        replaceImportedImage(embedded, image);
+        importedPageImageReplacements.put(new ImportedImageKey(pageNumber, resourceName), image);
         return this;
     }
 
-    Map<ImportedImageKey, ImageData> importedImageReplacements() {
-        return Map.copyOf(importedImageReplacements);
+    /** Replaces the exact imported image object, including images reached through Form XObjects. */
+    public PdfDocument replaceImportedImage(EmbeddedImage embedded, ImageData image) {
+        ensureOpen();
+        Objects.requireNonNull(embedded, "embedded");
+        Objects.requireNonNull(image, "image");
+        if (sourceParser == null || embedded.parser() != sourceParser) {
+            throw new IllegalArgumentException("The image does not belong to this PDF document");
+        }
+        importedImageReplacements.put(embedded.stream(), image);
+        return this;
+    }
+
+    IdentityHashMap<CosValue.CosStream, ImageData> importedImageReplacements() {
+        return new IdentityHashMap<>(importedImageReplacements);
+    }
+
+    Map<ImportedImageKey, ImageData> importedPageImageReplacements() {
+        return Map.copyOf(importedPageImageReplacements);
     }
 
     public void copyPagesFrom(PdfDocument source, int fromPage, int toPage) {
@@ -226,6 +262,21 @@ public final class PdfDocument implements AutoCloseable {
 
     List<PdfPage> pages() {
         return List.copyOf(pages);
+    }
+
+    @Nullable NativePdfParser canonicalRewriteSource() {
+        if (sourceParser == null || !documentInfo.isEmpty() || !language.isEmpty()
+            || !outlines.isEmpty() || !namedDestinations.isEmpty() || signatureField != null
+            || pages.size() != sourceParser.pages().size()) {
+            return null;
+        }
+        for (int index = 0; index < pages.size(); index++) {
+            var page = pages.get(index);
+            if (!page.isUnmodifiedImportedPage() || page.importedPage() != sourceParser.pages().get(index)) {
+                return null;
+            }
+        }
+        return sourceParser;
     }
 
     public void ensureOpen() {

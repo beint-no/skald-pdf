@@ -9,9 +9,9 @@
 | Layout | Paragraphs, lists with custom start index, runs, margins, padding, backgrounds, gradients, rounded borders, dashed rules, divs, nested cell content, fixed position, `keepTogether`, widow/orphan control, fitted-image measure, `AreaBreak` page size, named destinations |
 | Tables | weighted or mixed point/percent columns, min-content honoured before leftover is distributed, column and row spans, repeating headers and footers, inset hairline rules (`addRule`), line-boundary row splits, complete-row checks, nested blocks in cells |
 | Images | Core: JPEG pass-through, lossless raster embedding, alpha masks, adaptive prediction, `fromRgb` / `fromGray`; optional `skald-image`: JPEG/PNG/GIF/BMP allowlist, size gates, `scaleToFit` / `asJpeg` |
-| Imported images | list `/XObject /Image` on parsed pages; replace with new DCT/Flate while keeping the `Do` name |
+| Imported images | recursively list `/XObject /Image` on pages and Form XObjects; replace the exact shared stream |
 | Text extract | `PdfText` / `Pdf.extractText` via ToUnicode CMaps (WinAnsi fallback) |
-| Optimize | optional `skald-optimize`: downsample and JPEG-recompress images already inside a received PDF |
+| Optimize | canonical full-graph rewrite, safe image gates, semantic digest, size threshold, idempotence; optional JDK or JPEGli encoder |
 | Drawing | fills, rounded paths, axial shadings, dashed lines, opacity, canvas overlays, end-page events, watermarks, URI and GoTo links |
 | Barcodes | validated EAN-13, UPC-A, Code 128, GS1-128, and QR (versions 1–16) with independent decode tests |
 | Labels | `skald-label-sticker` (93×35 mm clothing EAN); `skald-label-shipping` (100×150 mm) |
@@ -21,7 +21,7 @@
 | Signatures | reserved signature field in core; optional `skald-sign` CMS / PAdES-B-B; incremental second seal; rewrite of sealed files fails closed |
 | Encryption | PDF 2.0 revision 6 AES-256 (`PdfEncryption`) on write; encrypted input is not parsed |
 | Image ingest | optional `skald-image`: JDK codecs plus TurboJPEG, libheif (HEIC/AVIF), libjxl (JPEG XL ingest only) via FFM; absent native libraries are skipped |
-| Runtime | published engine + component artifacts, JDK 26+, JSpecify `@NullMarked` APIs, zero third-party *Java* runtime dependencies; native codecs optional |
+| Runtime | JDK 26+, JSpecify `@NullMarked`; ordinary modules have zero third-party Java runtime dependencies; optional JPEGli uses Glimt FFM + bundled natives |
 
 ## Deliberately deferred
 

@@ -42,10 +42,59 @@ final class NativePdfWriter {
         Objects.requireNonNull(document, "document");
         Objects.requireNonNull(target, "target");
         try {
-            writeObjects(buildObjects(document), target);
+            var source = encryption == null ? document.canonicalRewriteSource() : null;
+            if (source == null) {
+                writeObjects(buildObjects(document), target, HEADER);
+            } else {
+                writeCanonical(source, document.importedImageReplacements(), target);
+            }
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to write PDF", exception);
         }
+    }
+
+    private void writeCanonical(NativePdfParser source,
+                                IdentityHashMap<CosValue.CosStream, org.skaldpdf.image.ImageData> images,
+                                OutputStream target) throws IOException {
+        var replacements = new IdentityHashMap<CosValue.CosStream, CosValue.CosStream>();
+        images.forEach((stream, image) -> replacements.put(stream, replacementImage(stream, image)));
+        var objects = new ObjectStore();
+        var importer = new CanonicalImportContext(source, objects, replacements);
+        objects.rootObject = importer.importReference(source.catalogReference());
+        var trailer = new StringBuilder();
+        source.trailer().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            if (!STRUCTURAL_TRAILER_KEYS.contains(entry.getKey())) {
+                trailer.append(" /").append(name(entry.getKey())).append(' ')
+                    .append(importer.direct(entry.getValue()));
+            }
+        });
+        objects.trailerEntries = trailer.toString();
+        var candidate = new ByteArrayOutputStream();
+        writeObjects(objects, candidate, source.canonicalHeader());
+        var bytes = candidate.toByteArray();
+        var expected = source.semanticDigest(replacements);
+        var actual = new NativePdfParser(bytes).semanticDigest(new IdentityHashMap<>());
+        if (!MessageDigest.isEqual(expected, actual)) {
+            throw new IllegalStateException("Canonical PDF rewrite changed document semantics");
+        }
+        target.write(bytes);
+    }
+
+    private static CosValue.CosStream replacementImage(CosValue.CosStream source,
+                                                        org.skaldpdf.image.ImageData image) {
+        if (!image.jpeg() || image.alpha() != null || image.components() != 1 && image.components() != 3) {
+            throw new IllegalArgumentException("Imported image replacements must be opaque DeviceGray or DeviceRGB JPEGs");
+        }
+        var values = new LinkedHashMap<String, CosValue>(source.dictionary().values());
+        values.keySet().removeAll(IMAGE_ENCODING_KEYS);
+        values.put("Type", new CosValue.CosName("XObject"));
+        values.put("Subtype", new CosValue.CosName("Image"));
+        values.put("Width", new CosValue.CosNumber(Integer.toString(image.width())));
+        values.put("Height", new CosValue.CosNumber(Integer.toString(image.height())));
+        values.put("ColorSpace", new CosValue.CosName(image.components() == 1 ? "DeviceGray" : "DeviceRGB"));
+        values.put("BitsPerComponent", new CosValue.CosNumber("8"));
+        values.put("Filter", new CosValue.CosName("DCTDecode"));
+        return new CosValue.CosStream(new CosValue.CosDictionary(values), image.samples());
     }
 
     private ObjectStore buildObjects(PdfDocument document) {
@@ -303,7 +352,7 @@ final class NativePdfWriter {
     private Map<String, Integer> replacementImages(PdfDocument document, int pageNumber, ObjectStore objects,
                                                    IdentityHashMap<org.skaldpdf.image.ImageData, Integer> shared) {
         var result = new LinkedHashMap<String, Integer>();
-        document.importedImageReplacements().forEach((key, image) -> {
+        document.importedPageImageReplacements().forEach((key, image) -> {
             if (key.pageNumber() == pageNumber) {
                 result.put(key.resourceName(), addImageObject(objects, image, shared));
             }
@@ -573,10 +622,10 @@ final class NativePdfWriter {
         target.append(" >>");
     }
 
-    private void writeObjects(ObjectStore objects, OutputStream output) throws IOException {
+    private void writeObjects(ObjectStore objects, OutputStream output, byte[] header) throws IOException {
         var packed = packSmallObjects(objects);
         var target = new CountingOutputStream(output);
-        target.write(HEADER);
+        target.write(header);
         var offsets = new long[objects.size() + 2];
         for (int number = 1; number <= objects.size(); number++) {
             if (packed.containsKey(number)) {
@@ -589,10 +638,15 @@ final class NativePdfWriter {
         var xrefOffset = target.count();
         offsets[xrefNumber] = xrefOffset;
         var compressedXref = deflate(xref(offsets, packed, xrefNumber));
-        var identifier = fileIdentifier(objects);
         var xrefDictionary = format(
-            "/Type /XRef /Size %d /Root %d 0 R /ID [<%s> <%s>] /W [1 8 4] /Index [0 %d] ",
-            xrefNumber + 1, objects.rootObject, identifier, identifier, xrefNumber + 1);
+            "/Type /XRef /Size %d /Root %d 0 R /W [1 8 4] /Index [0 %d] ",
+            xrefNumber + 1, objects.rootObject, xrefNumber + 1);
+        if (objects.trailerEntries == null) {
+            var identifier = fileIdentifier(objects);
+            xrefDictionary += "/ID [<" + identifier + "> <" + identifier + ">] ";
+        } else {
+            xrefDictionary += objects.trailerEntries;
+        }
         if (objects.encryptObject != 0) {
             xrefDictionary += "/Encrypt " + objects.encryptObject + " 0 R ";
         }
@@ -1117,6 +1171,7 @@ final class NativePdfWriter {
         private final Set<Integer> unpacked = new LinkedHashSet<>();
         private int rootObject;
         private int encryptObject;
+        private @Nullable String trailerEntries;
 
         int reserve() {
             objects.add(null);
@@ -1159,6 +1214,89 @@ final class NativePdfWriter {
             return objects.size();
         }
     }
+
+    private static final class CanonicalImportContext {
+        private final NativePdfParser source;
+        private final ObjectStore target;
+        private final IdentityHashMap<CosValue.CosStream, CosValue.CosStream> replacements;
+        private final Map<CosValue.CosReference, Integer> objects = new LinkedHashMap<>();
+
+        CanonicalImportContext(NativePdfParser source, ObjectStore target,
+                               IdentityHashMap<CosValue.CosStream, CosValue.CosStream> replacements) {
+            this.source = source;
+            this.target = target;
+            this.replacements = replacements;
+        }
+
+        int importReference(CosValue.CosReference reference) {
+            var existing = objects.get(reference);
+            if (existing != null) {
+                return existing;
+            }
+            var object = target.reserve();
+            objects.put(reference, object);
+            var value = source.resolve(reference);
+            target.set(object, value instanceof CosValue.CosStream stream
+                ? rawStream(replacements.getOrDefault(stream, stream))
+                : ascii(direct(value)));
+            return object;
+        }
+
+        String direct(CosValue value) {
+            return switch (value) {
+                case CosValue.CosNull ignored -> "null";
+                case CosValue.CosBoolean bool -> Boolean.toString(bool.value());
+                case CosValue.CosNumber number -> number.lexicalValue();
+                case CosValue.CosName pdfName -> "/" + name(pdfName.value());
+                case CosValue.CosString string -> "<" + hex(string.bytes()) + ">";
+                case CosValue.CosArray array -> {
+                    var result = new StringBuilder("[");
+                    array.values().forEach(item -> result.append(direct(item)).append(' '));
+                    yield result.append(']').toString();
+                }
+                case CosValue.CosDictionary dictionary -> directDictionary(dictionary);
+                case CosValue.CosStream ignored -> throw new IllegalArgumentException("A PDF stream cannot be direct");
+                case CosValue.CosReference reference -> importReference(reference) + " 0 R";
+            };
+        }
+
+        private String directDictionary(CosValue.CosDictionary dictionary) {
+            var result = new StringBuilder("<<");
+            dictionary.values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry ->
+                result.append(" /").append(name(entry.getKey())).append(' ')
+                    .append(direct(entry.getValue())));
+            return result.append(" >>").toString();
+        }
+
+        private byte[] rawStream(CosValue.CosStream stream) {
+            var payload = stream.encodedBytes();
+            var dictionary = new StringBuilder("<<");
+            stream.dictionary().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+                if (!entry.getKey().equals("Length")) {
+                    dictionary.append(" /").append(name(entry.getKey())).append(' ')
+                        .append(direct(entry.getValue()));
+                }
+            });
+            dictionary.append(" /Length ").append(payload.length).append(" >>\nstream\n");
+            var output = new ByteArrayOutputStream(dictionary.length() + payload.length + 16);
+            try {
+                output.write(ascii(dictionary.toString()));
+                output.write(payload);
+                output.write(ascii("\nendstream"));
+            } catch (IOException impossible) {
+                throw new AssertionError(impossible);
+            }
+            return output.toByteArray();
+        }
+    }
+
+    private static final Set<String> STRUCTURAL_TRAILER_KEYS = Set.of(
+        "Type", "Size", "Root", "Encrypt", "Prev", "XRefStm", "W", "Index", "Length", "Filter", "DecodeParms"
+    );
+    private static final Set<String> IMAGE_ENCODING_KEYS = Set.of(
+        "Length", "Type", "Subtype", "Width", "Height", "ColorSpace", "BitsPerComponent",
+        "Filter", "DecodeParms", "ImageMask", "Mask", "SMask", "Decode", "SMaskInData", "Matte"
+    );
 
     private static final class CountingOutputStream extends OutputStream {
         private final OutputStream target;

@@ -169,6 +169,11 @@ public final class PdfPage {
         return importedPage;
     }
 
+    boolean isUnmodifiedImportedPage() {
+        return importedPage != null && content.isEmpty() && fonts.isEmpty() && images.isEmpty()
+            && opacities.isEmpty() && links.isEmpty() && shadings.isEmpty();
+    }
+
     private String uniqueResourceName(String prefix, int initial) {
         var candidate = initial;
         while (importedPage != null && importedPage.resourceNames().contains(prefix + candidate)) {

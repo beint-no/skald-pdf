@@ -70,4 +70,9 @@ public final class PdfDocumentInfo {
     public @Nullable Instant getModificationDate() {
         return modificationDate;
     }
+
+    boolean isEmpty() {
+        return title.isEmpty() && author.isEmpty() && subject.isEmpty() && keywords.isEmpty()
+            && creationDate == null && modificationDate == null;
+    }
 }

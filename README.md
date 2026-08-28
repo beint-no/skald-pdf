@@ -27,6 +27,7 @@ and other generated documents that do not need historical PDF output modes.
 - Object streams, compact CID widths, xref streams, XMP metadata, and configurable Deflate compression
 - Optional `skald-sign` module: PAdES-B-B CMS integrity seals, JDK-only, no BouncyCastle
 - Optional `skald-optimize` module: recompress image XObjects inside received PDFs
+- Optional `skald-optimize-jpegli`: bundled JPEGli quality with no PDFBox or server executable
 - Optional `skald-image` module: JDK JPEG/PNG/GIF/BMP processing plus TurboJPEG, libheif, and JPEG XL ingest
 - Independent rendering, extraction, barcode, syntax, signature, and PDF 2.0 validation tests
 
@@ -49,13 +50,16 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
 | `skald-image` | `org.skaldpdf.codec` | Optional JDK raster processing and FFM TurboJPEG / libheif / libjxl ingest |
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
+| `skald-optimize-jpegli` | `org.skaldpdf.optimize.jpegli` | Optional Glimt/JPEGli encoder for received-PDF optimization |
 
 Engine modules depend on core. Layout and human-readable barcodes also use the
 standard font module; optimization also uses the optional image-processing module.
 Low-level core users pay for neither bundled faces nor `java.desktop`. Finished pages live under
 [`skald-components/`](skald-components/README.md) as **separate** artifacts
 — one module per invoice, slip, or label. See [docs/modules.md](docs/modules.md).
-The complete runtime still depends solely on the JDK.
+The normal Skald runtime still depends solely on the JDK. The optional JPEGli
+adapter uses Glimt's FFM modules and bundled native resources; it does not add
+PDFBox, JNI, a subprocess, an installed executable, or a runtime download.
 
 Signing is an integrity seal, not a qualified eIDAS signature. ReAI and Skald
 are not QTSPs. See [docs/signing.md](docs/signing.md).
@@ -70,18 +74,19 @@ out of production modules. Published APIs are JSpecify `@NullMarked`: Kotlin
 and other consumers see non-null types by default, and `@Nullable` only where
 absence is a real value (logo, bank, due date, encryption). Optional text is
 empty, never null. Older Skald revisions remain the tail for older JDKs.
-Release `1.11.0` is the current line:
+Release `1.12.0` is the current line:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.11.0")
-    implementation("no.beint.skaldpdf:skald-fonts:1.11.0")         // direct SkaldSans API access
-    implementation("no.beint.skaldpdf:skald-barcode:1.11.0")        // optional symbols
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.11.0")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.11.0") // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.11.0")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.11.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.11.0")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-layout:1.12.0")
+    implementation("no.beint.skaldpdf:skald-fonts:1.12.0")         // direct SkaldSans API access
+    implementation("no.beint.skaldpdf:skald-barcode:1.12.0")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.12.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.12.0") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.12.0")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.12.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.12.0")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.12.0") // optional bundled JPEGli encoder
 }
 ```
 
@@ -101,6 +106,7 @@ requires org.skaldpdf.invoice.no;  // optional Norwegian invoice
 requires org.skaldpdf.labels;      // optional clothing stickers
 requires org.skaldpdf.sign;        // optional
 requires org.skaldpdf.optimize;    // optional
+requires org.skaldpdf.optimize.jpegli; // optional JPEGli adapter
 ```
 
 ## Create a document
@@ -205,6 +211,29 @@ import org.skaldpdf.optimize.PdfOptimizer;
 byte[] smaller = PdfOptimizer.recompress(attachment, OptimizeOptions.attachments());
 ```
 
+For higher JPEG quality per byte, keep the PDF engine independent and plug in
+the optional JPEGli module:
+
+```java
+import org.skaldpdf.optimize.jpegli.JpegliImageRecompressor;
+
+var jpegli = new JpegliImageRecompressor(); // reusable and thread-safe
+byte[] smaller = PdfOptimizer.recompress(
+    attachment, OptimizeOptions.attachments(), jpegli);
+```
+
+Like other Glimt uses, classpath applications enable native access with
+`--enable-native-access=ALL-UNNAMED`; named applications use
+`--enable-native-access=no.beint.glimt`.
+
+The attachment preset uses a 2400-pixel longest edge, quality 80 for existing
+JPEGs, quality 90 for lossless rasters, a 20-megapixel decode ceiling, and
+2% / 4 KiB savings gates. Skald returns the original byte array for malformed,
+encrypted, signed, linearized, incrementally revised, or declared PDF/A/PDF/X/
+PDF/UA inputs. Successful rewrites reparse themselves and compare the complete
+reachable object graph before returning. A private JPEG marker makes the same
+policy byte-for-byte idempotent.
+
 Seal an issued invoice (integrity, not a qualified eIDAS signature):
 
 ```java
@@ -221,11 +250,12 @@ low-level drawing.
 
 ## PDF policy
 
-Every new file is PDF 2.0. There is no PDF 1.x output switch. Composition accepts
+Every newly generated file is PDF 2.0. There is no PDF 1.x generation switch. Composition accepts
 unencrypted PDF 1.x and 2.0 input because received files are not under the
 application's control; newly saved output is normalized to PDF 2.0.
 
-Mutable documents are thread-confined. Immutable inputs can be shared, and
+Canonical optimization retains an imported file's 1.5–2.0 header (or raises an
+older ordinary PDF to the 1.5 minimum needed by object streams). Mutable documents are thread-confined. Immutable inputs can be shared, and
 separate documents work naturally on virtual threads. Encrypted input and
 unsupported structural features fail closed instead of being partially read.
 

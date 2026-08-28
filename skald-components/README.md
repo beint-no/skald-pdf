@@ -1,7 +1,7 @@
 # Components
 
 Building blocks live in `skald-core`, `skald-layout`, `skald-barcode`,
-`skald-sign`, `skald-image`, and `skald-optimize`.
+`skald-sign`, `skald-image`, `skald-optimize`, and `skald-optimize-jpegli`.
 
 This directory is a **component library** on top of those blocks: finished
 pages other people can depend on, and living examples of how to use Skald.

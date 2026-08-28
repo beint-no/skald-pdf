@@ -13,7 +13,7 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.11.0").get()
+val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.12.0").get()
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-fonts" to "Skald Fonts",
@@ -22,6 +22,7 @@ val moduleTitles = mapOf(
     "skald-sign" to "Skald Sign",
     "skald-image" to "Skald Image",
     "skald-optimize" to "Skald Optimize",
+    "skald-optimize-jpegli" to "Skald Optimize JPEGli",
     "skald-label-sticker" to "Skald Clothing Sticker",
     "skald-label-shipping" to "Skald Shipping Label",
     "skald-invoice-no" to "Skald Norwegian Invoice",
@@ -39,6 +40,7 @@ val moduleDescriptions = mapOf(
     "skald-sign" to "Optional PKCS#7/CMS PAdES-B-B sealing for Skald PDF documents",
     "skald-image" to "Optional JDK and native decoding, scaling, and photo ingest for Skald PDF",
     "skald-optimize" to "Optional recompression of image XObjects already stored in a received PDF",
+    "skald-optimize-jpegli" to "Optional JPEGli image encoder for Skald PDF optimization",
     "skald-label-sticker" to "93×35 mm clothing EAN-13 sticker print stock",
     "skald-label-shipping" to "100×150 mm shipping label with address and tracking",
     "skald-invoice-no" to "Opinionated Norwegian invoice theme (faktura, kreditnota, tilbud, ordrebekreftelse)",
@@ -69,7 +71,10 @@ subprojects {
     }
 
     dependencies {
-        add("compileOnly", "org.jspecify:jspecify:1.0.0")
+        // Named-module consumers must see the annotation module while javac
+        // resolves our `requires static transitive` descriptors. It remains
+        // absent from every runtime classpath.
+        add("compileOnlyApi", "org.jspecify:jspecify:1.0.0")
         add("testImplementation", "org.jspecify:jspecify:1.0.0")
         add("testImplementation", platform("org.junit:junit-bom:6.0.3"))
         add("testImplementation", "org.junit.jupiter:junit-jupiter")
@@ -99,8 +104,11 @@ subprojects {
                 .incoming.resolutionResult.allComponents
                 .map { it.id }
                 .filterIsInstance<ModuleComponentIdentifier>()
-            check(externalModules.isEmpty()) {
-                "$name must have zero third-party runtime dependencies: ${externalModules.joinToString()}"
+            val unexpected = externalModules.filterNot {
+                project.name == "skald-optimize-jpegli" && it.group == "no.beint.glimt"
+            }
+            check(unexpected.isEmpty()) {
+                "$name has unexpected third-party runtime dependencies: ${unexpected.joinToString()}"
             }
         }
     }

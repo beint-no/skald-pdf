@@ -9,6 +9,7 @@ import org.skaldpdf.pdf.PdfWriter;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Recompresses image XObjects inside a received PDF. Generation-time helpers
@@ -17,6 +18,10 @@ import java.util.Objects;
  *
  * <p>JPEG XL is not written into the file. ISO 32000-2 has no interoperable
  * JXL filter, so replacements are DCT or Flate only.
+ *
+ * <p>The safe entry points return the original array when parsing, image
+ * conversion, post-write verification, or configured savings gates reject a
+ * candidate. They also preserve protected document classes byte for byte.
  */
 public final class PdfOptimizer {
     private PdfOptimizer() {
@@ -26,40 +31,80 @@ public final class PdfOptimizer {
         return recompress(pdf, OptimizeOptions.attachments());
     }
 
+    /**
+     * Recompresses with the JDK encoder and returns the original array unless a
+     * verified candidate satisfies every configured size gate.
+     */
     public static byte[] recompress(byte[] pdf, OptimizeOptions options) {
-        Objects.requireNonNull(pdf, "pdf");
-        Objects.requireNonNull(options, "options");
-        var output = new ByteArrayOutputStream(pdf.length);
-        try (var document = new PdfDocument(new PdfReader(pdf), new PdfWriter(output))) {
-            for (var image : document.importedImages()) {
-                var replacement = recompress(image, options);
-                if (replacement != null) {
-                    document.replaceImportedImage(image.pageNumber(), image.resourceName(), replacement);
-                }
-            }
-        }
-        return output.toByteArray();
+        return recompress(pdf, options, PdfOptimizer::recompressWithJdk);
     }
 
-    private static @org.jspecify.annotations.Nullable ImageData recompress(EmbeddedImage image, OptimizeOptions options) {
-        var decoded = image.decode();
-        if (decoded.isEmpty()) {
+    /**
+     * Rewrites with an application-supplied image encoder. The PDF parser,
+     * graph preservation, size gates, and post-write equivalence proof remain
+     * owned by Skald. Exceptions from an individual codec call keep that image
+     * unchanged; a document-level failure returns the original array.
+     */
+    public static byte[] recompress(byte[] pdf, OptimizeOptions options, ImageRecompressor recompressor) {
+        Objects.requireNonNull(pdf, "pdf");
+        Objects.requireNonNull(options, "options");
+        Objects.requireNonNull(recompressor, "recompressor");
+        var output = new ByteArrayOutputStream(pdf.length);
+        try {
+            try (var document = new PdfDocument(new PdfReader(pdf), new PdfWriter(output))) {
+                if (!document.isSafeForCanonicalOptimization()) {
+                    return pdf;
+                }
+                for (var image : document.importedImages()) {
+                    var replacement = recompress(image, options, recompressor);
+                    if (replacement != null) {
+                        document.replaceImportedImage(image, replacement);
+                    }
+                }
+            }
+        } catch (RuntimeException unsupported) {
+            return pdf;
+        }
+        var candidate = output.toByteArray();
+        return options.worthReplacing(pdf.length, candidate.length) ? candidate : pdf;
+    }
+
+    private static @org.jspecify.annotations.Nullable ImageData recompress(
+        EmbeddedImage image, OptimizeOptions options, ImageRecompressor recompressor
+    ) {
+        var pixels = (long) image.width() * image.height();
+        if (!image.safeToRecompress() || pixels <= 0 || pixels > options.maximumImagePixels()
+            || image.jpeg() && !options.recompressJpeg()
+            || !image.jpeg() && (!options.convertLosslessRaster()
+                || image.encodedLength() < options.minimumLosslessBytes())) {
             return null;
         }
-        var data = decoded.get();
-        var longest = Math.max(data.width(), data.height());
-        var scaled = longest > options.maxEdge();
-        if (scaled) {
-            data = RasterImages.scaleToFit(data, options.maxEdge(), options.maxEdge());
-        }
-        if (!data.jpeg() || options.recompressJpeg() || scaled) {
-            data = RasterImages.asJpeg(data, options.jpegQuality());
-        } else {
+        if (image.jpeg() && OptimizedJpeg.alreadySatisfies(
+            image.encodedBytes(), options, image.width(), image.height())) {
             return null;
         }
-        if (!scaled && data.samples().length >= image.encodedLength()) {
+        ImageData data;
+        try {
+            data = recompressor.recompress(image, options).orElse(null);
+        } catch (RuntimeException unsupported) {
+            return null;
+        }
+        if (data == null || !data.jpeg() || data.alpha() != null
+            || data.components() != 1 && data.components() != 3
+        ) {
+            return null;
+        }
+        data = OptimizedJpeg.mark(data, options,
+            image.jpeg() ? options.jpegQuality() : options.losslessQuality());
+        if (!options.worthReplacing(image.encodedLength(), data.samples().length)) {
             return null;
         }
         return data;
+    }
+
+    private static Optional<ImageData> recompressWithJdk(EmbeddedImage image, OptimizeOptions options) {
+        return image.decode().map(data -> RasterImages.asJpeg(
+            data, options.maxEdge(), options.maxEdge(),
+            image.jpeg() ? options.jpegQuality() : options.losslessQuality()));
     }
 }
