@@ -1,7 +1,7 @@
 # Publishing
 
 Skald publishes `skald-core`, `skald-fonts`, `skald-layout`, `skald-barcode`,
-`skald-sign`, `skald-image`, `skald-optimize`, and each
+`skald-sign`, `skald-image`, `skald-optimize`, `skald-optimize-jpegli`, and each
 `skald-components/` artifact (`skald-invoice-no`, `skald-label-sticker`,
 …) to Maven Central under `no.beint.skaldpdf`. Java packages remain
 `org.skaldpdf`.
@@ -29,8 +29,8 @@ Set the version in `build.gradle.kts`, merge the change to `main`, and push a
 matching tag:
 
 ```shell
-git tag v1.11.0
-git push origin v1.11.0
+git tag v1.12.0
+git push origin v1.12.0
 ```
 
 GitHub Actions verifies that the tag matches the Gradle version, then builds

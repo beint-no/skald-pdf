@@ -4,6 +4,24 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.12.0
+
+- Canonical received-PDF optimizer copies the complete reachable COS graph
+  instead of rebuilding only pages and known catalog fields.
+- Post-write semantic digest proves that only approved image streams changed;
+  unknown dictionaries, metadata, outlines, forms, name trees, structure,
+  optional content, annotations, and extension objects remain reachable.
+- Recursive Form XObject image discovery, shared-stream replacement, strict
+  mask/filter/colour gates, document and image savings thresholds, and a
+  20-megapixel attachment preset.
+- Signed, encrypted, linearized, incrementally revised, and declared PDF/A,
+  PDF/X, PDF/UA, PDF/E, and PDF/VT files remain byte-for-byte untouched.
+- Private JPEG policy marker prevents repeated lossy transcoding.
+- `skald-optimize-jpegli` supplies a reusable Glimt JPEGli encoder with direct
+  native resize for lossless PDF rasters. PDFBox remains test-only.
+- Private-corpus benchmark gate reparses results with PDFBox and proves
+  idempotence; qpdf remains an independent syntax check.
+
 ## Shipped in 1.11.0
 
 - Tip-and-tail policy: latest `main` always targets the current JDK feature
@@ -52,8 +70,8 @@ practical document coverage it adds.
 - Incremental second signature; rewrite of a sealed file throws.
 - `skald-label-sticker` is the clothing-sticker artifact.
   `skald-labels` is now the umbrella. No empty GS1/shelf modules.
-- Jpegli evaluated and deferred: no shared library to bind; TurboJPEG
-  remains the optional JPEG encoder.
+- JPEGli was evaluated and deferred in this release; 1.12.0 later added it
+  through Glimt's bundled FFM module.
 
 ## Shipped in 1.7.0
 

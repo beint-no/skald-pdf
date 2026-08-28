@@ -33,6 +33,29 @@ class RasterImagesBenchmarkTest {
             "Direct DataBufferInt unpack should beat per-pixel getRGB. " + report);
     }
 
+    @Test
+    void combinedResizeAndJpegEncodeBeatsTheFormerTwoPassComposition() throws Exception {
+        var source = RasterImages.asJpeg(RasterImages.fromBufferedImage(noisy(1800, 1200)), 0.94f);
+        Runnable former = () -> RasterImages.asJpeg(
+            RasterImages.scaleToFit(source, 900, 900), 0.80f);
+        Runnable combined = () -> RasterImages.asJpeg(source, 900, 900, 0.80f);
+        for (int warmup = 0; warmup < 4; warmup++) {
+            former.run();
+            combined.run();
+        }
+        var formerNanos = medianNanos(9, former);
+        var combinedNanos = medianNanos(9, combined);
+        var result = RasterImages.asJpeg(source, 900, 900, 0.80f);
+        assertTrue(result.width() <= 900 && result.height() <= 900);
+        var report = "RasterImages resize+JPEG 1800×1200 → 900: former two-pass "
+            + formerNanos / 1_000 + " µs, combined " + combinedNanos / 1_000 + " µs, speedup "
+            + String.format(java.util.Locale.ROOT, "%.2f", formerNanos / (double) combinedNanos) + "×\n";
+        Files.createDirectories(Path.of("build", "benchmarks"));
+        Files.writeString(Path.of("build", "benchmarks", "jdk26-jpeg-resize.md"), report);
+        assertTrue(combinedNanos < formerNanos,
+            "Combined resize and encode should avoid the intermediate JPEG decode. " + report);
+    }
+
     private static long medianNanos(int runs, Runnable action) {
         var samples = new long[runs];
         for (int index = 0; index < runs; index++) {

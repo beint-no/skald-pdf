@@ -22,9 +22,19 @@ malformed page trees, invalid font tables, non-finite PDF numbers, and encrypted
 documents fail closed with an exception. Characters the embedded face does not
 contain use glyph 0 (`.notdef`) instead of aborting a business document.
 
-Imported pages are treated as inert data. Page `/AA`, `/JS`, and `/PresSteps`
-are dropped. Annotation `/A` entries are kept only when they are `/URI` or
-`/GoTo`; Launch, JavaScript, SubmitForm, and remote-goto actions are removed.
+Imported pages are treated as inert data. Composition and stamping drop page
+`/AA`, `/JS`, and `/PresSteps`; annotation `/A` entries are kept only for `/URI`
+and `/GoTo`. Canonical optimization instead preserves the complete inert graph,
+including unknown extensions, because silently changing a received attachment
+is not an optimizer's job.
+
+Optimization is transactional in memory. It rewrites into a separate buffer,
+reparses the candidate, and returns it only when a reference-independent digest
+of the complete reachable graph matches the source after applying the exact
+declared image substitutions. It returns the original array for parser errors,
+protected document classes, unsafe image masks/colour spaces/filters, or an
+insufficient size reduction. Lossy replacements carry a private JPEG APP15
+policy marker so retries cannot compound quality loss.
 
 `skald-sign` uses the JCA (`SHA256withRSA` / `SHA256withECDSA`) and a small
 DER writer. Private keys stay in the caller’s `SigningKey`. The library does

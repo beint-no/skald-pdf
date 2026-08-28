@@ -21,6 +21,7 @@ public final class EmbeddedImage {
     private final String colorSpace;
     private final int bitsPerComponent;
     private final boolean jpeg;
+    private final boolean safeToRecompress;
     private final byte[] encodedBytes;
     private final NativePdfParser parser;
     private final CosValue.CosStream stream;
@@ -28,7 +29,7 @@ public final class EmbeddedImage {
     private boolean decodeAttempted;
 
     EmbeddedImage(int pageNumber, String resourceName, int width, int height, String filter,
-                  String colorSpace, int bitsPerComponent, boolean jpeg, byte[] encodedBytes,
+                  String colorSpace, int bitsPerComponent, boolean jpeg, boolean safeToRecompress, byte[] encodedBytes,
                   NativePdfParser parser, CosValue.CosStream stream) {
         this.pageNumber = pageNumber;
         this.resourceName = Objects.requireNonNull(resourceName, "resourceName");
@@ -38,6 +39,7 @@ public final class EmbeddedImage {
         this.colorSpace = Objects.requireNonNull(colorSpace, "colorSpace");
         this.bitsPerComponent = bitsPerComponent;
         this.jpeg = jpeg;
+        this.safeToRecompress = safeToRecompress;
         this.encodedBytes = Objects.requireNonNull(encodedBytes, "encodedBytes");
         this.parser = parser;
         this.stream = stream;
@@ -75,6 +77,11 @@ public final class EmbeddedImage {
         return jpeg;
     }
 
+    /** Whether replacing this stream can preserve its PDF image semantics. */
+    public boolean safeToRecompress() {
+        return safeToRecompress;
+    }
+
     public int encodedLength() {
         return encodedBytes.length;
     }
@@ -98,5 +105,13 @@ public final class EmbeddedImage {
             }
         }
         return Optional.ofNullable(decoded);
+    }
+
+    NativePdfParser parser() {
+        return parser;
+    }
+
+    CosValue.CosStream stream() {
+        return stream;
     }
 }

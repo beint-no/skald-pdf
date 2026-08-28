@@ -86,10 +86,22 @@ public final class RasterImages {
     /** Re-encodes an image as JPEG and composites alpha on white. */
     public static ImageData asJpeg(ImageData source, float quality) {
         Objects.requireNonNull(source, "source");
+        return asJpeg(source, source.width(), source.height(), quality);
+    }
+
+    /** Downscales and JPEG-encodes in one raster pass, compositing alpha on white. */
+    public static ImageData asJpeg(ImageData source, int maxWidth, int maxHeight, float quality) {
+        Objects.requireNonNull(source, "source");
+        if (maxWidth < 1 || maxHeight < 1) {
+            throw new IllegalArgumentException("Maximum image size must be at least 1×1");
+        }
         if (!(quality > 0) || quality > 1 || !Float.isFinite(quality)) {
             throw new IllegalArgumentException("JPEG quality must be in (0, 1]");
         }
-        return rasterize(source, source.width(), source.height(), true, quality);
+        var scale = Math.min(1, Math.min(maxWidth / (double) source.width(), maxHeight / (double) source.height()));
+        var width = Math.max(1, (int) Math.round(source.width() * scale));
+        var height = Math.max(1, (int) Math.round(source.height() * scale));
+        return rasterize(source, width, height, true, quality);
     }
 
     private static ImageData rasterize(ImageData source, int width, int height, boolean jpeg, float quality) {

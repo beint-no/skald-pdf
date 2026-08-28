@@ -9,13 +9,17 @@ import org.skaldpdf.image.ImageData;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,11 +41,14 @@ final class NativePdfParser {
     private static final int STARTXREF_SEARCH_BYTES = 1024 * 1024;
 
     private final byte[] source;
+    private final String headerVersion;
     private final Map<Integer, ObjectLocation> locations = new LinkedHashMap<>();
     private final Map<CosReference, CosValue> objects = new HashMap<>();
     private final Set<CosReference> resolving = new HashSet<>();
     private CosReference root;
+    private CosDictionary trailer;
     private boolean encrypted;
+    private boolean hasPreviousRevision;
     private final int startXref;
     private final List<ImportedPage> pages;
 
@@ -51,6 +58,8 @@ final class NativePdfParser {
         }
         this.source = source.clone();
         require(startsWith(this.source, 0, "%PDF-"), "Input does not have a PDF header");
+        headerVersion = new String(this.source, 5, 3, StandardCharsets.US_ASCII);
+        require(headerVersion.matches("(?:1\\.[0-7]|2\\.0)"), "Unsupported PDF header version");
         startXref = Math.toIntExact(findStartXref());
         readCrossReferences(startXref);
         require(!encrypted, "Encrypted PDFs are not supported");
@@ -76,6 +85,30 @@ final class NativePdfParser {
 
     CosReference catalogReference() {
         return root;
+    }
+
+    CosDictionary trailer() {
+        return trailer;
+    }
+
+    byte[] canonicalHeader() {
+        var version = headerVersion.equals("2.0") || headerVersion.compareTo("1.5") >= 0
+            ? headerVersion : "1.5";
+        return ("%PDF-" + version + "\n%\u00e2\u00e3\u00cf\u00d3\n").getBytes(StandardCharsets.ISO_8859_1);
+    }
+
+    /**
+     * Hashes the complete object graph reachable from the final trailer without
+     * depending on source object numbers or dictionary ordering. Stream bytes
+     * are hashed as encoded data; callers may provide the exact image streams
+     * that a canonical rewrite is expected to substitute.
+     */
+    byte[] semanticDigest(IdentityHashMap<CosStream, CosStream> replacements) {
+        return new SemanticDigest(replacements).digest();
+    }
+
+    boolean isSafeForCanonicalOptimization() {
+        return !isLinearized() && !hasPreviousRevision && !hasConformanceProfile() && !hasSignatureDictionary();
     }
 
     int maximumObjectNumber() {
@@ -110,25 +143,39 @@ final class NativePdfParser {
         if (resourcesValue == null) {
             return List.of();
         }
+        var result = new ArrayList<EmbeddedImage>();
+        imageXObjects(resourcesValue, pageNumber, "", result,
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
+        return List.copyOf(result);
+    }
+
+    private void imageXObjects(CosValue resourcesValue, int pageNumber, String path,
+                               List<EmbeddedImage> result, Set<CosStream> visitedForms) {
         var resources = dictionary(resolve(resourcesValue), "page Resources");
         var xobjects = resources.get("XObject");
         if (xobjects == null) {
-            return List.of();
+            return;
         }
         var dictionary = dictionary(resolve(xobjects), "XObject");
-        var result = new ArrayList<EmbeddedImage>();
         for (var entry : dictionary.values().entrySet()) {
             var resolved = resolve(entry.getValue());
             if (!(resolved instanceof CosStream stream)) {
                 continue;
             }
             var subtype = stream.dictionary().get("Subtype");
-            if (!(resolve(subtype) instanceof CosName name) || !name.value().equals("Image")) {
+            if (!(resolve(subtype) instanceof CosName name)) {
                 continue;
             }
-            result.add(embeddedImage(pageNumber, entry.getKey(), stream));
+            var resourceName = path.isEmpty() ? entry.getKey() : path + "/" + entry.getKey();
+            if (name.value().equals("Image")) {
+                result.add(embeddedImage(pageNumber, resourceName, stream));
+            } else if (name.value().equals("Form") && visitedForms.add(stream)) {
+                var nestedResources = stream.dictionary().get("Resources");
+                if (nestedResources != null) {
+                    imageXObjects(nestedResources, pageNumber, resourceName, result, visitedForms);
+                }
+            }
         }
-        return List.copyOf(result);
     }
 
     byte[] contentBytes(ImportedPage page) {
@@ -198,8 +245,27 @@ final class NativePdfParser {
         var filters = filterNames(dictionary.get("Filter"));
         var filter = filters.isEmpty() ? "None" : String.join("+", filters);
         var jpeg = filters.contains("DCTDecode") || filters.contains("DCT");
+        var colorSpace = colorSpaceName(dictionary.get("ColorSpace"));
+        var safe = filters.size() == 1
+            && Set.of("DCTDecode", "DCT", "FlateDecode", "Fl").contains(filters.getFirst())
+            && bits == 8 && Set.of("DeviceRGB", "DeviceGray").contains(colorSpace)
+            && !hasAny(dictionary, "Mask", "SMask", "Decode", "Metadata", "Alternates", "OPI", "Matte", "SMaskInData")
+            && !booleanValue(dictionary.get("ImageMask"));
         return new EmbeddedImage(pageNumber, resourceName, width, height, filter,
-            colorSpaceName(dictionary.get("ColorSpace")), bits, jpeg, stream.encodedBytes(), this, stream);
+            colorSpace, bits, jpeg, safe, stream.encodedBytes(), this, stream);
+    }
+
+    private static boolean hasAny(CosDictionary dictionary, String... names) {
+        for (var name : names) {
+            if (dictionary.get(name) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean booleanValue(CosValue value) {
+        return value != null && resolve(value) instanceof CosBoolean bool && bool.value();
     }
 
     private String colorSpaceName(CosValue value) {
@@ -367,6 +433,9 @@ final class NativePdfParser {
             } else {
                 trailer = parseXrefStream(offset);
             }
+            if (this.trailer == null) {
+                this.trailer = trailer;
+            }
             if (root == null && trailer.get("Root") != null) {
                 root = reference(trailer.get("Root"), "trailer Root");
             }
@@ -375,6 +444,7 @@ final class NativePdfParser {
                 pending.addFirst(numberLong(resolveForTrailer(trailer.get("XRefStm")), "hybrid xref stream"));
             }
             if (trailer.get("Prev") != null) {
+                hasPreviousRevision = true;
                 pending.addLast(numberLong(resolveForTrailer(trailer.get("Prev")), "xref Prev"));
             }
             require(locations.size() <= MAXIMUM_OBJECTS, "PDF has too many objects");
@@ -842,6 +912,169 @@ final class NativePdfParser {
     private static void require(boolean condition, String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
+        }
+    }
+
+    private boolean isLinearized() {
+        var length = Math.min(source.length, 4096);
+        return new String(source, 0, length, StandardCharsets.ISO_8859_1).contains("/Linearized");
+    }
+
+    private boolean hasConformanceProfile() {
+        var catalog = dictionary(resolve(root), "catalog");
+        var metadataValue = catalog.get("Metadata");
+        if (metadataValue != null) {
+            var resolved = resolve(metadataValue);
+            if (!(resolved instanceof CosStream metadata)) {
+                return true;
+            }
+            try {
+                var xmp = new String(decoded(metadata, "XMP metadata"), StandardCharsets.UTF_8)
+                    .toLowerCase(java.util.Locale.ROOT);
+                if (List.of("pdfaid:", "pdfxid:", "pdfuaid:", "pdfeid:", "pdfvtid:",
+                    "pdfa/ns/id", "pdfx/ns/id", "pdfua/ns/id", "pdfe/ns/id", "pdfvt/ns/id")
+                    .stream().anyMatch(xmp::contains)) {
+                    return true;
+                }
+            } catch (RuntimeException unreadableMetadata) {
+                return true;
+            }
+        }
+        var infoValue = trailer.get("Info");
+        if (infoValue != null && resolve(infoValue) instanceof CosDictionary info
+            && (info.get("GTS_PDFXVersion") != null || info.get("GTS_PDFXConformance") != null)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean hasSignatureDictionary() {
+        var references = new HashSet<CosReference>();
+        var direct = java.util.Collections.newSetFromMap(new IdentityHashMap<CosValue, Boolean>());
+        return containsSignature(trailer, references, direct, 0);
+    }
+
+    private boolean containsSignature(CosValue value, Set<CosReference> references,
+                                      Set<CosValue> direct, int depth) {
+        require(depth <= MAXIMUM_DEPTH, "PDF object graph is too deep");
+        if (value instanceof CosReference reference) {
+            return references.add(reference) && containsSignature(resolve(reference), references, direct, depth + 1);
+        }
+        if (!direct.add(value)) {
+            return false;
+        }
+        if (value instanceof CosArray array) {
+            return array.values().stream().anyMatch(item -> containsSignature(item, references, direct, depth + 1));
+        }
+        var dictionary = value instanceof CosStream stream ? stream.dictionary()
+            : value instanceof CosDictionary candidate ? candidate : null;
+        if (dictionary == null) {
+            return false;
+        }
+        if (isName(dictionary.get("Type"), "Sig") || isName(dictionary.get("FT"), "Sig")
+            || dictionary.get("ByteRange") != null) {
+            return true;
+        }
+        return dictionary.values().values().stream()
+            .anyMatch(item -> containsSignature(item, references, direct, depth + 1));
+    }
+
+    private boolean isName(CosValue value, String expected) {
+        return value != null && resolve(value) instanceof CosName name && name.value().equals(expected);
+    }
+
+    private final class SemanticDigest {
+        private static final Set<String> STRUCTURAL_TRAILER_KEYS = Set.of(
+            "Type", "Size", "Encrypt", "Prev", "XRefStm", "W", "Index", "Length", "Filter", "DecodeParms"
+        );
+
+        private final MessageDigest digest;
+        private final IdentityHashMap<CosStream, CosStream> replacements;
+        private final Map<CosReference, Integer> referenceNumbers = new LinkedHashMap<>();
+        private final List<CosReference> pendingReferences = new ArrayList<>();
+
+        SemanticDigest(IdentityHashMap<CosStream, CosStream> replacements) {
+            this.replacements = new IdentityHashMap<>(replacements);
+            try {
+                digest = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException impossible) {
+                throw new AssertionError(impossible);
+            }
+        }
+
+        byte[] digest() {
+            var semanticTrailer = new LinkedHashMap<String, CosValue>();
+            trailer.values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+                if (!STRUCTURAL_TRAILER_KEYS.contains(entry.getKey())) {
+                    semanticTrailer.put(entry.getKey(), entry.getValue());
+                }
+            });
+            value(new CosDictionary(semanticTrailer));
+            for (int index = 0; index < pendingReferences.size(); index++) {
+                token('O');
+                integer(index);
+                value(resolve(pendingReferences.get(index)));
+            }
+            return digest.digest();
+        }
+
+        private void value(CosValue value) {
+            switch (value) {
+                case CosNull ignored -> token('0');
+                case CosBoolean bool -> token(bool.value() ? 'T' : 'F');
+                case CosNumber number -> bytes('N', number.lexicalValue().getBytes(StandardCharsets.US_ASCII));
+                case CosName name -> bytes('K', name.value().getBytes(StandardCharsets.ISO_8859_1));
+                case CosString string -> bytes('S', string.bytes());
+                case CosArray array -> {
+                    token('A');
+                    integer(array.values().size());
+                    array.values().forEach(this::value);
+                }
+                case CosDictionary dictionary -> dictionary(dictionary, false);
+                case CosStream original -> {
+                    var stream = replacements.getOrDefault(original, original);
+                    token('M');
+                    dictionary(stream.dictionary(), true);
+                    bytes('B', stream.encodedBytes());
+                }
+                case CosReference reference -> {
+                    token('R');
+                    var number = referenceNumbers.get(reference);
+                    if (number == null) {
+                        number = pendingReferences.size();
+                        referenceNumbers.put(reference, number);
+                        pendingReferences.add(reference);
+                    }
+                    integer(number);
+                }
+            }
+        }
+
+        private void dictionary(CosDictionary dictionary, boolean stream) {
+            token('D');
+            var entries = dictionary.values().entrySet().stream()
+                .filter(entry -> !stream || !entry.getKey().equals("Length"))
+                .sorted(Map.Entry.comparingByKey())
+                .toList();
+            integer(entries.size());
+            for (var entry : entries) {
+                bytes('K', entry.getKey().getBytes(StandardCharsets.ISO_8859_1));
+                value(entry.getValue());
+            }
+        }
+
+        private void token(char value) {
+            digest.update((byte) value);
+        }
+
+        private void integer(int value) {
+            digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(value).array());
+        }
+
+        private void bytes(char type, byte[] bytes) {
+            token(type);
+            integer(bytes.length);
+            digest.update(bytes);
         }
     }
 

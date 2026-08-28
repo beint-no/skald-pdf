@@ -18,13 +18,14 @@ jobs:
           distribution: temurin
           java-version: 26
       - uses: gradle/actions/setup-gradle@v5
-      - name: Build, test, and verify Maven publications
-        run: ./gradlew clean build publishToMavenLocal
-      - name: Check PDF syntax
+      - name: Install independent PDF validator
         run: |
           sudo apt-get update
           sudo apt-get install --yes qpdf
-          find build/use-case-pdfs -maxdepth 1 -name '*.pdf' -print0 | xargs -0 -n1 qpdf --check
+      - name: Build, test, and verify Maven publications
+        run: ./gradlew clean build publishToMavenLocal
+      - name: Check PDF syntax
+        run: find build/use-case-pdfs -maxdepth 1 -name '*.pdf' -print0 | xargs -0 -n1 qpdf --check
       - name: Validate PDF 2.0 object model
         if: github.event_name == 'pull_request'
         run: scripts/validate-pdf2.sh build/use-case-pdfs

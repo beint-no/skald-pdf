@@ -8,6 +8,7 @@ include(
     "skald-sign",
     "skald-image",
     "skald-optimize",
+    "skald-optimize-jpegli",
     "skald-label-sticker",
     "skald-label-shipping",
     "skald-invoice-no",
