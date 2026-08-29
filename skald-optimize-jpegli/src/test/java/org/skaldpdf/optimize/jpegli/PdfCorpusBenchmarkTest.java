@@ -166,11 +166,14 @@ class PdfCorpusBenchmarkTest {
         var edge = System.getenv("SKALD_PDF_MAX_EDGE");
         var jpegQuality = System.getenv("SKALD_PDF_JPEG_QUALITY");
         var losslessQuality = System.getenv("SKALD_PDF_LOSSLESS_QUALITY");
+        var minimumLosslessBytes = System.getenv("SKALD_PDF_MINIMUM_LOSSLESS_BYTES");
         builder.maxEdge(edge == null || edge.isBlank() ? defaults.maxEdge() : Integer.parseInt(edge));
         builder.jpegQuality(jpegQuality == null || jpegQuality.isBlank()
             ? defaults.jpegQuality() : Float.parseFloat(jpegQuality));
         builder.losslessQuality(losslessQuality == null || losslessQuality.isBlank()
             ? defaults.losslessQuality() : Float.parseFloat(losslessQuality));
+        builder.minimumLosslessBytes(minimumLosslessBytes == null || minimumLosslessBytes.isBlank()
+            ? defaults.minimumLosslessBytes() : Integer.parseInt(minimumLosslessBytes));
         return builder.build();
     }
 

@@ -22,6 +22,7 @@ public final class EmbeddedImage {
     private final int bitsPerComponent;
     private final boolean jpeg;
     private final boolean safeToRecompress;
+    private final boolean requiresOriginalDimensions;
     private final byte[] encodedBytes;
     private final NativePdfParser parser;
     private final CosValue.CosStream stream;
@@ -29,7 +30,8 @@ public final class EmbeddedImage {
     private boolean decodeAttempted;
 
     EmbeddedImage(int pageNumber, String resourceName, int width, int height, String filter,
-                  String colorSpace, int bitsPerComponent, boolean jpeg, boolean safeToRecompress, byte[] encodedBytes,
+                  String colorSpace, int bitsPerComponent, boolean jpeg, boolean safeToRecompress,
+                  boolean requiresOriginalDimensions, byte[] encodedBytes,
                   NativePdfParser parser, CosValue.CosStream stream) {
         this.pageNumber = pageNumber;
         this.resourceName = Objects.requireNonNull(resourceName, "resourceName");
@@ -40,6 +42,7 @@ public final class EmbeddedImage {
         this.bitsPerComponent = bitsPerComponent;
         this.jpeg = jpeg;
         this.safeToRecompress = safeToRecompress;
+        this.requiresOriginalDimensions = requiresOriginalDimensions;
         this.encodedBytes = Objects.requireNonNull(encodedBytes, "encodedBytes");
         this.parser = parser;
         this.stream = stream;
@@ -80,6 +83,14 @@ public final class EmbeddedImage {
     /** Whether replacing this stream can preserve its PDF image semantics. */
     public boolean safeToRecompress() {
         return safeToRecompress;
+    }
+
+    /**
+     * Whether this image has a preserved soft mask and therefore must not be
+     * resampled independently from that mask.
+     */
+    public boolean requiresOriginalDimensions() {
+        return requiresOriginalDimensions;
     }
 
     public int encodedLength() {

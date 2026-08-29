@@ -92,7 +92,7 @@ public final class PdfOptimizer {
             return null;
         }
         if (image.jpeg() && OptimizedJpeg.alreadySatisfies(
-            image.encodedBytes(), options, image.width(), image.height())) {
+            image.encodedBytes(), options, image.width(), image.height(), image.requiresOriginalDimensions())) {
             return null;
         }
         ImageData data;
@@ -103,6 +103,8 @@ public final class PdfOptimizer {
         }
         if (data == null || !data.jpeg() || data.alpha() != null
             || data.components() != 1 && data.components() != 3
+            || image.requiresOriginalDimensions()
+                && (data.width() != image.width() || data.height() != image.height())
         ) {
             return null;
         }
@@ -115,8 +117,10 @@ public final class PdfOptimizer {
     }
 
     private static Optional<ImageData> recompressWithJdk(EmbeddedImage image, OptimizeOptions options) {
+        var maxEdge = image.requiresOriginalDimensions()
+            ? Math.max(image.width(), image.height()) : options.maxEdge();
         return image.decode().map(data -> RasterImages.asJpeg(
-            data, options.maxEdge(), options.maxEdge(),
+            data, maxEdge, maxEdge,
             image.jpeg() ? options.jpegQuality() : options.losslessQuality()));
     }
 }

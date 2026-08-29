@@ -64,7 +64,8 @@ final class NativePdfWriter {
                                 OutputStream target) throws IOException {
         var replacements = new IdentityHashMap<CosValue.CosStream, CosValue.CosStream>();
         images.forEach((stream, image) -> replacements.put(stream,
-            replacementImage(stream, image, source.preservedImageColorComponents(stream))));
+            replacementImage(stream, image, source.preservedImageColorComponents(stream),
+                source.preservesImageSoftMask(stream, image.width(), image.height()))));
         var objects = new ObjectStore();
         var importer = new CanonicalImportContext(source, objects, replacements,
             compressStreamsLosslessly, deduplicateImagesLosslessly,
@@ -91,7 +92,8 @@ final class NativePdfWriter {
 
     private static CosValue.CosStream replacementImage(CosValue.CosStream source,
                                                         org.skaldpdf.image.ImageData image,
-                                                        int preservedColorComponents) {
+                                                        int preservedColorComponents,
+                                                        boolean preserveSoftMask) {
         if (!image.jpeg() || image.alpha() != null || image.components() != 1 && image.components() != 3) {
             throw new IllegalArgumentException("Imported image replacements must be opaque DeviceGray or DeviceRGB JPEGs");
         }
@@ -100,6 +102,9 @@ final class NativePdfWriter {
         }
         var values = new LinkedHashMap<String, CosValue>(source.dictionary().values());
         values.keySet().removeAll(IMAGE_ENCODING_KEYS);
+        if (preserveSoftMask) {
+            values.put("SMask", source.dictionary().get("SMask"));
+        }
         values.put("Type", new CosValue.CosName("XObject"));
         values.put("Subtype", new CosValue.CosName("Image"));
         values.put("Width", new CosValue.CosNumber(Integer.toString(image.width())));

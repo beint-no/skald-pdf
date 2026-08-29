@@ -382,13 +382,46 @@ final class NativePdfParser {
         var colorSpaceValue = dictionary.get("ColorSpace");
         var colorSpace = colorSpaceName(colorSpaceValue);
         var components = imageColorComponents(colorSpaceValue);
+        var softMask = dictionary.get("SMask");
+        var hasSoftMask = softMask != null && !isName(softMask, "None");
         var safe = supportedImageFilters(filters, jpeg)
             && bits == 8 && components > 0
             && identityImageDecode(dictionary.get("Decode"), components)
-            && !hasAny(dictionary, "Mask", "SMask", "Metadata", "Alternates", "OPI", "Matte", "SMaskInData")
+            && safeSoftMask(softMask)
+            && !hasAny(dictionary, "Mask", "Metadata", "Alternates", "OPI", "Matte", "SMaskInData")
             && !booleanValue(dictionary.get("ImageMask"));
         return new EmbeddedImage(pageNumber, resourceName, width, height, filter,
-            colorSpace, bits, jpeg, safe, stream.encodedBytes(), this, stream);
+            colorSpace, bits, jpeg, safe, hasSoftMask && safe, stream.encodedBytes(), this, stream);
+    }
+
+    /**
+     * A preserved soft mask remains byte exact. Matte masks are excluded: the
+     * parent colour samples are preblended and lossy recompression could alter
+     * the unblending result at transparent edges.
+     */
+    private boolean safeSoftMask(CosValue value) {
+        if (value == null || isName(value, "None")) {
+            return true;
+        }
+        try {
+            var resolved = resolve(value);
+            if (!(resolved instanceof CosStream mask)) {
+                return false;
+            }
+            var dictionary = mask.dictionary();
+            var width = integer(resolve(dictionary.get("Width")), "soft-mask Width");
+            var height = integer(resolve(dictionary.get("Height")), "soft-mask Height");
+            var bits = integer(resolve(dictionary.get("BitsPerComponent")), "soft-mask BitsPerComponent");
+            var type = dictionary.get("Type");
+            return width > 0 && height > 0 && Set.of(1, 2, 4, 8, 16).contains(bits)
+                && (type == null || isName(type, "XObject"))
+                && isName(dictionary.get("Subtype"), "Image")
+                && colorSpaceName(dictionary.get("ColorSpace")).equals("DeviceGray")
+                && !booleanValue(dictionary.get("ImageMask"))
+                && !hasAny(dictionary, "Mask", "SMask", "SMaskInData", "Matte", "Alternates", "OPI");
+        } catch (RuntimeException malformed) {
+            return false;
+        }
     }
 
     private static boolean hasAny(CosDictionary dictionary, String... names) {
@@ -436,6 +469,18 @@ final class NativePdfParser {
     int preservedImageColorComponents(CosStream stream) {
         return colorSpaceName(stream.dictionary().get("ColorSpace")).equals("ICCBased")
             ? imageColorComponents(stream.dictionary().get("ColorSpace")) : 0;
+    }
+
+    boolean preservesImageSoftMask(CosStream stream, int replacementWidth, int replacementHeight) {
+        var embedded = embeddedImage(0, "", stream);
+        if (!embedded.safeToRecompress() || !embedded.requiresOriginalDimensions()) {
+            return false;
+        }
+        var width = integer(resolve(stream.dictionary().get("Width")), "image Width");
+        var height = integer(resolve(stream.dictionary().get("Height")), "image Height");
+        require(replacementWidth == width && replacementHeight == height,
+            "An image with a soft mask must preserve its dimensions");
+        return true;
     }
 
     private int imageColorComponents(CosValue value) {

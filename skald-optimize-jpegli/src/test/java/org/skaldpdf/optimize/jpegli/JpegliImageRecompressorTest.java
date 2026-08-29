@@ -14,6 +14,7 @@ import java.util.Random;
 import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JpegliImageRecompressorTest {
@@ -59,6 +60,32 @@ class JpegliImageRecompressorTest {
             for (var task : tasks) {
                 assertArrayEquals(expected, task.get());
             }
+        }
+    }
+
+    @Test
+    void preservesTheDimensionsOfAnImageWithASoftMask() {
+        var rgb = new byte[900 * 700 * 3];
+        var alpha = new byte[900 * 700];
+        new Random(47).nextBytes(rgb);
+        for (var index = 0; index < alpha.length; index++) {
+            alpha[index] = (byte) (index % 251);
+        }
+        var source = pdfWith(ImageData.fromRgb(900, 700, rgb, alpha));
+        var options = OptimizeOptions.builder().maxEdge(480).minimumLosslessBytes(0)
+            .minimumSavingsBytes(1).minimumSavingsPercent(0).build();
+        var recompressor = new JpegliImageRecompressor();
+
+        var optimized = PdfOptimizer.recompress(source, options, recompressor);
+
+        assertTrue(optimized.length < source.length);
+        assertArrayEquals(optimized, PdfOptimizer.recompress(optimized, options, recompressor));
+        try (var document = new PdfDocument(new PdfReader(optimized))) {
+            var image = document.importedImages().getFirst();
+            assertTrue(image.jpeg());
+            assertTrue(image.requiresOriginalDimensions());
+            assertEquals(900, image.width());
+            assertEquals(700, image.height());
         }
     }
 

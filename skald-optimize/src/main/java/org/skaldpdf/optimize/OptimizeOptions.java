@@ -44,8 +44,8 @@ public final class OptimizeOptions {
     /**
      * Supplier invoices, receipts, and other camera-heavy business attachments:
      * 2400 px, JPEG quality 75, lossless-raster quality 90, 20 MP, exact
-     * stream compression, exact image/font-program sharing, and 4 KiB / 2%
-     * savings gates.
+     * stream compression, exact image/font-program sharing, a 16 KiB
+     * lossless-raster work floor, and 4 KiB / 2% savings gates.
      */
     public static OptimizeOptions attachments() {
         return builder().build();
@@ -152,7 +152,7 @@ public final class OptimizeOptions {
         private boolean deduplicateImagesLosslessly = true;
         private boolean deduplicateFontProgramsLosslessly = true;
         private long maximumImagePixels = 20_000_000;
-        private int minimumLosslessBytes = 64 * 1024;
+        private int minimumLosslessBytes = 16 * 1024;
         private int minimumSavingsBytes = 4096;
         private int minimumSavingsPercent = 2;
 

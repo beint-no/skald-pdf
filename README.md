@@ -74,19 +74,19 @@ out of production modules. Published APIs are JSpecify `@NullMarked`: Kotlin
 and other consumers see non-null types by default, and `@Nullable` only where
 absence is a real value (logo, bank, due date, encryption). Optional text is
 empty, never null. Older Skald revisions remain the tail for older JDKs.
-Release `1.14.0` is the current line:
+Release `1.15.0` is the current line:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.14.0")
-    implementation("no.beint.skaldpdf:skald-fonts:1.14.0")         // direct SkaldSans API access
-    implementation("no.beint.skaldpdf:skald-barcode:1.14.0")        // optional symbols
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.14.0")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.14.0") // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.14.0")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.14.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.14.0")      // optional received-PDF recompress
-    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.14.0") // optional bundled JPEGli encoder
+    implementation("no.beint.skaldpdf:skald-layout:1.15.0")
+    implementation("no.beint.skaldpdf:skald-fonts:1.15.0")         // direct SkaldSans API access
+    implementation("no.beint.skaldpdf:skald-barcode:1.15.0")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.15.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.15.0") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.15.0")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.15.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.15.0")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.15.0") // optional bundled JPEGli encoder
 }
 ```
 
@@ -227,10 +227,11 @@ Like other Glimt uses, classpath applications enable native access with
 `--enable-native-access=no.beint.glimt`.
 
 The attachment preset uses a 2400-pixel longest edge, quality 75 for existing
-JPEGs, quality 90 for lossless rasters, a 20-megapixel decode ceiling, and
-2% / 4 KiB savings gates. It also compresses raw and ASCII-armoured streams,
-selectively improves weak Flate streams, and shares byte-identical simple image
-XObjects and embedded font program streams without changing decoded bytes.
+JPEGs, quality 90 for lossless rasters, a 20-megapixel decode ceiling, a 16 KiB
+lossless-raster work floor, and 2% / 4 KiB savings gates. It also compresses
+raw and ASCII-armoured streams, selectively improves weak Flate streams, and
+shares byte-identical simple image XObjects and embedded font program streams
+without changing decoded bytes.
 Skald returns the original byte array for malformed,
 encrypted, signed, linearized, incrementally revised, or declared PDF/A/PDF/X/
 PDF/UA inputs. Successful rewrites reparse themselves and compare the complete
