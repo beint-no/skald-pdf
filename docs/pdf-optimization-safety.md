@@ -62,11 +62,23 @@ for a zero-surprise attachment optimizer.
   JBIG2 symbol substitution is especially unsuitable for invoices and receipts.
 * Font subsetting and merging non-identical font subsets require complete
   glyph-use analysis across content, forms, patterns, appearances, and Type 3
-  fonts. Incorrect analysis can silently change text. Exact duplicate program
-  streams are already shared without interpreting glyphs. The largest-file
-  audit found a one-page
-  1.27 MiB PDF whose images use 2.5 KiB and whose full Calibri programs use
-  about 1.24 MiB; that is a real next target, but not a safe stream-only rewrite.
+  fonts. Incorrect analysis can silently change text. The final 9,770-document
+  audit found 80,996,581 encoded bytes in 3,951 full-name embedded programs
+  across 1,196 PDFs. A deliberately narrow prototype accepted only static
+  TrueType outlines selected through `Identity-H` with an identity
+  `CIDToGIDMap`; it rejected dynamic content, unsupported tables, malformed
+  programs, and the [OpenType `fsType`][opentype-os2]
+  restricted/no-subsetting flags. With the
+  production savings gates, it changed 19 PDFs and saved 786,193 bytes. qpdf,
+  MuPDF, Poppler, text extraction, and all 33 affected pages at 144 DPI agreed,
+  pixel for pixel. That is only 0.07% of the corpus and does not justify adding
+  a second content parser plus font-program mutation to the production path.
+  The other large programs are less local: [simple WinAnsi TrueType
+  selection][pdf-reference] follows glyph-name, Adobe Glyph List, cmap,
+  post-table, and viewer heuristic rules; CFF and Type 1 need a mature
+  subsetter. [HarfBuzz][harfbuzz-subset] supports retained glyph IDs and
+  glyf/CFF/CFF2, but would add another native module. Exact duplicate program
+  streams remain shared without interpreting glyphs.
 * Generic indirect-object deduplication is not assumed safe merely because two
   objects serialize identically; object identity can participate in forms,
   structure, annotations, and extension semantics. Deduplication is limited to
@@ -101,8 +113,9 @@ attachment optimization. Removing metadata, forms, actions, tags, attachments,
 or layers changes document semantics. Transparency flattening and colour-space
 conversion can change rendering. JBIG2 symbol substitution is inappropriate
 for financial text. Effective-DPI downsampling needs a complete graphics-state
-walk. Font subsetting and merging remain the largest justified next feature,
-but only after their broader reachability and glyph-closure proof is complete.
+walk. The measured font-subsetting prototype is intentionally not retained;
+revisit it only if a future corpus has enough eligible unique font data to
+justify a complete interpreter and a mature retained-glyph-ID subsetter.
 
 ## Verification gates
 
@@ -150,6 +163,16 @@ and removed the guard against documents containing many tiny image objects.
 Across 1,038 rendered pages from the broader no-floor set, the minimum PSNR
 was 41.380 dB and minimum mean SSIM was 0.997812.
 
+The final font-program audit used the same 9,770-document snapshot. Full-name
+embedded programs occupied 80,996,581 encoded bytes, but most were CFF, Type 1,
+license-restricted, dynamically reachable, or selected through mappings that
+need more than a local glyph-ID proof. The strict static TrueType/Identity-H
+prototype saved 786,193 bytes in 19 documents after the normal replacement
+gates. All 19 passed qpdf, MuPDF, Poppler, and byte-identical text extraction;
+all 33 rendered pages were pixel-identical at 144 DPI. The prototype was
+discarded because its 0.07% corpus gain did not justify its permanent parser
+and font-mutation surface.
+
 The 71 unchanged files in that subset are accounted for: 51 are protected
 documents, 15 fail codec or savings gates, four have no qualifying stream gain,
 and one is excluded by image policy. The full corpus contains 117 otherwise
@@ -170,6 +193,9 @@ makeup, eligible images, savings, and optimizer latency; see
 
 [pdf-spec]: https://pdfa.org/resource/pdf-specification-archive/
 [qpdf-size]: https://qpdf.readthedocs.io/en/latest/cli.html#optimizing-file-size
+[pdf-reference]: https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/pdfreference1.6.pdf
+[opentype-os2]: https://learn.microsoft.com/en-us/typography/opentype/spec/os2
+[harfbuzz-subset]: https://harfbuzz.github.io/harfbuzz-hb-subset.html
 [verapdf]: https://docs.verapdf.org/validation/
 [ghostscript]: https://ghostscript.readthedocs.io/en/latest/VectorDevices.html
 [adobe-optimizer]: https://helpx.adobe.com/acrobat/desktop/create-documents/optimize-pdfs/pdf-optimizer-settings.html
