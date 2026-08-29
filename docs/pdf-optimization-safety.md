@@ -95,7 +95,7 @@ Skald changed 2,568 and saved 232,107,905 bytes (16.43%). Optimizer-only
 latency was 8 ms p50, 70 ms p95, and 188 ms p99 on the development machine.
 
 The deterministic 250-largest subset contained 396,833,510 bytes. Skald
-changed 157 and saved 152,284,026 bytes (38.37%). All 157 outputs passed qpdf,
+changed 157 and saved 152,284,088 bytes (38.37%). All 157 outputs passed qpdf,
 MuPDF, and Poppler. Across 282 independently rendered before/after pages, the
 minimum PSNR was 27.800 dB and minimum mean SSIM was 0.891187; the fixed gates
 are 25 dB and 0.88. The earlier 1.12 implementation saved 6.54% on the same
