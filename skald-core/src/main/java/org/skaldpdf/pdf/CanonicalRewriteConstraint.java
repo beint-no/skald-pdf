@@ -9,5 +9,7 @@ public enum CanonicalRewriteConstraint {
     /** A declared PDF/A, PDF/X, PDF/UA, PDF/E, or PDF/VT profile needs profile validation. */
     CONFORMANCE_PROFILE,
     /** Rewriting any signed byte range would invalidate the document signature. */
-    DIGITAL_SIGNATURE
+    DIGITAL_SIGNATURE,
+    /** At least one reachable Flate stream has truncated or trailing encoded data. */
+    MALFORMED_STREAM
 }

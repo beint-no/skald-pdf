@@ -13,7 +13,11 @@ optimizer:
 - lossless raster rows select the best PNG predictor before Deflate;
 - JPEG byte streams are embedded directly, avoiding quality loss and CPU cost;
 - repeated image instances and opacity states share indirect objects;
+- received PDFs share only byte-identical embedded font program streams while
+  retaining separate descriptors, encodings, and font resources;
 - compact CID width ranges reduce font dictionaries;
+- adjacent generated text shares colour/font/text state and uses positioned
+  `TJ` arrays instead of repeating a complete text object for every run;
 - content-stream numbers are encoded without temporary formatted strings;
 - batched barcode and QR rectangles reduce content operators;
 - bounded parsers reject decompression and object-count abuse early;

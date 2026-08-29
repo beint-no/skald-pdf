@@ -11,6 +11,6 @@ import java.util.Optional;
  */
 @FunctionalInterface
 public interface ImageRecompressor {
-    /** Returns an opaque DeviceGray or DeviceRGB JPEG, or empty to keep the original stream. */
+    /** Returns an opaque one- or three-component JPEG, or empty to keep the original stream. */
     Optional<ImageData> recompress(EmbeddedImage image, OptimizeOptions options);
 }

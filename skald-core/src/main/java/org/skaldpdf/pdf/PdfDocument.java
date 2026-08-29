@@ -34,6 +34,7 @@ public final class PdfDocument implements AutoCloseable {
     private @Nullable NativePdfParser sourceParser;
     private boolean compressImportedStreamsLosslessly;
     private boolean deduplicateImportedImagesLosslessly;
+    private boolean deduplicateImportedFontProgramsLosslessly;
     private boolean closed;
     private boolean closing;
 
@@ -204,6 +205,17 @@ public final class PdfDocument implements AutoCloseable {
     }
 
     /**
+     * Requests exact sharing of byte-identical embedded font program streams
+     * during a canonical rewrite. Font dictionaries, encodings, and glyphs
+     * are not modified or interpreted.
+     */
+    public PdfDocument deduplicateImportedFontProgramsLosslessly() {
+        ensureOpen();
+        deduplicateImportedFontProgramsLosslessly = true;
+        return this;
+    }
+
+    /**
      * Replaces one imported image XObject. The page content stream keeps the
      * same resource name, so the existing {@code Do} operator continues to
      * work. The replacement is written as a new DCT or Flate stream.
@@ -253,6 +265,10 @@ public final class PdfDocument implements AutoCloseable {
 
     boolean shouldDeduplicateImportedImagesLosslessly() {
         return deduplicateImportedImagesLosslessly;
+    }
+
+    boolean shouldDeduplicateImportedFontProgramsLosslessly() {
+        return deduplicateImportedFontProgramsLosslessly;
     }
 
     public void copyPagesFrom(PdfDocument source, int fromPage, int toPage) {

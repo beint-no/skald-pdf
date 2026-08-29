@@ -4,6 +4,28 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.14.0
+
+- Profile-preserving JPEGli recompression for three-component ICCBased image
+  XObjects. The profile, alternate space, and component interpretation remain
+  in the PDF; grayscale, CMYK, and other unsupported profiles still fail closed.
+- The attachment preset uses JPEGli quality 75 for existing JPEGs after a
+  250-largest production corpus comparison against quality 80. It saves
+  176,843,768 bytes (44.56%) while all 336 sampled renders stay above the fixed
+  25 dB PSNR / 0.88 SSIM gates.
+- Exact sharing of byte-identical `FontFile`, `FontFile2`, and `FontFile3`
+  streams removes 14,245,691 more bytes from the 250-largest corpus without
+  parsing glyphs or changing font dictionaries, encodings, or content.
+- Generated horizontal text runs share text state and compact adjacent runs
+  into positioned `TJ` arrays. A representative 1,000-row report is 30.9%
+  smaller with pixel-identical sampled renders and identical extracted text.
+- Private corpus tests accept explicit max-edge and quality overrides so
+  release policy comparisons use the same graph, idempotence, and visual gates.
+- Verified 9,630 production PDFs and 1.41 GB: 293,887,792 bytes saved (20.80%);
+  p50 6 ms, p95 48 ms, p99 140 ms. Every changed output passed qpdf,
+  MuPDF, and Poppler; 117 inputs with malformed reachable Flate data were
+  deliberately kept byte-for-byte unchanged.
+
 ## Shipped in 1.13.0
 
 - Lossless recompression for raw, ASCIIHex, ASCII85, and weak Flate streams,
@@ -120,12 +142,16 @@ practical document coverage it adds.
 Ordered by what would make Skald the better business-PDF library, not a
 bigger iText clone:
 
-1. **CFF/OTF embedding** — licensed retail faces as PDF 2.0 CID fonts.
-2. **PDF/A-4 module** — archive invoices with output intents.
-3. **PAdES-B-T** — timestamp after a TSA; still not QES.
-4. **Colour-managed ICC image conversion** — only with profile validation and
-   rendered colour-difference gates.
-5. **Emit JPEG XL** — only after ISO publishes a filter and viewers implement it.
+1. **Received-PDF TrueType subsetting** — only after glyph-use analysis covers
+   pages, forms, patterns, annotation appearances, Type 3 fonts, composite
+   glyph closure, and no-subsetting licence flags. Keep glyph IDs stable and
+   fail closed on any unparsed content operator.
+2. **CFF/OTF embedding** — licensed retail faces as PDF 2.0 CID fonts.
+3. **PDF/A-4 module** — archive invoices with output intents.
+4. **PAdES-B-T** — timestamp after a TSA; still not QES.
+5. **CMYK and calibrated-colour image conversion** — only with profile
+   validation and rendered colour-difference gates.
+6. **Emit JPEG XL** — only after ISO publishes a filter and viewers implement it.
 
 ## Shipped in 1.4.1
 
