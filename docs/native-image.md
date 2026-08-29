@@ -6,7 +6,7 @@ and **libjxl** with the JDK FFM API. It is not on the core classpath. Invoices,
 stickers, signatures, and callers that provide prepared `ImageData` work without it.
 
 ```kotlin
-implementation("no.beint.skaldpdf:skald-image:1.12.0")
+implementation("no.beint.skaldpdf:skald-image:1.13.0")
 ```
 
 ```java
@@ -70,6 +70,7 @@ libjxl tree as a static extra, not as a commonly installed `libjpegli`
 shared library. Homebrew `jpeg-xl` 0.12 ships `libjxl` / `libjxl_cms` /
 `libjxl_threads` only.
 
-A `skald-jpegli` module would be empty on almost every machine. TurboJPEG
-already covers optional fast JPEG encode inside `skald-image`. We will bind
-jpegli when a shared library is a normal install, not before.
+Received-PDF optimization uses the separate `skald-optimize-jpegli` adapter.
+It delegates to Glimt's modular, bundled JPEGli FFM runtime, so consumers do
+not need a system executable or a commonly installed `libjpegli` shared
+library. `skald-image` keeps TurboJPEG for its smaller optional ingest path.

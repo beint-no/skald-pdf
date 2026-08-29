@@ -29,8 +29,8 @@ Set the version in `build.gradle.kts`, merge the change to `main`, and push a
 matching tag:
 
 ```shell
-git tag v1.12.0
-git push origin v1.12.0
+git tag v1.13.0
+git push origin v1.13.0
 ```
 
 GitHub Actions verifies that the tag matches the Gradle version, then builds

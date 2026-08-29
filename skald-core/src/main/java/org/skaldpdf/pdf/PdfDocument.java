@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Mutable PDF document for generation, composition, and read-modify-write
@@ -31,6 +32,8 @@ public final class PdfDocument implements AutoCloseable {
     private String language = "";
     private @Nullable SignatureField signatureField;
     private @Nullable NativePdfParser sourceParser;
+    private boolean compressImportedStreamsLosslessly;
+    private boolean deduplicateImportedImagesLosslessly;
     private boolean closed;
     private boolean closing;
 
@@ -171,6 +174,36 @@ public final class PdfDocument implements AutoCloseable {
     }
 
     /**
+     * Returns the source properties that make a canonical rewrite unsafe.
+     * An empty set means the document is eligible for verified optimization.
+     */
+    public Set<CanonicalRewriteConstraint> canonicalRewriteConstraints() {
+        ensureOpen();
+        return sourceParser == null ? Set.of() : sourceParser.canonicalRewriteConstraints();
+    }
+
+    /**
+     * Requests exact re-encoding of eligible imported streams during a
+     * canonical rewrite. Stream dictionaries and decoded bytes are preserved;
+     * the writer keeps the original representation unless Deflate is smaller.
+     */
+    public PdfDocument compressImportedStreamsLosslessly() {
+        ensureOpen();
+        compressImportedStreamsLosslessly = true;
+        return this;
+    }
+
+    /**
+     * Requests exact sharing of byte-identical, semantically simple image
+     * XObjects during a canonical rewrite.
+     */
+    public PdfDocument deduplicateImportedImagesLosslessly() {
+        ensureOpen();
+        deduplicateImportedImagesLosslessly = true;
+        return this;
+    }
+
+    /**
      * Replaces one imported image XObject. The page content stream keeps the
      * same resource name, so the existing {@code Do} operator continues to
      * work. The replacement is written as a new DCT or Flate stream.
@@ -212,6 +245,14 @@ public final class PdfDocument implements AutoCloseable {
 
     Map<ImportedImageKey, ImageData> importedPageImageReplacements() {
         return Map.copyOf(importedPageImageReplacements);
+    }
+
+    boolean shouldCompressImportedStreamsLosslessly() {
+        return compressImportedStreamsLosslessly;
+    }
+
+    boolean shouldDeduplicateImportedImagesLosslessly() {
+        return deduplicateImportedImagesLosslessly;
     }
 
     public void copyPagesFrom(PdfDocument source, int fromPage, int toPage) {
