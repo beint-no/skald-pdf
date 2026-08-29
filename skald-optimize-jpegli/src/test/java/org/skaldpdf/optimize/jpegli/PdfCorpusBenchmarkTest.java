@@ -57,7 +57,7 @@ class PdfCorpusBenchmarkTest {
             Files.createDirectories(outputCorpus);
         }
 
-        var options = OptimizeOptions.attachments();
+        var options = corpusOptions();
         var recompressor = new JpegliImageRecompressor();
         var csv = new StringBuilder("rank,file,source_bytes,output_bytes,saved_bytes,millis,changed,reason,detail,")
             .append("pages,streams,stream_bytes,image_streams,image_stream_bytes,images,safe_images,eligible_images\n");
@@ -125,6 +125,7 @@ class PdfCorpusBenchmarkTest {
             | Metric | Result |
             | --- | ---: |
             | PDFs | %,d |
+            | Max edge / JPEG quality / lossless quality | %,d / %.2f / %.2f |
             | Unique source payloads | %,d |
             | Exact duplicate files / bytes | %,d / %,d |
             | Changed | %,d |
@@ -141,7 +142,8 @@ class PdfCorpusBenchmarkTest {
 
             | Reason | PDFs | Source bytes | Saved bytes |
             | --- | ---: | ---: | ---: |
-            """, paths.size(), payloads.size(), duplicateFiles, duplicateBytes,
+            """, paths.size(), options.maxEdge(), options.jpegQuality(), options.losslessQuality(),
+            payloads.size(), duplicateFiles, duplicateBytes,
             changed, sourceBytes, outputBytes, sourceBytes - outputBytes,
             (sourceBytes - outputBytes) * 100.0 / sourceBytes, optimizerMillis,
             paths.size() * 1000.0 / Math.max(1, optimizerMillis),
@@ -156,6 +158,20 @@ class PdfCorpusBenchmarkTest {
         Files.writeString(output.resolve("private-pdf-corpus.md"), report);
         Files.writeString(output.resolve("private-pdf-corpus.csv"), csv);
         System.out.println(report);
+    }
+
+    static OptimizeOptions corpusOptions() {
+        var defaults = OptimizeOptions.attachments();
+        var builder = OptimizeOptions.builder();
+        var edge = System.getenv("SKALD_PDF_MAX_EDGE");
+        var jpegQuality = System.getenv("SKALD_PDF_JPEG_QUALITY");
+        var losslessQuality = System.getenv("SKALD_PDF_LOSSLESS_QUALITY");
+        builder.maxEdge(edge == null || edge.isBlank() ? defaults.maxEdge() : Integer.parseInt(edge));
+        builder.jpegQuality(jpegQuality == null || jpegQuality.isBlank()
+            ? defaults.jpegQuality() : Float.parseFloat(jpegQuality));
+        builder.losslessQuality(losslessQuality == null || losslessQuality.isBlank()
+            ? defaults.losslessQuality() : Float.parseFloat(losslessQuality));
+        return builder.build();
     }
 
     private static long percentile(List<Long> sorted, int percentile) {

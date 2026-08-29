@@ -42,7 +42,7 @@ class ConcurrencyAndEfficiencyTest {
     void thousandRowReportStaysCompactAndFast() {
         assertTimeout(Duration.ofSeconds(15), () -> {
             var bytes = documentWithRows("Large report", 1_000);
-            assertTrue(bytes.length < 250_000,
+            assertTrue(bytes.length < 165_000,
                 () -> "1,000-row report should remain compact, actual bytes=" + bytes.length);
             try (var document = PdfTestSupport.load(bytes)) {
                 assertTrue(document.getNumberOfPages() > 10);

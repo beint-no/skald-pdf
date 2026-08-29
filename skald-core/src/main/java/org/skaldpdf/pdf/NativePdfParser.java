@@ -6,7 +6,6 @@ import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.geom.Rectangle;
 import org.skaldpdf.image.ImageData;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,9 +25,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.zip.InflaterInputStream;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
+import java.util.zip.DataFormatException;
+import java.util.zip.Inflater;
 
 /**
  * Bounded parser for the structural PDF subset needed by page composition. It
@@ -132,6 +132,9 @@ final class NativePdfParser {
         }
         if (hasSignatureDictionary()) {
             constraints.add(CanonicalRewriteConstraint.DIGITAL_SIGNATURE);
+        }
+        if (constraints.isEmpty() && hasMalformedFlateStream()) {
+            constraints.add(CanonicalRewriteConstraint.MALFORMED_STREAM);
         }
         return Set.copyOf(constraints);
     }
@@ -354,10 +357,15 @@ final class NativePdfParser {
             return ImageData.fromJpeg(data);
         }
         data = applyPredictor(data, dictionary.get("DecodeParms"), "image");
-        var colorSpace = colorSpaceName(dictionary.get("ColorSpace"));
+        var colorSpaceValue = dictionary.get("ColorSpace");
+        var colorSpace = colorSpaceName(colorSpaceValue);
         return switch (colorSpace) {
             case "DeviceRGB" -> ImageData.fromRgb(width, height, data);
             case "DeviceGray" -> ImageData.fromGray(width, height, data);
+            case "ICCBased" -> switch (imageColorComponents(colorSpaceValue)) {
+                case 3 -> ImageData.fromRgb(width, height, data);
+                default -> throw new IllegalArgumentException("Unsupported ICC image component count");
+            };
             default -> throw new IllegalArgumentException("Unsupported image color space " + colorSpace);
         };
     }
@@ -371,10 +379,12 @@ final class NativePdfParser {
         var filters = filterNames(dictionary.get("Filter"));
         var filter = filters.isEmpty() ? "None" : String.join("+", filters);
         var jpeg = filters.contains("DCTDecode") || filters.contains("DCT");
-        var colorSpace = colorSpaceName(dictionary.get("ColorSpace"));
+        var colorSpaceValue = dictionary.get("ColorSpace");
+        var colorSpace = colorSpaceName(colorSpaceValue);
+        var components = imageColorComponents(colorSpaceValue);
         var safe = supportedImageFilters(filters, jpeg)
-            && bits == 8 && Set.of("DeviceRGB", "DeviceGray").contains(colorSpace)
-            && identityImageDecode(dictionary.get("Decode"), colorSpace)
+            && bits == 8 && components > 0
+            && identityImageDecode(dictionary.get("Decode"), components)
             && !hasAny(dictionary, "Mask", "SMask", "Metadata", "Alternates", "OPI", "Matte", "SMaskInData")
             && !booleanValue(dictionary.get("ImageMask"));
         return new EmbeddedImage(pageNumber, resourceName, width, height, filter,
@@ -403,7 +413,7 @@ final class NativePdfParser {
             ).contains(filter));
     }
 
-    private boolean identityImageDecode(CosValue value, String colorSpace) {
+    private boolean identityImageDecode(CosValue value, int components) {
         if (value == null) {
             return true;
         }
@@ -411,8 +421,7 @@ final class NativePdfParser {
         if (!(resolved instanceof CosArray decode)) {
             return false;
         }
-        var components = colorSpace.equals("DeviceGray") ? 1 : colorSpace.equals("DeviceRGB") ? 3 : 0;
-        if (components == 0 || decode.values().size() != components * 2) {
+        if (components <= 0 || decode.values().size() != components * 2) {
             return false;
         }
         for (int index = 0; index < components; index++) {
@@ -422,6 +431,38 @@ final class NativePdfParser {
             }
         }
         return true;
+    }
+
+    int preservedImageColorComponents(CosStream stream) {
+        return colorSpaceName(stream.dictionary().get("ColorSpace")).equals("ICCBased")
+            ? imageColorComponents(stream.dictionary().get("ColorSpace")) : 0;
+    }
+
+    private int imageColorComponents(CosValue value) {
+        var colorSpace = colorSpaceName(value);
+        if (colorSpace.equals("DeviceGray")) {
+            return 1;
+        }
+        if (colorSpace.equals("DeviceRGB")) {
+            return 3;
+        }
+        if (!colorSpace.equals("ICCBased")) {
+            return 0;
+        }
+        var resolved = resolve(value);
+        if (!(resolved instanceof CosArray array) || array.values().size() != 2) {
+            return 0;
+        }
+        var profile = resolve(array.values().get(1));
+        if (!(profile instanceof CosStream profileStream)) {
+            return 0;
+        }
+        var countValue = profileStream.dictionary().get("N");
+        if (countValue == null) {
+            return 0;
+        }
+        var count = integer(resolve(countValue), "ICCBased N");
+        return count == 3 ? count : 0;
     }
 
     boolean safeToDeduplicateImage(CosStream stream) {
@@ -435,6 +476,51 @@ final class NativePdfParser {
         } catch (RuntimeException unsupported) {
             return false;
         }
+    }
+
+    Set<CosReference> fontProgramReferences() {
+        var result = new LinkedHashSet<CosReference>();
+        var references = new HashSet<CosReference>();
+        var direct = java.util.Collections.newSetFromMap(new IdentityHashMap<CosValue, Boolean>());
+        var pending = new ArrayDeque<CosValue>();
+        pending.add(trailer);
+        while (!pending.isEmpty()) {
+            var value = pending.removeLast();
+            if (value instanceof CosReference reference) {
+                if (references.add(reference)) {
+                    pending.add(resolve(reference));
+                }
+                continue;
+            }
+            if (!direct.add(value)) {
+                continue;
+            }
+            if (value instanceof CosArray array) {
+                pending.addAll(array.values());
+                continue;
+            }
+            var dictionary = value instanceof CosStream stream ? stream.dictionary()
+                : value instanceof CosDictionary candidate ? candidate : null;
+            if (dictionary == null) {
+                continue;
+            }
+            if (isName(dictionary.get("Type"), "FontDescriptor")) {
+                for (var key : Set.of("FontFile", "FontFile2", "FontFile3")) {
+                    if (dictionary.get(key) instanceof CosReference reference
+                        && resolve(reference) instanceof CosStream) {
+                        result.add(reference);
+                    }
+                }
+            }
+            pending.addAll(dictionary.values().values());
+        }
+        return Set.copyOf(result);
+    }
+
+    boolean safeToDeduplicateFontProgram(CosStream stream) {
+        return stream.dictionary().values().entrySet().stream()
+            .filter(entry -> !entry.getKey().equals("Length"))
+            .allMatch(entry -> containsNoIndirectValues(entry.getValue()));
     }
 
     private static boolean containsNoIndirectValues(CosValue value) {
@@ -856,19 +942,93 @@ final class NativePdfParser {
     }
 
     private byte[] inflate(byte[] encoded, String description) {
-        try (var input = new InflaterInputStream(new ByteArrayInputStream(encoded));
-             var output = new ByteArrayOutputStream(Math.min(encoded.length * 2, 1_048_576))) {
+        var inflater = new Inflater();
+        var output = new ByteArrayOutputStream(Math.min(encoded.length * 2, 1_048_576));
+        try {
+            inflater.setInput(encoded);
             var buffer = new byte[8192];
             var total = 0;
-            for (int read; (read = input.read(buffer)) >= 0; ) {
+            while (!inflater.finished()) {
+                var read = inflater.inflate(buffer);
+                if (read == 0) {
+                    if (inflater.finished()) {
+                        break;
+                    }
+                    require(!inflater.needsDictionary(), description + " requires an unsupported preset dictionary");
+                    require(!inflater.needsInput(), description + " has truncated Flate data");
+                    throw new IllegalArgumentException(description + " made no Flate decoding progress");
+                }
                 total += read;
                 require(total <= MAXIMUM_DECODED_STRUCTURAL_BYTES,
                     description + " exceeds the decoded size limit");
                 output.write(buffer, 0, read);
             }
+            require(inflater.getRemaining() == 0, description + " has trailing Flate data");
             return output.toByteArray();
-        } catch (IOException exception) {
+        } catch (DataFormatException exception) {
             throw new IllegalArgumentException("Unable to inflate " + description, exception);
+        } finally {
+            inflater.end();
+        }
+    }
+
+    private boolean hasMalformedFlateStream() {
+        var references = new HashSet<CosReference>();
+        var direct = java.util.Collections.newSetFromMap(new IdentityHashMap<CosValue, Boolean>());
+        var pending = new ArrayDeque<CosValue>();
+        pending.add(trailer);
+        while (!pending.isEmpty()) {
+            var value = pending.removeLast();
+            if (value instanceof CosReference reference) {
+                if (references.add(reference)) {
+                    pending.add(resolve(reference));
+                }
+                continue;
+            }
+            if (!direct.add(value)) {
+                continue;
+            }
+            if (value instanceof CosArray array) {
+                pending.addAll(array.values());
+                continue;
+            }
+            var dictionary = value instanceof CosStream stream ? stream.dictionary()
+                : value instanceof CosDictionary candidate ? candidate : null;
+            if (dictionary == null) {
+                continue;
+            }
+            if (value instanceof CosStream stream && !validFlateEncoding(stream)) {
+                return true;
+            }
+            pending.addAll(dictionary.values().values());
+        }
+        return false;
+    }
+
+    private boolean validFlateEncoding(CosStream stream) {
+        var filters = filterNames(stream.dictionary().get("Filter"));
+        if (!filters.stream().anyMatch(filter -> Set.of("FlateDecode", "Fl").contains(filter))) {
+            return true;
+        }
+        var data = stream.encodedBytes();
+        try {
+            for (var filter : filters) {
+                data = switch (filter) {
+                    case "ASCIIHexDecode", "AHx" -> asciiHex(data, "Flate preflight");
+                    case "ASCII85Decode", "A85" -> ascii85(data, "Flate preflight");
+                    case "FlateDecode", "Fl" -> inflate(data, "Flate preflight");
+                    default -> {
+                        // A preceding unknown filter prevents bounded validation of a later Flate stage.
+                        yield null;
+                    }
+                };
+                if (data == null) {
+                    return true;
+                }
+            }
+            return true;
+        } catch (RuntimeException malformed) {
+            return false;
         }
     }
 

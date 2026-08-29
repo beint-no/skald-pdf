@@ -18,9 +18,10 @@ lossless stream strategy also tracks the independently implemented
 | Generate object and cross-reference streams | Every reachable value is imported and a graph digest independent of object numbers and dictionary order must match. |
 | Raw, ASCIIHex, or ASCII85 stream to Flate | The old filter is decoded within bounded memory, the new stream is inflated again, and decoded bytes must be identical. |
 | Recompress an existing Flate stream | Decoded bytes must be identical. Image planes use balanced Deflate; other data uses a bounded level-6/level-9 sample to avoid maximum compression when it cannot pay. |
-| Recompress a JPEG image with JPEGli | Only opaque 8-bit DeviceGray or DeviceRGB image XObjects with supported filters and no semantic modifiers qualify. ASCII85, ASCIIHex, and Flate wrappers around DCT streams are decoded in bounded memory. The replacement must clear both per-image and whole-document savings gates. |
+| Recompress a JPEG image with JPEGli | Only opaque 8-bit DeviceGray, DeviceRGB, or three-component ICCBased image XObjects with supported filters and no semantic modifiers qualify. ASCII85, ASCIIHex, and Flate wrappers around DCT streams are decoded in bounded memory. ICCBased replacements retain the original profile object and color-space dictionary. The replacement must clear both per-image and whole-document savings gates. |
 | Convert a lossless raster to JPEGli | The same image restrictions apply, plus pixel, source-size, quality, and resize limits. Explicit identity `/Decode` arrays are retained; any inversion or remapping remains excluded. |
 | Share exact image XObjects | Semantically simple image streams share one object only when their complete canonical stream bodies are byte-identical. The semantic digest receives an explicit source-reference alias map. Similar pixels or payload-only matches never qualify. |
+| Share exact font programs | Only indirect `FontFile`, `FontFile2`, and `FontFile3` streams under a `FontDescriptor` qualify. Their complete canonical stream dictionaries and encoded bytes must be identical and contain no indirect values. Descriptors, font dictionaries, encodings, CMaps, glyph data, and content operators remain unchanged. |
 
 Images reached through nested Form XObjects and shared image objects are
 handled once. An APP15 policy marker makes JPEG processing exactly idempotent.
@@ -38,6 +39,7 @@ Skald does not rewrite these document classes:
 | Linearization | Object order, offsets, and hint tables implement progressive loading and must be rebuilt as a unit. |
 | Declared PDF/A, PDF/X, PDF/UA, PDF/E, or PDF/VT conformance | A valid-looking rewrite is insufficient; profile-specific validation is required. [veraPDF][verapdf] supplies formal PDF/A and PDF/UA rules. |
 | Encryption without credentials and policy | Decryption and permissions are outside attachment optimization. |
+| Malformed Flate stream | Truncated streams and streams with trailing encoded data may render in tolerant readers but fail independent validators. Skald leaves the complete source byte-for-byte unchanged. |
 
 This is deliberately stricter than sending a PDF through Ghostscript
 `pdfwrite`. [Ghostscript documents][ghostscript] that this creates a new page description and
@@ -47,26 +49,58 @@ for a zero-surprise attachment optimizer.
 
 ## Currently excluded image and document techniques
 
-* ICCBased images stay unchanged until Skald has a color-managed conversion
-  path that validates the profile and proves the rendered conversion. Treating
-  ICC samples as DeviceRGB can change colors.
+* Three-component ICCBased images can be recompressed while retaining their
+  original profile, alternate space, and component interpretation. Profiles
+  with one, two, or four components remain unchanged because the JPEGli path
+  cannot preserve those sample planes and component counts.
 * Images with masks, soft masks, non-identity decode arrays, alternates, OPI,
   or image metadata are not replaced. Their streams may still receive exact
   lossless compression.
 * CCITT, JBIG2, and JPX images remain in their specialized encodings. Lossy
   JBIG2 symbol substitution is especially unsuitable for invoices and receipts.
-* Font subsetting and font deduplication require complete glyph-use analysis
-  across content, forms, patterns, appearances, and Type 3 fonts. Incorrect
-  analysis can silently change text.
+* Font subsetting and merging non-identical font subsets require complete
+  glyph-use analysis across content, forms, patterns, appearances, and Type 3
+  fonts. Incorrect analysis can silently change text. Exact duplicate program
+  streams are already shared without interpreting glyphs. The largest-file
+  audit found a one-page
+  1.27 MiB PDF whose images use 2.5 KiB and whose full Calibri programs use
+  about 1.24 MiB; that is a real next target, but not a safe stream-only rewrite.
 * Generic indirect-object deduplication is not assumed safe merely because two
   objects serialize identically; object identity can participate in forms,
   structure, annotations, and extension semantics. Deduplication is limited to
-  the simple image XObjects described above.
+  the simple image XObjects and font program streams described above.
 * Effective-DPI downsampling needs a complete graphics-state walk across every
   use of an image, including forms, patterns, and appearance streams. The
   current fixed pixel cap is more conservative.
 * Zopfli is not a request-time default. qpdf describes it as roughly 100 times
   slower than zlib for about 5% improvement over the best ordinary Deflate.
+
+## Comparison with established optimizers
+
+[Adobe Acrobat][adobe-optimizer] exposes image downsampling and recompression,
+font removal/subsetting, transparency flattening, object and user-data removal,
+content cleanup, and linearization. [iText pdfOptimizer][itext-optimizer]
+combines stream compression, duplicate-font removal, font subsetting and
+merging, image scaling/recompression, colour conversion, and rollback when a
+replacement grows. [Apryse][apryse-optimizer] similarly removes duplicate
+fonts, images, ICC profiles, and other streams, downsamples images, supports
+JBIG2/JPEG 2000, and removes unused objects. [Nutrient][nutrient-optimizer]
+offers unused-content removal, font and image analysis, and linearization.
+
+Skald now covers the high-value subset that has a compact local proof: object
+streams, exact stream recompression, bounded image resizing/recompression,
+exact simple-image sharing, exact font-program sharing, whole-file rollback,
+idempotence, and graph equivalence. The production audit found only 3,471 bytes
+of duplicate ICC profile payloads in the effective 250-largest outputs, so a
+separate ICC interning feature is not justified yet.
+
+The remaining commercial techniques are not interchangeable with safe
+attachment optimization. Removing metadata, forms, actions, tags, attachments,
+or layers changes document semantics. Transparency flattening and colour-space
+conversion can change rendering. JBIG2 symbol substitution is inappropriate
+for financial text. Effective-DPI downsampling needs a complete graphics-state
+walk. Font subsetting and merging remain the largest justified next feature,
+but only after their broader reachability and glyph-closure proof is complete.
 
 ## Verification gates
 
@@ -91,21 +125,26 @@ Every changed corpus document must pass all of these checks:
 ## Current private-corpus result
 
 The 2026-08-29 release gate used 9,630 production PDFs (1,412,810,215 bytes).
-Skald changed 2,568 and saved 232,107,905 bytes (16.43%). Optimizer-only
-latency was 8 ms p50, 70 ms p95, and 188 ms p99 on the development machine.
+Skald changed 3,888 and saved 293,887,792 bytes (20.80%). Optimizer-only
+latency was 6 ms p50, 48 ms p95, and 140 ms p99 on the development machine.
+Every changed output returned success from qpdf, MuPDF, and Poppler. Ten
+Poppler diagnostics from malformed opaque source structures were identical
+before and after; Skald neither parses nor changes those structures.
 
 The deterministic 250-largest subset contained 396,833,510 bytes. Skald
-changed 157 and saved 152,284,088 bytes (38.37%). All 157 outputs passed qpdf,
-MuPDF, and Poppler. Across 282 independently rendered before/after pages, the
-minimum PSNR was 27.800 dB and minimum mean SSIM was 0.891187; the fixed gates
-are 25 dB and 0.88. The earlier 1.12 implementation saved 6.54% on the same
+changed 179 and saved 191,089,459 bytes (48.15%). All 179 outputs passed qpdf,
+MuPDF, and Poppler. Across 339 independently rendered before/after pages, the
+minimum PSNR was 27.802 dB and minimum mean SSIM was 0.888447; the fixed gates
+are 25 dB and 0.88. Release 1.13 saved 38.37% and 1.12 saved 6.54% on the same
 subset.
 
-The 93 unchanged files in that subset are accounted for: 51 are protected
-documents, 31 fail codec or savings gates, six use unsupported image semantics,
-four have no qualifying stream gain, and one is excluded by image policy. The
-full corpus also contains 27 malformed, non-standard, or encrypted inputs;
-each remains byte-identical.
+The 71 unchanged files in that subset are accounted for: 51 are protected
+documents, 15 fail codec or savings gates, four have no qualifying stream gain,
+and one is excluded by image policy. The full corpus contains 117 otherwise
+parseable inputs with malformed reachable Flate data and another 27 malformed,
+non-standard, or encrypted inputs. All 144 remain byte-identical. Skald gives
+up their small possible gains rather than normalizing around broken checksums,
+empty or truncated streams, or trailing encoded data.
 
 Exact whole-file hashing found 457 duplicate files representing 72,804,113
 bytes beyond one copy of each payload. That is an application storage
@@ -121,3 +160,7 @@ makeup, eligible images, savings, and optimizer latency; see
 [qpdf-size]: https://qpdf.readthedocs.io/en/latest/cli.html#optimizing-file-size
 [verapdf]: https://docs.verapdf.org/validation/
 [ghostscript]: https://ghostscript.readthedocs.io/en/latest/VectorDevices.html
+[adobe-optimizer]: https://helpx.adobe.com/acrobat/desktop/create-documents/optimize-pdfs/pdf-optimizer-settings.html
+[itext-optimizer]: https://itextpdf.com/products/compress-pdf-pdfoptimizer
+[apryse-optimizer]: https://docs.apryse.com/core/guides/features/optimization
+[nutrient-optimizer]: https://www.nutrient.io/api/document-optimization-api/

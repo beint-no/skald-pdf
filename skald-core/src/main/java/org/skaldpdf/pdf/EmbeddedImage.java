@@ -91,7 +91,8 @@ public final class EmbeddedImage {
     }
 
     /**
-     * Decodes DCT or 8-bit DeviceRGB/DeviceGray Flate streams into
+     * Decodes DCT or 8-bit DeviceRGB, DeviceGray, or three-component ICCBased
+     * Flate streams into
      * {@link ImageData}. Empty when the filter or colour space is outside the
      * supported subset.
      */

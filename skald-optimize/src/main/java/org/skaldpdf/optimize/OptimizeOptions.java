@@ -9,6 +9,7 @@ public final class OptimizeOptions {
     private final boolean convertLosslessRaster;
     private final boolean compressStreamsLosslessly;
     private final boolean deduplicateImagesLosslessly;
+    private final boolean deduplicateFontProgramsLosslessly;
     private final long maximumImagePixels;
     private final int minimumLosslessBytes;
     private final int minimumSavingsBytes;
@@ -32,6 +33,7 @@ public final class OptimizeOptions {
         convertLosslessRaster = builder.convertLosslessRaster;
         compressStreamsLosslessly = builder.compressStreamsLosslessly;
         deduplicateImagesLosslessly = builder.deduplicateImagesLosslessly;
+        deduplicateFontProgramsLosslessly = builder.deduplicateFontProgramsLosslessly;
         maximumImagePixels = builder.maximumImagePixels;
         minimumLosslessBytes = builder.minimumLosslessBytes;
         minimumSavingsBytes = builder.minimumSavingsBytes;
@@ -41,8 +43,9 @@ public final class OptimizeOptions {
 
     /**
      * Supplier invoices, receipts, and other camera-heavy business attachments:
-     * 2400 px, JPEG quality 80, lossless-raster quality 90, 20 MP, exact
-     * stream/image sharing, and 4 KiB / 2% savings gates.
+     * 2400 px, JPEG quality 75, lossless-raster quality 90, 20 MP, exact
+     * stream compression, exact image/font-program sharing, and 4 KiB / 2%
+     * savings gates.
      */
     public static OptimizeOptions attachments() {
         return builder().build();
@@ -83,6 +86,11 @@ public final class OptimizeOptions {
     /** Whether byte-identical simple image XObjects should share one stream. */
     public boolean deduplicateImagesLosslessly() {
         return deduplicateImagesLosslessly;
+    }
+
+    /** Whether byte-identical embedded font program streams should share one object. */
+    public boolean deduplicateFontProgramsLosslessly() {
+        return deduplicateFontProgramsLosslessly;
     }
 
     public long maximumImagePixels() {
@@ -136,12 +144,13 @@ public final class OptimizeOptions {
 
     public static final class Builder {
         private int maxEdge = 2400;
-        private float jpegQuality = 0.80f;
+        private float jpegQuality = 0.75f;
         private float losslessQuality = 0.90f;
         private boolean recompressJpeg = true;
         private boolean convertLosslessRaster = true;
         private boolean compressStreamsLosslessly = true;
         private boolean deduplicateImagesLosslessly = true;
+        private boolean deduplicateFontProgramsLosslessly = true;
         private long maximumImagePixels = 20_000_000;
         private int minimumLosslessBytes = 64 * 1024;
         private int minimumSavingsBytes = 4096;
@@ -184,6 +193,12 @@ public final class OptimizeOptions {
         /** Enables exact sharing of byte-identical, semantically simple image XObjects. */
         public Builder deduplicateImagesLosslessly(boolean value) {
             deduplicateImagesLosslessly = value;
+            return this;
+        }
+
+        /** Enables exact sharing of byte-identical embedded font program streams. */
+        public Builder deduplicateFontProgramsLosslessly(boolean value) {
+            deduplicateFontProgramsLosslessly = value;
             return this;
         }
 

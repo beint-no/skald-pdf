@@ -64,6 +64,9 @@ public final class PdfOptimizer {
                 if (options.deduplicateImagesLosslessly()) {
                     document.deduplicateImportedImagesLosslessly();
                 }
+                if (options.deduplicateFontProgramsLosslessly()) {
+                    document.deduplicateImportedFontProgramsLosslessly();
+                }
                 for (var image : document.importedImages()) {
                     var replacement = recompress(image, options, recompressor);
                     if (replacement != null) {

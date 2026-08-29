@@ -30,18 +30,33 @@ public final class PdfDrawing {
             case RIGHT -> x + width - textWidth;
         };
         var fontName = page.registerFont(font, run);
-        var operators = new StringBuilder(80 + run.glyphs().length * 4);
-        var isolated = opacity < 1f;
-        if (isolated) {
-            operators.append("q\n");
-            opacity(operators, page, opacity);
+        var colorOperator = rgb(new StringBuilder(28), color).append(" rg\n").toString();
+        var fontOperator = new StringBuilder(24).append('/').append(fontName).append(' ');
+        PdfNumbers.append(fontOperator, fontSize);
+        fontOperator.append(" Tf\n");
+        var matrix = new StringBuilder(40);
+        appendTextMatrix(matrix, alignedX, baseline, rotation);
+        var glyphHex = new StringBuilder(run.glyphs().length * 4);
+        for (var glyph : run.glyphs()) {
+            PdfNumbers.appendHex4(glyphHex, glyph);
         }
-        rgb(operators, color).append(" rg\nBT\n/").append(fontName).append(' ');
-        PdfNumbers.append(operators, fontSize);
-        operators.append(" Tf\n");
+        var isolated = opacity < 1f;
+        if (!isolated) {
+            page.appendGeneratedText(colorOperator, fontOperator.toString(), matrix.toString(), glyphHex.toString(),
+                alignedX, baseline, textWidth, fontSize, rotation == 0);
+            return;
+        }
+        var operators = new StringBuilder(96 + run.glyphs().length * 4).append("q\n");
+        opacity(operators, page, opacity);
+        operators.append(colorOperator).append("BT\n").append(fontOperator).append(matrix)
+            .append('<').append(glyphHex).append("> Tj\nET\nQ\n");
+        page.append(operators.toString());
+    }
+
+    private static void appendTextMatrix(StringBuilder operators, float x, float baseline, float rotation) {
         if (rotation == 0) {
             operators.append("1 0 0 1 ");
-            PdfNumbers.append(operators, alignedX);
+            PdfNumbers.append(operators, x);
             operators.append(' ');
             PdfNumbers.append(operators, baseline);
             operators.append(" Tm\n");
@@ -56,20 +71,11 @@ public final class PdfDrawing {
             operators.append(' ');
             PdfNumbers.append(operators, cosine);
             operators.append(' ');
-            PdfNumbers.append(operators, alignedX);
+            PdfNumbers.append(operators, x);
             operators.append(' ');
             PdfNumbers.append(operators, baseline);
             operators.append(" Tm\n");
         }
-        operators.append('<');
-        for (var glyph : run.glyphs()) {
-            PdfNumbers.appendHex4(operators, glyph);
-        }
-        operators.append("> Tj\nET\n");
-        if (isolated) {
-            operators.append("Q\n");
-        }
-        page.append(operators.toString());
     }
 
     public static void fill(PdfDocument document, PdfPage page, Color color, float x, float y, float width,

@@ -31,6 +31,13 @@ public final class PdfPage {
     private Rectangle cropBox;
     private boolean ignorePageRotationForContent;
     private boolean rotationMatrixWritten;
+    private boolean generatedTextOpen;
+    private boolean generatedTextArrayOpen;
+    private String generatedTextColor = "";
+    private String generatedTextFont = "";
+    private float generatedTextEndX;
+    private float generatedTextBaseline;
+    private float generatedTextFontSize;
 
     PdfPage(PdfDocument document, PageSize pageSize) {
         this.document = document;
@@ -81,7 +88,57 @@ public final class PdfPage {
     public void append(String operators) {
         document.ensureOpen();
         writeRotationMatrixIfNeeded();
+        closeGeneratedText();
         content.append(operators);
+    }
+
+    /**
+     * Appends one independently positioned generated text run while sharing
+     * legal PDF text and graphics state with adjacent runs. General-purpose
+     * {@link #append(String)} calls close the batch before writing.
+     */
+    public void appendGeneratedText(String colorOperator, String fontOperator, String matrixOperator,
+                                    String glyphHex, float x, float baseline, float advance,
+                                    float fontSize, boolean horizontal) {
+        document.ensureOpen();
+        writeRotationMatrixIfNeeded();
+        if (!generatedTextOpen) {
+            content.append(colorOperator).append("BT\n");
+            generatedTextOpen = true;
+            generatedTextColor = colorOperator;
+        } else if (!generatedTextColor.equals(colorOperator)) {
+            closeGeneratedText();
+            content.append(colorOperator).append("BT\n");
+            generatedTextOpen = true;
+            generatedTextColor = colorOperator;
+        }
+        if (!generatedTextFont.equals(fontOperator)) {
+            closeGeneratedTextArray();
+            content.append(fontOperator);
+            generatedTextFont = fontOperator;
+        }
+        if (horizontal && generatedTextArrayOpen
+            && Float.floatToIntBits(generatedTextBaseline) == Float.floatToIntBits(baseline)
+            && Float.floatToIntBits(generatedTextFontSize) == Float.floatToIntBits(fontSize)) {
+            var adjustment = (generatedTextEndX - x) * 1_000f / fontSize;
+            if (adjustment != 0f) {
+                content.append(' ');
+                PdfNumbers.append(content, adjustment);
+            }
+            content.append(" <").append(glyphHex).append('>');
+        } else {
+            closeGeneratedTextArray();
+            content.append(matrixOperator);
+            if (horizontal) {
+                content.append("[<").append(glyphHex).append('>');
+                generatedTextArrayOpen = true;
+            } else {
+                content.append('<').append(glyphHex).append("> Tj\n");
+            }
+        }
+        generatedTextEndX = x + advance;
+        generatedTextBaseline = baseline;
+        generatedTextFontSize = fontSize;
     }
 
     public String registerFont(PdfFont font, PdfFont.GlyphRun run) {
@@ -138,6 +195,7 @@ public final class PdfPage {
     }
 
     String content() {
+        closeGeneratedText();
         return content.toString();
     }
 
@@ -195,6 +253,23 @@ public final class PdfPage {
             default -> throw new AssertionError("Rotation was normalized by the parser");
         });
         rotationMatrixWritten = true;
+    }
+
+    private void closeGeneratedText() {
+        if (generatedTextOpen) {
+            closeGeneratedTextArray();
+            content.append("ET\n");
+            generatedTextOpen = false;
+            generatedTextColor = "";
+            generatedTextFont = "";
+        }
+    }
+
+    private void closeGeneratedTextArray() {
+        if (generatedTextArrayOpen) {
+            content.append("] TJ\n");
+            generatedTextArrayOpen = false;
+        }
     }
 
     static final class FontUsage {

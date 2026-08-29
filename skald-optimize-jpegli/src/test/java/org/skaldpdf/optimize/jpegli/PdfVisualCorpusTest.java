@@ -39,7 +39,7 @@ class PdfVisualCorpusTest {
         }
         Assumptions.assumeFalse(paths.isEmpty(), "Visual corpus has no PDFs");
 
-        var options = OptimizeOptions.attachments();
+        var options = PdfCorpusBenchmarkTest.corpusOptions();
         var recompressor = new JpegliImageRecompressor();
         var csv = new StringBuilder("file,page,psnr_db,mean_ssim\n");
         var rendered = 0;
@@ -88,11 +88,13 @@ class PdfVisualCorpusTest {
             | Metric | Result |
             | --- | ---: |
             | Changed PDFs | %,d |
+            | Max edge / JPEG quality / lossless quality | %,d / %.2f / %.2f |
             | Pages rendered twice | %,d |
             | Minimum PSNR | %.3f dB |
             | Minimum mean SSIM | %.6f |
             | Worst rendered page | %s page %d |
-            """, changed, rendered, minimumPsnr, minimumSsim, worstFile, worstPage));
+            """, changed, options.maxEdge(), options.jpegQuality(), options.losslessQuality(),
+            rendered, minimumPsnr, minimumSsim, worstFile, worstPage));
         if (worstBefore != null && worstAfter != null) {
             ImageIO.write(worstBefore, "png", output.resolve("private-pdf-visual-worst-before.png").toFile());
             ImageIO.write(worstAfter, "png", output.resolve("private-pdf-visual-worst-after.png").toFile());
