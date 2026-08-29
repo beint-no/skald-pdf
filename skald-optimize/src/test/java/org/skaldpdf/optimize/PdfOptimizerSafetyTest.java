@@ -4,6 +4,7 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSFloat;
 import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -201,6 +202,87 @@ class PdfOptimizerSafetyTest {
     }
 
     @Test
+    void recompressesAColourImageWithASimpleSoftMaskWithoutResamplingEitherPlane() throws Exception {
+        var source = pdfWithSoftMask(false, false);
+        try (var document = new PdfDocument(new PdfReader(source))) {
+            var image = document.importedImages().getFirst();
+            assertTrue(image.safeToRecompress());
+            assertTrue(image.requiresOriginalDimensions());
+        }
+
+        var optimized = PdfOptimizer.recompress(source, TEST_OPTIONS);
+
+        assertTrue(optimized.length < source.length);
+        try (var before = Loader.loadPDF(source); var after = Loader.loadPDF(optimized)) {
+            var original = firstImage(before);
+            var replacement = firstImage(after);
+            assertEquals(original.getWidth(), replacement.getWidth());
+            assertEquals(original.getHeight(), replacement.getHeight());
+            assertEquals(COSName.DCT_DECODE, replacement.getCOSObject().getCOSName(COSName.FILTER));
+            assertArrayEquals(decodedSoftMask(original), decodedSoftMask(replacement));
+            assertArrayEquals(alpha(original.getImage()), alpha(replacement.getImage()));
+        }
+        assertArrayEquals(optimized, PdfOptimizer.recompress(optimized, TEST_OPTIONS));
+    }
+
+    @Test
+    void acceptsASoftMaskWithoutItsOptionalTypeEntry() throws Exception {
+        var source = withoutSoftMaskType(pdfWithSoftMask(false, false));
+        try (var document = new PdfDocument(new PdfReader(source))) {
+            assertTrue(document.importedImages().getFirst().safeToRecompress());
+        }
+
+        var optimized = PdfOptimizer.recompress(source, TEST_OPTIONS);
+
+        assertTrue(optimized.length < source.length);
+        try (var before = Loader.loadPDF(source); var after = Loader.loadPDF(optimized)) {
+            assertArrayEquals(decodedSoftMask(firstImage(before)), decodedSoftMask(firstImage(after)));
+        }
+    }
+
+    @Test
+    void rejectsAResizedReplacementWhenTheImageHasASoftMask() throws Exception {
+        var source = pdfWithSoftMask(false, false);
+        var calls = new AtomicInteger();
+
+        var result = PdfOptimizer.recompress(source, TEST_OPTIONS, (image, options) -> {
+            calls.incrementAndGet();
+            return image.decode().map(decoded -> RasterImages.asJpeg(
+                decoded, options.maxEdge(), options.maxEdge(), options.losslessQuality()));
+        });
+
+        assertEquals(1, calls.get());
+        try (var document = Loader.loadPDF(result)) {
+            var image = firstImage(document);
+            assertEquals(COSName.FLATE_DECODE, image.getCOSObject().getCOSName(COSName.FILTER));
+            assertEquals(900, image.getWidth());
+            assertEquals(700, image.getHeight());
+        }
+    }
+
+    @Test
+    void neverRecompressesPreblendedOrNonGraySoftMasks() throws Exception {
+        for (var source : java.util.List.of(
+            pdfWithSoftMask(true, false), pdfWithSoftMask(false, true))) {
+            var calls = new AtomicInteger();
+            try (var document = new PdfDocument(new PdfReader(source))) {
+                assertFalse(document.importedImages().getFirst().safeToRecompress());
+            }
+
+            var result = PdfOptimizer.recompress(source, TEST_OPTIONS, (image, options) -> {
+                calls.incrementAndGet();
+                return image.decode();
+            });
+
+            assertEquals(0, calls.get());
+            try (var document = Loader.loadPDF(result)) {
+                assertEquals(COSName.FLATE_DECODE,
+                    firstImage(document).getCOSObject().getCOSName(COSName.FILTER));
+            }
+        }
+    }
+
+    @Test
     void rejectsIccBasedImagesWhoseComponentCountCannotBePreservedByJpeg() throws Exception {
         var profile = ICC_Profile.getInstance(ColorSpace.CS_sRGB).getData();
         for (var components : java.util.List.of(1, 2, 4)) {
@@ -246,6 +328,24 @@ class PdfOptimizerSafetyTest {
                     0, 0, 640, 480, null, 0, 640),
                 image.getImage().getRGB(0, 0, 640, 480, null, 0, 640));
         }
+    }
+
+    @Test
+    void keepsLosslessImagesBelowTheAttachmentWorkFloorAwayFromTheCodec() throws Exception {
+        var source = pdfWith(RasterImages.decode(noisyPng(64, 64)));
+        var options = OptimizeOptions.attachments();
+        try (var document = new PdfDocument(new PdfReader(source))) {
+            assertTrue(document.importedImages().getFirst().encodedLength()
+                < options.minimumLosslessBytes());
+        }
+        var calls = new AtomicInteger();
+
+        PdfOptimizer.recompress(source, options, (image, policy) -> {
+            calls.incrementAndGet();
+            return image.decode();
+        });
+
+        assertEquals(0, calls.get());
     }
 
     @Test
@@ -678,6 +778,68 @@ class PdfOptimizerSafetyTest {
 
     private static byte[] pdfWithIccBasedRgb(int width, int height, byte[] profile) throws Exception {
         return pdfWithIccBasedSamples(width, height, profile, 3);
+    }
+
+    private static byte[] pdfWithSoftMask(boolean matte, boolean rgbMask) throws Exception {
+        var width = 900;
+        var height = 700;
+        var colour = ImageIO.read(new ByteArrayInputStream(noisyPng(width, height)));
+        var alpha = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+        for (var y = 0; y < height; y++) {
+            for (var x = 0; x < width; x++) {
+                var value = (x * 255 / (width - 1)) << 16;
+                alpha.setRGB(x, y, value | value >>> 8 | value >>> 16);
+            }
+        }
+        try (var document = new PDDocument()) {
+            var page = new PDPage(new PDRectangle(width, height));
+            document.addPage(page);
+            var image = LosslessFactory.createFromImage(document, colour);
+            var mask = LosslessFactory.createFromImage(document, alpha);
+            if (matte) {
+                var values = new COSArray();
+                values.add(new COSFloat(1));
+                values.add(new COSFloat(1));
+                values.add(new COSFloat(1));
+                mask.getCOSObject().setItem(COSName.getPDFName("Matte"), values);
+            }
+            if (rgbMask) {
+                mask.getCOSObject().setItem(COSName.COLORSPACE, COSName.DEVICERGB);
+            }
+            image.getCOSObject().setItem(COSName.SMASK, mask.getCOSObject());
+            try (var content = new PDPageContentStream(document, page)) {
+                content.drawImage(image, 0, 0, width, height);
+            }
+            var output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private static byte[] decodedSoftMask(PDImageXObject image) throws Exception {
+        var mask = assertInstanceOf(COSStream.class,
+            image.getCOSObject().getDictionaryObject(COSName.SMASK));
+        try (var input = mask.createInputStream()) {
+            return input.readAllBytes();
+        }
+    }
+
+    private static byte[] withoutSoftMaskType(byte[] source) throws Exception {
+        try (var document = Loader.loadPDF(source)) {
+            var mask = assertInstanceOf(COSStream.class,
+                firstImage(document).getCOSObject().getDictionaryObject(COSName.SMASK));
+            mask.removeItem(COSName.TYPE);
+            var output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private static int[] alpha(BufferedImage image) {
+        var pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(),
+            null, 0, image.getWidth());
+        Arrays.setAll(pixels, index -> pixels[index] >>> 24);
+        return pixels;
     }
 
     private static byte[] pdfWithIccBasedSamples(int width, int height, byte[] profile, int components) throws Exception {

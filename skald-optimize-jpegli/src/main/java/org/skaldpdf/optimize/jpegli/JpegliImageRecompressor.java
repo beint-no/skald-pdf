@@ -50,12 +50,12 @@ public final class JpegliImageRecompressor implements ImageRecompressor {
     public Optional<ImageData> recompress(EmbeddedImage image, OptimizeOptions options) {
         if (image.jpeg()) {
             return image.decode().filter(ImageData::jpeg).map(decoded -> {
-                var converted = jpegConverters.computeIfAbsent(Policy.from(options), this::converter)
+                var converted = jpegConverters.computeIfAbsent(Policy.from(options, image), this::converter)
                     .convert(decoded.samples());
                 return ImageData.fromJpeg(converted.bytes());
             });
         }
-        return image.decode().map(decoded -> encodeRaster(decoded, options));
+        return image.decode().map(decoded -> encodeRaster(image, decoded, options));
     }
 
     private JpegConverter converter(Policy policy) {
@@ -68,7 +68,7 @@ public final class JpegliImageRecompressor implements ImageRecompressor {
             .build();
     }
 
-    private ImageData encodeRaster(ImageData source, OptimizeOptions options) {
+    private ImageData encodeRaster(EmbeddedImage embedded, ImageData source, OptimizeOptions options) {
         var rgba = rgba(source);
         try (var arena = Arena.ofConfined()) {
             var pixels = arena.allocate(rgba.length, 1);
@@ -76,8 +76,9 @@ public final class JpegliImageRecompressor implements ImageRecompressor {
             var image = new PixelImage(source.width(), source.height(), 8, 1, 1,
                 1, 13, false, Math.multiplyExact(source.width(), 4L), pixels, MemorySegment.NULL);
             var longest = Math.max(source.width(), source.height());
-            if (longest > options.maxEdge()) {
-                var scale = options.maxEdge() / (double) longest;
+            var maxEdge = embedded.requiresOriginalDimensions() ? longest : options.maxEdge();
+            if (longest > maxEdge) {
+                var scale = maxEdge / (double) longest;
                 var width = Math.max(1, (int) Math.round(source.width() * scale));
                 var height = Math.max(1, (int) Math.round(source.height() * scale));
                 image = resizer.resize(image, width, height, ResizeFilter.MITCHELL,
@@ -121,8 +122,10 @@ public final class JpegliImageRecompressor implements ImageRecompressor {
     }
 
     private record Policy(int maxEdge, int jpegQuality, long maximumPixels) {
-        static Policy from(OptimizeOptions options) {
-            return new Policy(options.maxEdge(), Math.round(options.jpegQuality() * 100),
+        static Policy from(OptimizeOptions options, EmbeddedImage image) {
+            var maxEdge = image.requiresOriginalDimensions()
+                ? Math.max(image.width(), image.height()) : options.maxEdge();
+            return new Policy(maxEdge, Math.round(options.jpegQuality() * 100),
                 Math.min(Integer.MAX_VALUE, options.maximumImagePixels()));
         }
     }

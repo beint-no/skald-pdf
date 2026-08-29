@@ -15,9 +15,10 @@ final class OptimizedJpeg {
     private OptimizedJpeg() {
     }
 
-    static boolean alreadySatisfies(byte[] jpeg, OptimizeOptions options, int width, int height) {
+    static boolean alreadySatisfies(byte[] jpeg, OptimizeOptions options, int width, int height,
+                                    boolean requiresOriginalDimensions) {
         var marker = marker(jpeg);
-        if (marker == null || Math.max(width, height) > options.maxEdge()) {
+        if (marker == null || !requiresOriginalDimensions && Math.max(width, height) > options.maxEdge()) {
             return false;
         }
         return marker.fingerprint() == options.markerFingerprint()

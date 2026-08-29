@@ -18,7 +18,7 @@ lossless stream strategy also tracks the independently implemented
 | Generate object and cross-reference streams | Every reachable value is imported and a graph digest independent of object numbers and dictionary order must match. |
 | Raw, ASCIIHex, or ASCII85 stream to Flate | The old filter is decoded within bounded memory, the new stream is inflated again, and decoded bytes must be identical. |
 | Recompress an existing Flate stream | Decoded bytes must be identical. Image planes use balanced Deflate; other data uses a bounded level-6/level-9 sample to avoid maximum compression when it cannot pay. |
-| Recompress a JPEG image with JPEGli | Only opaque 8-bit DeviceGray, DeviceRGB, or three-component ICCBased image XObjects with supported filters and no semantic modifiers qualify. ASCII85, ASCIIHex, and Flate wrappers around DCT streams are decoded in bounded memory. ICCBased replacements retain the original profile object and color-space dictionary. The replacement must clear both per-image and whole-document savings gates. |
+| Recompress a JPEG image with JPEGli | Only 8-bit DeviceGray, DeviceRGB, or three-component ICCBased image XObjects with supported filters qualify. An optional, semantically simple DeviceGray soft mask is retained byte-exact and forces the colour plane to keep its original dimensions. ASCII85, ASCIIHex, and Flate wrappers around DCT streams are decoded in bounded memory. ICCBased replacements retain the original profile object and color-space dictionary. The replacement must clear both per-image and whole-document savings gates. |
 | Convert a lossless raster to JPEGli | The same image restrictions apply, plus pixel, source-size, quality, and resize limits. Explicit identity `/Decode` arrays are retained; any inversion or remapping remains excluded. |
 | Share exact image XObjects | Semantically simple image streams share one object only when their complete canonical stream bodies are byte-identical. The semantic digest receives an explicit source-reference alias map. Similar pixels or payload-only matches never qualify. |
 | Share exact font programs | Only indirect `FontFile`, `FontFile2`, and `FontFile3` streams under a `FontDescriptor` qualify. Their complete canonical stream dictionaries and encoded bytes must be identical and contain no indirect values. Descriptors, font dictionaries, encodings, CMaps, glyph data, and content operators remain unchanged. |
@@ -53,9 +53,11 @@ for a zero-surprise attachment optimizer.
   original profile, alternate space, and component interpretation. Profiles
   with one, two, or four components remain unchanged because the JPEGli path
   cannot preserve those sample planes and component counts.
-* Images with masks, soft masks, non-identity decode arrays, alternates, OPI,
-  or image metadata are not replaced. Their streams may still receive exact
-  lossless compression.
+* Images with hard masks, preblended `/Matte` soft masks, nested masks,
+  non-DeviceGray soft masks, non-identity decode arrays, alternates, OPI, or
+  image metadata are not replaced. A simple DeviceGray soft-mask stream is
+  preserved exactly while only its colour plane is recompressed without
+  resizing. Excluded streams may still receive exact lossless compression.
 * CCITT, JBIG2, and JPX images remain in their specialized encodings. Lossy
   JBIG2 symbol substitution is especially unsuitable for invoices and receipts.
 * Font subsetting and merging non-identical font subsets require complete
@@ -131,12 +133,22 @@ Every changed output returned success from qpdf, MuPDF, and Poppler. Ten
 Poppler diagnostics from malformed opaque source structures were identical
 before and after; Skald neither parses nor changes those structures.
 
-The deterministic 250-largest subset contained 396,833,510 bytes. Skald
-changed 179 and saved 191,089,459 bytes (48.15%). All 179 outputs passed qpdf,
+The deterministic 250-largest subset contained 396,833,510 bytes. Skald 1.15
+changed 179 and saved 201,273,417 bytes (50.72%). All 179 outputs passed qpdf,
 MuPDF, and Poppler. Across 339 independently rendered before/after pages, the
 minimum PSNR was 27.802 dB and minimum mean SSIM was 0.888447; the fixed gates
-are 25 dB and 0.88. Release 1.13 saved 38.37% and 1.12 saved 6.54% on the same
-subset.
+are 25 dB and 0.88. Release 1.14 saved 48.15%, 1.13 saved 38.37%, and 1.12
+saved 6.54% on the same subset.
+
+The post-1.14 fixed-point audit used the current 9,770 production PDFs
+(1,127,587,226 bytes). Release 1.15 found another 14,174,908 bytes (1.26%) in
+730 documents: 4,789,108 bytes came from safe soft-mask colour planes and the
+remainder from lowering the lossless-raster work floor from 64 KiB to 16 KiB.
+All 730 candidates passed structural and idempotence checks. A stricter
+no-floor experiment saved another 1,276,448 bytes but spent more codec time
+and removed the guard against documents containing many tiny image objects.
+Across 1,038 rendered pages from the broader no-floor set, the minimum PSNR
+was 41.380 dB and minimum mean SSIM was 0.997812.
 
 The 71 unchanged files in that subset are accounted for: 51 are protected
 documents, 15 fail codec or savings gates, four have no qualifying stream gain,
