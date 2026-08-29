@@ -49,9 +49,11 @@ public final class JpegliImageRecompressor implements ImageRecompressor {
     @Override
     public Optional<ImageData> recompress(EmbeddedImage image, OptimizeOptions options) {
         if (image.jpeg()) {
-            var converted = jpegConverters.computeIfAbsent(Policy.from(options), this::converter)
-                .convert(image.encodedBytes());
-            return Optional.of(ImageData.fromJpeg(converted.bytes()));
+            return image.decode().filter(ImageData::jpeg).map(decoded -> {
+                var converted = jpegConverters.computeIfAbsent(Policy.from(options), this::converter)
+                    .convert(decoded.samples());
+                return ImageData.fromJpeg(converted.bytes());
+            });
         }
         return image.decode().map(decoded -> encodeRaster(decoded, options));
     }

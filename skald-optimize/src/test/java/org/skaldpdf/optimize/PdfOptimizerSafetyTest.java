@@ -10,6 +10,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.common.PDMetadata;
+import org.apache.pdfbox.pdmodel.common.PDStream;
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
@@ -25,9 +26,12 @@ import org.skaldpdf.pdf.SignatureField;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -108,6 +112,44 @@ class PdfOptimizerSafetyTest {
     }
 
     @Test
+    void acceptsOnlyIdentityImageDecodeArrays() throws Exception {
+        var source = pdfWith(RasterImages.decode(noisyPng(640, 480)));
+        var identity = withDecodeArray(source, false);
+        var calls = new AtomicInteger();
+
+        var result = PdfOptimizer.recompress(identity, TEST_OPTIONS, (image, options) -> {
+            calls.incrementAndGet();
+            return image.decode().map(decoded -> RasterImages.asJpeg(
+                decoded, options.maxEdge(), options.maxEdge(), options.losslessQuality()));
+        });
+
+        assertEquals(1, calls.get());
+        assertTrue(result.length < identity.length);
+    }
+
+    @Test
+    void decodesAscii85AndFlateWrappersAroundJpegImages() throws Exception {
+        var jpeg = jpeg(640, 480);
+        var source = withAscii85FlateJpegWrappers(pdfWith(ImageData.fromJpeg(jpeg)));
+        var calls = new AtomicInteger();
+
+        var result = PdfOptimizer.recompress(source, TEST_OPTIONS, (image, options) -> {
+            calls.incrementAndGet();
+            return image.decode();
+        });
+
+        assertEquals(1, calls.get());
+        assertTrue(result.length < source.length);
+        try (var document = Loader.loadPDF(result)) {
+            var image = firstImage(document);
+            assertEquals(COSName.DCT_DECODE, image.getCOSObject().getCOSName(COSName.FILTER));
+            assertArrayEquals(ImageIO.read(new ByteArrayInputStream(jpeg)).getRGB(
+                    0, 0, 640, 480, null, 0, 640),
+                image.getImage().getRGB(0, 0, 640, 480, null, 0, 640));
+        }
+    }
+
+    @Test
     void customEncoderKeepsSkaldGraphAndSavingsGuards() throws Exception {
         var source = pdfWith(RasterImages.decode(noisyPng(800, 600)));
         var calls = new AtomicInteger();
@@ -148,6 +190,33 @@ class PdfOptimizerSafetyTest {
     }
 
     @Test
+    void sharesByteIdenticalSimpleImageObjectsWithoutChangingPageResources() throws Exception {
+        var source = pdfWithDuplicateJpegObjects(24);
+        var options = OptimizeOptions.builder().recompressJpeg(false).convertLosslessRaster(false)
+            .compressStreamsLosslessly(false).minimumSavingsBytes(1).minimumSavingsPercent(0).build();
+
+        var optimized = PdfOptimizer.recompress(source, options);
+
+        assertTrue(optimized.length < source.length);
+        try (var before = Loader.loadPDF(source); var after = Loader.loadPDF(optimized)) {
+            assertEquals(24, distinctPageImageObjects(before));
+            assertEquals(1, distinctPageImageObjects(after));
+            assertEquals(before.getNumberOfPages(), after.getNumberOfPages());
+            for (var page = 0; page < before.getNumberOfPages(); page++) {
+                assertArrayEquals(raw(firstImage(before, page)), raw(firstImage(after, page)));
+            }
+        }
+        assertArrayEquals(optimized, PdfOptimizer.recompress(optimized, options));
+
+        var disabled = OptimizeOptions.builder().recompressJpeg(false).convertLosslessRaster(false)
+            .compressStreamsLosslessly(false).deduplicateImagesLosslessly(false)
+            .minimumSavingsBytes(1).minimumSavingsPercent(0).build();
+        try (var document = Loader.loadPDF(PdfOptimizer.recompress(source, disabled))) {
+            assertEquals(24, distinctPageImageObjects(document));
+        }
+    }
+
+    @Test
     void findsAndReplacesImagesInsideNestedFormXObjects() throws Exception {
         var source = nestedFormPdf();
         var optimized = PdfOptimizer.recompress(source, TEST_OPTIONS);
@@ -172,6 +241,75 @@ class PdfOptimizerSafetyTest {
                 assertArrayEquals(tasks.getFirst().get(), task.get());
             }
         }
+    }
+
+    @Test
+    void compressesRawStreamsWithoutChangingTheirDecodedBytes() throws Exception {
+        var content = "q Q\n".repeat(200_000).getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        var source = pdfWithContent(content, false);
+        var options = OptimizeOptions.builder().recompressJpeg(false).convertLosslessRaster(false)
+            .minimumSavingsBytes(1).minimumSavingsPercent(0).build();
+
+        var optimized = PdfOptimizer.recompress(source, options);
+
+        assertTrue(optimized.length < source.length / 10);
+        assertArrayEquals(content, pageContent(optimized));
+        try (var document = Loader.loadPDF(optimized)) {
+            assertEquals(COSName.FLATE_DECODE,
+                document.getPage(0).getContentStreams().next().getFilters().getFirst());
+        }
+        assertArrayEquals(optimized, PdfOptimizer.recompress(optimized, options));
+    }
+
+    @Test
+    void recompressesExistingFlateStreamsAndKeepsDecodedBytesExact() throws Exception {
+        var content = java.util.stream.IntStream.range(0, 80_000)
+            .mapToObj(index -> "q 1 0 0 1 " + index % 997 + " " + index % 991 + " cm Q\n")
+            .collect(java.util.stream.Collectors.joining())
+            .getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        var source = pdfWithContent(content, true);
+        var options = OptimizeOptions.builder().recompressJpeg(false).convertLosslessRaster(false)
+            .minimumSavingsBytes(1).minimumSavingsPercent(0).build();
+
+        var optimized = PdfOptimizer.recompress(source, options);
+
+        assertTrue(optimized.length < source.length);
+        assertArrayEquals(content, pageContent(optimized));
+        assertArrayEquals(optimized, PdfOptimizer.recompress(optimized, options));
+    }
+
+    @Test
+    void losslessStreamCompressionCanBeDisabled() throws Exception {
+        var content = "q Q\n".repeat(100_000).getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        var source = pdfWithContent(content, false);
+        var options = OptimizeOptions.builder().recompressJpeg(false).convertLosslessRaster(false)
+            .compressStreamsLosslessly(false).minimumSavingsBytes(1).minimumSavingsPercent(0).build();
+
+        var optimized = PdfOptimizer.recompress(source, options);
+
+        assertArrayEquals(content, pageContent(optimized));
+        try (var document = Loader.loadPDF(optimized)) {
+            assertTrue(document.getPage(0).getContentStreams().next().getFilters().isEmpty());
+        }
+    }
+
+    @Test
+    void replacesAscii85WithLosslessFlateCompression() throws Exception {
+        var content = "q 1 0 0 1 0 0 cm Q\n".repeat(30_000)
+            .getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        var source = pdfWithAscii85Content(content);
+        var options = OptimizeOptions.builder().recompressJpeg(false).convertLosslessRaster(false)
+            .minimumSavingsBytes(1).minimumSavingsPercent(0).build();
+
+        var optimized = PdfOptimizer.recompress(source, options);
+
+        assertTrue(optimized.length < source.length / 10);
+        assertArrayEquals(content, pageContent(optimized));
+        try (var document = Loader.loadPDF(optimized)) {
+            assertEquals(COSName.FLATE_DECODE,
+                document.getPage(0).getContentStreams().next().getFilters().getFirst());
+        }
+        assertArrayEquals(optimized, PdfOptimizer.recompress(optimized, options));
     }
 
     @Test
@@ -204,19 +342,116 @@ class PdfOptimizerSafetyTest {
     }
 
     private static byte[] withDecodeArray(byte[] source) throws Exception {
+        return withDecodeArray(source, true);
+    }
+
+    private static byte[] withDecodeArray(byte[] source, boolean inverted) throws Exception {
         try (PDDocument document = Loader.loadPDF(source)) {
             var image = firstImage(document);
             var decode = new COSArray();
-            decode.add(new COSFloat(1));
-            decode.add(new COSFloat(0));
-            decode.add(new COSFloat(1));
-            decode.add(new COSFloat(0));
-            decode.add(new COSFloat(1));
-            decode.add(new COSFloat(0));
+            for (int component = 0; component < 3; component++) {
+                decode.add(new COSFloat(inverted ? 1 : 0));
+                decode.add(new COSFloat(inverted ? 0 : 1));
+            }
             image.getCOSObject().setItem(COSName.DECODE, decode);
             var output = new ByteArrayOutputStream();
             document.save(output);
             return output.toByteArray();
+        }
+    }
+
+    private static byte[] withAscii85FlateJpegWrappers(byte[] source) throws Exception {
+        try (var document = Loader.loadPDF(source)) {
+            var image = firstImage(document);
+            var encoded = new ByteArrayOutputStream();
+            try (var deflater = new Deflater(Deflater.BEST_SPEED);
+                 var output = new DeflaterOutputStream(encoded, deflater)) {
+                output.write(raw(image));
+            }
+            var filters = new COSArray();
+            filters.add(COSName.ASCII85_DECODE);
+            filters.add(COSName.FLATE_DECODE);
+            filters.add(COSName.DCT_DECODE);
+            image.getCOSObject().setItem(COSName.FILTER, filters);
+            try (var output = image.getCOSObject().createRawOutputStream()) {
+                output.write(ascii85(encoded.toByteArray()));
+            }
+            var result = new ByteArrayOutputStream();
+            document.save(result);
+            return result.toByteArray();
+        }
+    }
+
+    private static byte[] pdfWithContent(byte[] content, boolean poorlyDeflated) throws Exception {
+        try (var document = new PDDocument()) {
+            var page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            PDStream stream;
+            if (poorlyDeflated) {
+                var encoded = new ByteArrayOutputStream();
+                try (var deflater = new Deflater(Deflater.BEST_SPEED);
+                     var output = new DeflaterOutputStream(encoded, deflater)) {
+                    output.write(content);
+                }
+                var cos = document.getDocument().createCOSStream();
+                cos.setItem(COSName.FILTER, COSName.FLATE_DECODE);
+                try (var output = cos.createRawOutputStream()) {
+                    output.write(encoded.toByteArray());
+                }
+                stream = new PDStream(cos);
+            } else {
+                stream = new PDStream(document, new ByteArrayInputStream(content));
+            }
+            page.setContents(stream);
+            var output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private static byte[] pdfWithAscii85Content(byte[] content) throws Exception {
+        try (var document = new PDDocument()) {
+            var page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            var cos = document.getDocument().createCOSStream();
+            cos.setItem(COSName.FILTER, COSName.ASCII85_DECODE);
+            try (var output = cos.createRawOutputStream()) {
+                output.write(ascii85(content));
+            }
+            page.setContents(new PDStream(cos));
+            var output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private static byte[] ascii85(byte[] source) {
+        var output = new ByteArrayOutputStream(source.length * 5 / 4 + 2);
+        for (int offset = 0; offset < source.length; offset += 4) {
+            var count = Math.min(4, source.length - offset);
+            long value = 0;
+            for (int index = 0; index < 4; index++) {
+                value = value << 8 | (index < count ? source[offset + index] & 0xffL : 0);
+            }
+            if (count == 4 && value == 0) {
+                output.write('z');
+                continue;
+            }
+            var digits = new byte[5];
+            for (int index = 4; index >= 0; index--) {
+                digits[index] = (byte) (value % 85 + '!');
+                value /= 85;
+            }
+            output.write(digits, 0, count + 1);
+        }
+        output.write('~');
+        output.write('>');
+        return output.toByteArray();
+    }
+
+    private static byte[] pageContent(byte[] pdf) throws Exception {
+        try (var document = Loader.loadPDF(pdf); var content = document.getPage(0).getContents()) {
+            return content.readAllBytes();
         }
     }
 
@@ -244,6 +479,32 @@ class PdfOptimizerSafetyTest {
         }
     }
 
+    private static byte[] pdfWithDuplicateJpegObjects(int pages) throws Exception {
+        var encoded = jpeg(300, 136);
+        try (var document = new PDDocument()) {
+            for (var pageNumber = 0; pageNumber < pages; pageNumber++) {
+                var page = new PDPage(new PDRectangle(400, 300));
+                document.addPage(page);
+                var image = PDImageXObject.createFromByteArray(document, encoded, "repeated");
+                try (var content = new PDPageContentStream(document, page)) {
+                    content.drawImage(image, 50, 70, 300, 136);
+                }
+            }
+            var output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private static int distinctPageImageObjects(PDDocument document) throws Exception {
+        var images = java.util.Collections.newSetFromMap(
+            new java.util.IdentityHashMap<org.apache.pdfbox.cos.COSStream, Boolean>());
+        for (var page = 0; page < document.getNumberOfPages(); page++) {
+            images.add(firstImage(document, page).getCOSObject());
+        }
+        return images.size();
+    }
+
     private static void assertImagePayloadsEqual(byte[] before, byte[] after) throws Exception {
         try (var first = Loader.loadPDF(before); var second = Loader.loadPDF(after)) {
             assertArrayEquals(raw(firstImage(first)), raw(firstImage(second)));
@@ -251,7 +512,11 @@ class PdfOptimizerSafetyTest {
     }
 
     private static PDImageXObject firstImage(PDDocument document) throws Exception {
-        var page = document.getPage(0);
+        return firstImage(document, 0);
+    }
+
+    private static PDImageXObject firstImage(PDDocument document, int pageNumber) throws Exception {
+        var page = document.getPage(pageNumber);
         for (var name : page.getResources().getXObjectNames()) {
             var object = page.getResources().getXObject(name);
             if (object instanceof PDImageXObject image) {
@@ -283,6 +548,13 @@ class PdfOptimizerSafetyTest {
         image.setRGB(0, 0, width, height, pixels, 0, width);
         var output = new ByteArrayOutputStream();
         ImageIO.write(image, "png", output);
+        return output.toByteArray();
+    }
+
+    private static byte[] jpeg(int width, int height) throws Exception {
+        var image = ImageIO.read(new ByteArrayInputStream(noisyPng(width, height)));
+        var output = new ByteArrayOutputStream();
+        ImageIO.write(image, "jpeg", output);
         return output.toByteArray();
     }
 }

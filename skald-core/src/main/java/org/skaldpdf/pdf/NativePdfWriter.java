@@ -46,7 +46,9 @@ final class NativePdfWriter {
             if (source == null) {
                 writeObjects(buildObjects(document), target, HEADER);
             } else {
-                writeCanonical(source, document.importedImageReplacements(), target);
+                writeCanonical(source, document.importedImageReplacements(),
+                    document.shouldCompressImportedStreamsLosslessly(),
+                    document.shouldDeduplicateImportedImagesLosslessly(), target);
             }
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to write PDF", exception);
@@ -55,11 +57,14 @@ final class NativePdfWriter {
 
     private void writeCanonical(NativePdfParser source,
                                 IdentityHashMap<CosValue.CosStream, org.skaldpdf.image.ImageData> images,
+                                boolean compressStreamsLosslessly,
+                                boolean deduplicateImagesLosslessly,
                                 OutputStream target) throws IOException {
         var replacements = new IdentityHashMap<CosValue.CosStream, CosValue.CosStream>();
         images.forEach((stream, image) -> replacements.put(stream, replacementImage(stream, image)));
         var objects = new ObjectStore();
-        var importer = new CanonicalImportContext(source, objects, replacements);
+        var importer = new CanonicalImportContext(source, objects, replacements,
+            compressStreamsLosslessly, deduplicateImagesLosslessly, compressionLevel);
         objects.rootObject = importer.importReference(source.catalogReference());
         var trailer = new StringBuilder();
         source.trailer().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
@@ -72,7 +77,7 @@ final class NativePdfWriter {
         var candidate = new ByteArrayOutputStream();
         writeObjects(objects, candidate, source.canonicalHeader());
         var bytes = candidate.toByteArray();
-        var expected = source.semanticDigest(replacements);
+        var expected = source.semanticDigest(replacements, importer.referenceAliases());
         var actual = new NativePdfParser(bytes).semanticDigest(new IdentityHashMap<>());
         if (!MessageDigest.isEqual(expected, actual)) {
             throw new IllegalStateException("Canonical PDF rewrite changed document semantics");
@@ -1220,12 +1225,22 @@ final class NativePdfWriter {
         private final ObjectStore target;
         private final IdentityHashMap<CosValue.CosStream, CosValue.CosStream> replacements;
         private final Map<CosValue.CosReference, Integer> objects = new LinkedHashMap<>();
+        private final Map<ByteBuffer, DuplicateImage> duplicateImages = new LinkedHashMap<>();
+        private final Map<CosValue.CosReference, CosValue.CosReference> referenceAliases = new LinkedHashMap<>();
+        private final boolean compressStreamsLosslessly;
+        private final boolean deduplicateImagesLosslessly;
+        private final int compressionLevel;
 
         CanonicalImportContext(NativePdfParser source, ObjectStore target,
-                               IdentityHashMap<CosValue.CosStream, CosValue.CosStream> replacements) {
+                               IdentityHashMap<CosValue.CosStream, CosValue.CosStream> replacements,
+                               boolean compressStreamsLosslessly, boolean deduplicateImagesLosslessly,
+                               int compressionLevel) {
             this.source = source;
             this.target = target;
             this.replacements = replacements;
+            this.compressStreamsLosslessly = compressStreamsLosslessly;
+            this.deduplicateImagesLosslessly = deduplicateImagesLosslessly;
+            this.compressionLevel = compressionLevel;
         }
 
         int importReference(CosValue.CosReference reference) {
@@ -1233,13 +1248,43 @@ final class NativePdfWriter {
             if (existing != null) {
                 return existing;
             }
+            var value = source.resolve(reference);
+            if (deduplicateImagesLosslessly && value instanceof CosValue.CosStream stream
+                && source.safeToDeduplicateImage(stream)) {
+                var body = rawStream(replacement(stream));
+                var key = ByteBuffer.wrap(body).asReadOnlyBuffer();
+                var duplicate = duplicateImages.get(key);
+                if (duplicate != null) {
+                    objects.put(reference, duplicate.object());
+                    referenceAliases.put(reference, duplicate.reference());
+                    return duplicate.object();
+                }
+                var object = target.reserve();
+                objects.put(reference, object);
+                target.set(object, body);
+                duplicateImages.put(key, new DuplicateImage(object, reference));
+                return object;
+            }
             var object = target.reserve();
             objects.put(reference, object);
-            var value = source.resolve(reference);
             target.set(object, value instanceof CosValue.CosStream stream
-                ? rawStream(replacements.getOrDefault(stream, stream))
-                : ascii(direct(value)));
+                ? rawStream(replacement(stream)) : ascii(direct(value)));
             return object;
+        }
+
+        Map<CosValue.CosReference, CosValue.CosReference> referenceAliases() {
+            return Map.copyOf(referenceAliases);
+        }
+
+        private CosValue.CosStream replacement(CosValue.CosStream stream) {
+            var replacement = replacements.get(stream);
+            if (replacement == null && compressStreamsLosslessly) {
+                replacement = source.compressStreamLosslessly(stream, compressionLevel);
+                if (replacement != stream) {
+                    replacements.put(stream, replacement);
+                }
+            }
+            return replacement == null ? stream : replacement;
         }
 
         String direct(CosValue value) {
@@ -1288,6 +1333,9 @@ final class NativePdfWriter {
             }
             return output.toByteArray();
         }
+
+        private record DuplicateImage(int object, CosValue.CosReference reference) {
+        }
     }
 
     private static final Set<String> STRUCTURAL_TRAILER_KEYS = Set.of(
@@ -1295,7 +1343,7 @@ final class NativePdfWriter {
     );
     private static final Set<String> IMAGE_ENCODING_KEYS = Set.of(
         "Length", "Type", "Subtype", "Width", "Height", "ColorSpace", "BitsPerComponent",
-        "Filter", "DecodeParms", "ImageMask", "Mask", "SMask", "Decode", "SMaskInData", "Matte"
+        "Filter", "DecodeParms", "ImageMask", "Mask", "SMask", "SMaskInData", "Matte"
     );
 
     private static final class CountingOutputStream extends OutputStream {

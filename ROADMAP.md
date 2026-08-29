@@ -4,6 +4,21 @@ Skald prioritizes correctness and a small, durable API over matching the surface
 area of older PDF libraries. Work is ordered by the amount of confidence or
 practical document coverage it adds.
 
+## Shipped in 1.13.0
+
+- Lossless recompression for raw, ASCIIHex, ASCII85, and weak Flate streams,
+  with exact decoded-byte verification and bounded adaptive Deflate effort.
+- ASCII85/Flate-wrapped JPEG support and explicit identity `/Decode` support.
+- Exact sharing of byte-identical, semantically simple image XObjects, with
+  reference aliases included in the whole-graph semantic proof.
+- Iterative signature traversal, converging hybrid-xref handling, and
+  spec-compliant null resolution for undefined indirect references.
+- Ignored private-corpus tooling, deterministic largest-250 selection,
+  per-file reason and latency reports, duplicate-payload accounting, and
+  PSNR/SSIM rendered-page gates.
+- Verified 9,630 production PDFs and 1.41 GB: 232 MB saved; p50 8 ms, p95 70 ms,
+  p99 188 ms. The largest 250 saved 38.37%, up from 6.54% in 1.12.
+
 ## Shipped in 1.12.0
 
 - Canonical received-PDF optimizer copies the complete reachable COS graph
@@ -105,10 +120,11 @@ practical document coverage it adds.
 Ordered by what would make Skald the better business-PDF library, not a
 bigger iText clone:
 
-1. **Visual regression baselines** — persist fingerprints for the ReAI corpus.
-2. **CFF/OTF embedding** — licensed retail faces as PDF 2.0 CID fonts.
-3. **PDF/A-4 module** — archive invoices with output intents.
-4. **PAdES-B-T** — timestamp after a TSA; still not QES.
+1. **CFF/OTF embedding** — licensed retail faces as PDF 2.0 CID fonts.
+2. **PDF/A-4 module** — archive invoices with output intents.
+3. **PAdES-B-T** — timestamp after a TSA; still not QES.
+4. **Colour-managed ICC image conversion** — only with profile validation and
+   rendered colour-difference gates.
 5. **Emit JPEG XL** — only after ISO publishes a filter and viewers implement it.
 
 ## Shipped in 1.4.1

@@ -17,6 +17,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -26,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.InflaterInputStream;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
 
 /**
  * Bounded parser for the structural PDF subset needed by page composition. It
@@ -104,11 +107,33 @@ final class NativePdfParser {
      * that a canonical rewrite is expected to substitute.
      */
     byte[] semanticDigest(IdentityHashMap<CosStream, CosStream> replacements) {
-        return new SemanticDigest(replacements).digest();
+        return semanticDigest(replacements, Map.of());
+    }
+
+    byte[] semanticDigest(IdentityHashMap<CosStream, CosStream> replacements,
+                          Map<CosReference, CosReference> referenceAliases) {
+        return new SemanticDigest(replacements, referenceAliases).digest();
     }
 
     boolean isSafeForCanonicalOptimization() {
-        return !isLinearized() && !hasPreviousRevision && !hasConformanceProfile() && !hasSignatureDictionary();
+        return canonicalRewriteConstraints().isEmpty();
+    }
+
+    Set<CanonicalRewriteConstraint> canonicalRewriteConstraints() {
+        var constraints = EnumSet.noneOf(CanonicalRewriteConstraint.class);
+        if (isLinearized()) {
+            constraints.add(CanonicalRewriteConstraint.LINEARIZATION);
+        }
+        if (hasPreviousRevision) {
+            constraints.add(CanonicalRewriteConstraint.INCREMENTAL_HISTORY);
+        }
+        if (hasConformanceProfile()) {
+            constraints.add(CanonicalRewriteConstraint.CONFORMANCE_PROFILE);
+        }
+        if (hasSignatureDictionary()) {
+            constraints.add(CanonicalRewriteConstraint.DIGITAL_SIGNATURE);
+        }
+        return Set.copyOf(constraints);
     }
 
     int maximumObjectNumber() {
@@ -205,6 +230,106 @@ final class NativePdfParser {
         return decoded(stream, description);
     }
 
+    CosStream compressStreamLosslessly(CosStream stream, int compressionLevel) {
+        var dictionary = stream.dictionary();
+        if (dictionary.get("F") != null || dictionary.get("FFilter") != null
+            || dictionary.get("FDecodeParms") != null) {
+            return stream;
+        }
+        var filters = filterNames(dictionary.get("Filter"));
+        var unfiltered = filters.isEmpty();
+        if (!unfiltered && (filters.size() != 1 || !Set.of(
+            "FlateDecode", "Fl", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85"
+        ).contains(filters.getFirst()))) {
+            return stream;
+        }
+        var flate = !unfiltered && Set.of("FlateDecode", "Fl").contains(filters.getFirst());
+        if (!flate && !identityDecodeParameters(dictionary.get("DecodeParms"))) {
+            return stream;
+        }
+        var original = stream.encodedBytes();
+        if (original.length < 256) {
+            return stream;
+        }
+        byte[] decoded;
+        try {
+            decoded = unfiltered ? original : switch (filters.getFirst()) {
+                case "FlateDecode", "Fl" -> inflate(original, "stream recompression");
+                case "ASCIIHexDecode", "AHx" -> asciiHex(original, "stream recompression");
+                case "ASCII85Decode", "A85" -> ascii85(original, "stream recompression");
+                default -> throw new AssertionError("Filtered stream was not screened");
+            };
+        } catch (RuntimeException malformed) {
+            return stream;
+        }
+        var image = isName(dictionary.get("Subtype"), "Image");
+        var sourceLevel = flate ? deflateLevelHint(original) : -1;
+        if (sourceLevel == 3 || image && sourceLevel >= 2
+            || !image && sourceLevel == 2 && !maximumCompressionPays(decoded)) {
+            return stream;
+        }
+        var targetLevel = image ? Math.min(Compression.BALANCED.deflateLevel(), compressionLevel) : compressionLevel;
+        var compressed = deflate(decoded, targetLevel);
+        if (compressed.length + 64 >= original.length
+            || !Arrays.equals(decoded, inflate(compressed, "stream recompression verification"))) {
+            return stream;
+        }
+        if (flate) {
+            return new CosStream(dictionary, compressed);
+        }
+        var values = new LinkedHashMap<String, CosValue>(dictionary.values());
+        values.put("Filter", new CosName("FlateDecode"));
+        values.remove("DecodeParms");
+        return new CosStream(new CosDictionary(values), compressed);
+    }
+
+    private static int deflateLevelHint(byte[] encoded) {
+        if (encoded.length < 2) {
+            return -1;
+        }
+        var cmf = encoded[0] & 0xff;
+        var flg = encoded[1] & 0xff;
+        return (cmf & 0x0f) == 8 && ((cmf << 8) | flg) % 31 == 0 ? flg >>> 6 : -1;
+    }
+
+    private static boolean maximumCompressionPays(byte[] decoded) {
+        var sample = decoded.length <= 32 * 1024 ? decoded : Arrays.copyOf(decoded, 32 * 1024);
+        var balanced = deflate(sample, Compression.BALANCED.deflateLevel());
+        var maximum = deflate(sample, Compression.MAXIMUM.deflateLevel());
+        var saved = balanced.length - maximum.length;
+        return saved >= 128 && saved * 100 >= balanced.length;
+    }
+
+    private boolean identityDecodeParameters(CosValue value) {
+        if (value == null) {
+            return true;
+        }
+        var resolved = resolve(value);
+        if (resolved instanceof CosNull) {
+            return true;
+        }
+        if (resolved instanceof CosArray array) {
+            return array.values().isEmpty() || array.values().stream().allMatch(this::identityDecodeParameters);
+        }
+        if (!(resolved instanceof CosDictionary parameters)) {
+            return false;
+        }
+        var predictor = parameters.get("Predictor");
+        return predictor == null || resolve(predictor) instanceof CosNumber number
+            && number.lexicalValue().equals("1");
+    }
+
+    private static byte[] deflate(byte[] bytes, int compressionLevel) {
+        var output = new ByteArrayOutputStream(Math.max(64, bytes.length / 2));
+        try (var deflater = new Deflater(compressionLevel);
+             var compressed = new DeflaterOutputStream(output, deflater)) {
+            compressed.write(bytes);
+        } catch (IOException impossible) {
+            throw new AssertionError(impossible);
+        }
+        return output.toByteArray();
+    }
+
     ImageData decodeImage(CosStream stream) {
         var dictionary = stream.dictionary();
         var width = integer(resolve(dictionary.get("Width")), "image Width");
@@ -220,6 +345,7 @@ final class NativePdfParser {
             switch (filter) {
                 case "FlateDecode", "Fl" -> data = inflate(data, "image");
                 case "ASCIIHexDecode", "AHx" -> data = asciiHex(data, "image");
+                case "ASCII85Decode", "A85" -> data = ascii85(data, "image");
                 case "DCTDecode", "DCT" -> jpeg = true;
                 default -> throw new IllegalArgumentException("Unsupported image filter " + filter);
             }
@@ -246,10 +372,10 @@ final class NativePdfParser {
         var filter = filters.isEmpty() ? "None" : String.join("+", filters);
         var jpeg = filters.contains("DCTDecode") || filters.contains("DCT");
         var colorSpace = colorSpaceName(dictionary.get("ColorSpace"));
-        var safe = filters.size() == 1
-            && Set.of("DCTDecode", "DCT", "FlateDecode", "Fl").contains(filters.getFirst())
+        var safe = supportedImageFilters(filters, jpeg)
             && bits == 8 && Set.of("DeviceRGB", "DeviceGray").contains(colorSpace)
-            && !hasAny(dictionary, "Mask", "SMask", "Decode", "Metadata", "Alternates", "OPI", "Matte", "SMaskInData")
+            && identityImageDecode(dictionary.get("Decode"), colorSpace)
+            && !hasAny(dictionary, "Mask", "SMask", "Metadata", "Alternates", "OPI", "Matte", "SMaskInData")
             && !booleanValue(dictionary.get("ImageMask"));
         return new EmbeddedImage(pageNumber, resourceName, width, height, filter,
             colorSpace, bits, jpeg, safe, stream.encodedBytes(), this, stream);
@@ -262,6 +388,64 @@ final class NativePdfParser {
             }
         }
         return false;
+    }
+
+    private static boolean supportedImageFilters(List<String> filters, boolean jpeg) {
+        if (!jpeg) {
+            return filters.size() == 1 && Set.of("FlateDecode", "Fl").contains(filters.getFirst());
+        }
+        if (filters.isEmpty() || !Set.of("DCTDecode", "DCT").contains(filters.getLast())) {
+            return false;
+        }
+        return filters.subList(0, filters.size() - 1).stream()
+            .allMatch(filter -> Set.of(
+                "FlateDecode", "Fl", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85"
+            ).contains(filter));
+    }
+
+    private boolean identityImageDecode(CosValue value, String colorSpace) {
+        if (value == null) {
+            return true;
+        }
+        var resolved = resolve(value);
+        if (!(resolved instanceof CosArray decode)) {
+            return false;
+        }
+        var components = colorSpace.equals("DeviceGray") ? 1 : colorSpace.equals("DeviceRGB") ? 3 : 0;
+        if (components == 0 || decode.values().size() != components * 2) {
+            return false;
+        }
+        for (int index = 0; index < components; index++) {
+            if (number(resolve(decode.values().get(index * 2)), "image Decode") != 0
+                || number(resolve(decode.values().get(index * 2 + 1)), "image Decode") != 1) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    boolean safeToDeduplicateImage(CosStream stream) {
+        try {
+            if (!embeddedImage(0, "", stream).safeToRecompress()) {
+                return false;
+            }
+            return stream.dictionary().values().entrySet().stream()
+                .filter(entry -> !entry.getKey().equals("Length"))
+                .allMatch(entry -> containsNoIndirectValues(entry.getValue()));
+        } catch (RuntimeException unsupported) {
+            return false;
+        }
+    }
+
+    private static boolean containsNoIndirectValues(CosValue value) {
+        return switch (value) {
+            case CosReference ignored -> false;
+            case CosStream ignored -> false;
+            case CosArray array -> array.values().stream().allMatch(NativePdfParser::containsNoIndirectValues);
+            case CosDictionary dictionary -> dictionary.values().values().stream()
+                .allMatch(NativePdfParser::containsNoIndirectValues);
+            default -> true;
+        };
     }
 
     private boolean booleanValue(CosValue value) {
@@ -294,7 +478,11 @@ final class NativePdfParser {
         require(resolving.add(reference), "Cycle while resolving PDF object " + reference.objectNumber());
         try {
             var location = locations.get(reference.objectNumber());
-            require(location != null, "Missing xref entry for object " + reference.objectNumber());
+            if (location == null) {
+                var result = new CosNull();
+                objects.put(reference, result);
+                return result;
+            }
             CosValue result = switch (location) {
                 case DirectLocation direct -> parseIndirect(direct.offset(), reference.objectNumber()).value();
                 case CompressedLocation compressed -> resolveCompressed(reference, compressed);
@@ -424,7 +612,9 @@ final class NativePdfParser {
         pending.add(startOffset);
         while (!pending.isEmpty()) {
             var offset = pending.removeFirst();
-            require(visited.add(offset), "Cycle in PDF xref chain");
+            if (!visited.add(offset)) {
+                continue;
+            }
             require(offset >= 0 && offset < source.length, "xref offset is outside the PDF");
             var cursor = new Cursor(source, Math.toIntExact(offset));
             CosDictionary trailer;
@@ -645,6 +835,7 @@ final class NativePdfParser {
             result = switch (filter) {
                 case "FlateDecode", "Fl" -> inflate(result, description);
                 case "ASCIIHexDecode", "AHx" -> asciiHex(result, description);
+                case "ASCII85Decode", "A85" -> ascii85(result, description);
                 default -> throw new IllegalArgumentException(
                     "Unsupported structural stream filter " + filter + " in " + description);
             };
@@ -767,6 +958,63 @@ final class NativePdfParser {
             output.write(high << 4);
         }
         return output.toByteArray();
+    }
+
+    private static byte[] ascii85(byte[] encoded, String description) {
+        var output = new ByteArrayOutputStream(Math.min(encoded.length, 1_048_576));
+        long value = 0;
+        var digits = 0;
+        var started = false;
+        for (int index = 0; index < encoded.length; index++) {
+            var item = encoded[index] & 0xff;
+            if (isWhitespace(item)) {
+                continue;
+            }
+            if (!started && item == '<' && index + 1 < encoded.length && encoded[index + 1] == '~') {
+                started = true;
+                index++;
+                continue;
+            }
+            started = true;
+            if (item == '~') {
+                require(index + 1 < encoded.length && encoded[index + 1] == '>',
+                    "Invalid ASCII85 terminator in " + description);
+                break;
+            }
+            if (item == 'z') {
+                require(digits == 0, "ASCII85 z appears inside a group in " + description);
+                output.writeBytes(new byte[4]);
+                require(output.size() <= MAXIMUM_DECODED_STRUCTURAL_BYTES,
+                    description + " exceeds the decoded size limit");
+                continue;
+            }
+            require(item >= '!' && item <= 'u', "Invalid ASCII85 data in " + description);
+            value = value * 85 + item - '!';
+            digits++;
+            if (digits == 5) {
+                require(value <= 0xffff_ffffL, "ASCII85 group overflows in " + description);
+                writeAscii85Group(output, value, 4);
+                value = 0;
+                digits = 0;
+                require(output.size() <= MAXIMUM_DECODED_STRUCTURAL_BYTES,
+                    description + " exceeds the decoded size limit");
+            }
+        }
+        require(digits != 1, "Truncated ASCII85 group in " + description);
+        if (digits > 1) {
+            for (int index = digits; index < 5; index++) {
+                value = value * 85 + 84;
+            }
+            require(value <= 0xffff_ffffL, "ASCII85 group overflows in " + description);
+            writeAscii85Group(output, value, digits - 1);
+        }
+        return output.toByteArray();
+    }
+
+    private static void writeAscii85Group(ByteArrayOutputStream output, long value, int bytes) {
+        for (int shift = 24; shift >= 32 - bytes * 8; shift -= 8) {
+            output.write((int) (value >>> shift) & 0xff);
+        }
     }
 
     private long findStartXref() {
@@ -951,32 +1199,35 @@ final class NativePdfParser {
     private boolean hasSignatureDictionary() {
         var references = new HashSet<CosReference>();
         var direct = java.util.Collections.newSetFromMap(new IdentityHashMap<CosValue, Boolean>());
-        return containsSignature(trailer, references, direct, 0);
-    }
-
-    private boolean containsSignature(CosValue value, Set<CosReference> references,
-                                      Set<CosValue> direct, int depth) {
-        require(depth <= MAXIMUM_DEPTH, "PDF object graph is too deep");
-        if (value instanceof CosReference reference) {
-            return references.add(reference) && containsSignature(resolve(reference), references, direct, depth + 1);
+        var pending = new ArrayDeque<CosValue>();
+        pending.add(trailer);
+        while (!pending.isEmpty()) {
+            var value = pending.removeLast();
+            if (value instanceof CosReference reference) {
+                if (references.add(reference)) {
+                    pending.add(resolve(reference));
+                }
+                continue;
+            }
+            if (!direct.add(value)) {
+                continue;
+            }
+            if (value instanceof CosArray array) {
+                pending.addAll(array.values());
+                continue;
+            }
+            var dictionary = value instanceof CosStream stream ? stream.dictionary()
+                : value instanceof CosDictionary candidate ? candidate : null;
+            if (dictionary == null) {
+                continue;
+            }
+            if (isName(dictionary.get("Type"), "Sig") || isName(dictionary.get("FT"), "Sig")
+                || dictionary.get("ByteRange") != null) {
+                return true;
+            }
+            pending.addAll(dictionary.values().values());
         }
-        if (!direct.add(value)) {
-            return false;
-        }
-        if (value instanceof CosArray array) {
-            return array.values().stream().anyMatch(item -> containsSignature(item, references, direct, depth + 1));
-        }
-        var dictionary = value instanceof CosStream stream ? stream.dictionary()
-            : value instanceof CosDictionary candidate ? candidate : null;
-        if (dictionary == null) {
-            return false;
-        }
-        if (isName(dictionary.get("Type"), "Sig") || isName(dictionary.get("FT"), "Sig")
-            || dictionary.get("ByteRange") != null) {
-            return true;
-        }
-        return dictionary.values().values().stream()
-            .anyMatch(item -> containsSignature(item, references, direct, depth + 1));
+        return false;
     }
 
     private boolean isName(CosValue value, String expected) {
@@ -990,11 +1241,14 @@ final class NativePdfParser {
 
         private final MessageDigest digest;
         private final IdentityHashMap<CosStream, CosStream> replacements;
+        private final Map<CosReference, CosReference> referenceAliases;
         private final Map<CosReference, Integer> referenceNumbers = new LinkedHashMap<>();
         private final List<CosReference> pendingReferences = new ArrayList<>();
 
-        SemanticDigest(IdentityHashMap<CosStream, CosStream> replacements) {
+        SemanticDigest(IdentityHashMap<CosStream, CosStream> replacements,
+                       Map<CosReference, CosReference> referenceAliases) {
             this.replacements = new IdentityHashMap<>(replacements);
+            this.referenceAliases = Map.copyOf(referenceAliases);
             try {
                 digest = MessageDigest.getInstance("SHA-256");
             } catch (NoSuchAlgorithmException impossible) {
@@ -1039,11 +1293,12 @@ final class NativePdfParser {
                 }
                 case CosReference reference -> {
                     token('R');
-                    var number = referenceNumbers.get(reference);
+                    var canonical = referenceAliases.getOrDefault(reference, reference);
+                    var number = referenceNumbers.get(canonical);
                     if (number == null) {
                         number = pendingReferences.size();
-                        referenceNumbers.put(reference, number);
-                        pendingReferences.add(reference);
+                        referenceNumbers.put(canonical, number);
+                        pendingReferences.add(canonical);
                     }
                     integer(number);
                 }

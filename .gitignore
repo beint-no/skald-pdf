@@ -5,3 +5,4 @@ out/
 *.iml
 site/demos/*.pdf
 site/demos/*.png
+/benchmark-corpus/

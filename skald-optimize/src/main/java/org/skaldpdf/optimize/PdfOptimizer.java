@@ -3,9 +3,11 @@ package org.skaldpdf.optimize;
 import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.image.ImageData;
 import org.skaldpdf.pdf.EmbeddedImage;
+import org.skaldpdf.pdf.Compression;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfReader;
 import org.skaldpdf.pdf.PdfWriter;
+import org.skaldpdf.pdf.WriterProperties;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Objects;
@@ -51,9 +53,16 @@ public final class PdfOptimizer {
         Objects.requireNonNull(recompressor, "recompressor");
         var output = new ByteArrayOutputStream(pdf.length);
         try {
-            try (var document = new PdfDocument(new PdfReader(pdf), new PdfWriter(output))) {
+            var writer = new PdfWriter(output, new WriterProperties(Compression.MAXIMUM));
+            try (var document = new PdfDocument(new PdfReader(pdf), writer)) {
                 if (!document.isSafeForCanonicalOptimization()) {
                     return pdf;
+                }
+                if (options.compressStreamsLosslessly()) {
+                    document.compressImportedStreamsLosslessly();
+                }
+                if (options.deduplicateImagesLosslessly()) {
+                    document.deduplicateImportedImagesLosslessly();
                 }
                 for (var image : document.importedImages()) {
                     var replacement = recompress(image, options, recompressor);

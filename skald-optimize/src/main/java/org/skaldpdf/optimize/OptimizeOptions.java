@@ -7,6 +7,8 @@ public final class OptimizeOptions {
     private final float losslessQuality;
     private final boolean recompressJpeg;
     private final boolean convertLosslessRaster;
+    private final boolean compressStreamsLosslessly;
+    private final boolean deduplicateImagesLosslessly;
     private final long maximumImagePixels;
     private final int minimumLosslessBytes;
     private final int minimumSavingsBytes;
@@ -28,6 +30,8 @@ public final class OptimizeOptions {
         losslessQuality = builder.losslessQuality;
         recompressJpeg = builder.recompressJpeg;
         convertLosslessRaster = builder.convertLosslessRaster;
+        compressStreamsLosslessly = builder.compressStreamsLosslessly;
+        deduplicateImagesLosslessly = builder.deduplicateImagesLosslessly;
         maximumImagePixels = builder.maximumImagePixels;
         minimumLosslessBytes = builder.minimumLosslessBytes;
         minimumSavingsBytes = builder.minimumSavingsBytes;
@@ -37,7 +41,8 @@ public final class OptimizeOptions {
 
     /**
      * Supplier invoices, receipts, and other camera-heavy business attachments:
-     * 2400 px, JPEG quality 80, lossless-raster quality 90, 20 MP, and 4 KiB / 2% gates.
+     * 2400 px, JPEG quality 80, lossless-raster quality 90, 20 MP, exact
+     * stream/image sharing, and 4 KiB / 2% savings gates.
      */
     public static OptimizeOptions attachments() {
         return builder().build();
@@ -65,6 +70,19 @@ public final class OptimizeOptions {
 
     public boolean convertLosslessRaster() {
         return convertLosslessRaster;
+    }
+
+    /**
+     * Whether eligible unfiltered and Flate-encoded streams should be
+     * compressed without changing their decoded bytes.
+     */
+    public boolean compressStreamsLosslessly() {
+        return compressStreamsLosslessly;
+    }
+
+    /** Whether byte-identical simple image XObjects should share one stream. */
+    public boolean deduplicateImagesLosslessly() {
+        return deduplicateImagesLosslessly;
     }
 
     public long maximumImagePixels() {
@@ -122,6 +140,8 @@ public final class OptimizeOptions {
         private float losslessQuality = 0.90f;
         private boolean recompressJpeg = true;
         private boolean convertLosslessRaster = true;
+        private boolean compressStreamsLosslessly = true;
+        private boolean deduplicateImagesLosslessly = true;
         private long maximumImagePixels = 20_000_000;
         private int minimumLosslessBytes = 64 * 1024;
         private int minimumSavingsBytes = 4096;
@@ -152,6 +172,18 @@ public final class OptimizeOptions {
 
         public Builder convertLosslessRaster(boolean value) {
             convertLosslessRaster = value;
+            return this;
+        }
+
+        /** Enables byte-exact compression of eligible PDF streams. */
+        public Builder compressStreamsLosslessly(boolean value) {
+            compressStreamsLosslessly = value;
+            return this;
+        }
+
+        /** Enables exact sharing of byte-identical, semantically simple image XObjects. */
+        public Builder deduplicateImagesLosslessly(boolean value) {
+            deduplicateImagesLosslessly = value;
             return this;
         }
 
