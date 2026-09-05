@@ -1,5 +1,8 @@
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
+import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.result.ResolvedComponentResult
+import org.gradle.api.artifacts.result.ResolvedDependencyResult
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
@@ -7,6 +10,24 @@ import org.gradle.api.tasks.testing.Test
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+
+abstract class VerifyNoRuntimeDependencies : DefaultTask() {
+    @get:Input
+    abstract val externalModules: ListProperty<String>
+
+    @get:Input
+    abstract val allowGlimt: Property<Boolean>
+
+    @TaskAction
+    fun verify() {
+        val unexpected = externalModules.get().filterNot {
+            allowGlimt.get() && it.startsWith("no.beint.glimt:")
+        }
+        check(unexpected.isEmpty()) {
+            "$path has unexpected third-party runtime dependencies: ${unexpected.joinToString()}"
+        }
+    }
+}
 
 plugins {
     base
@@ -96,21 +117,25 @@ subprojects {
         systemProperty("java.awt.headless", "true")
     }
 
-    val verifyNoRuntimeDependencies = tasks.register("verifyNoRuntimeDependencies") {
+    val runtimeModules = configurations.getByName("runtimeClasspath")
+        .incoming.resolutionResult.rootComponent.map { root ->
+            val visited = mutableSetOf<ComponentIdentifier>()
+            fun visit(component: ResolvedComponentResult) {
+                if (visited.add(component.id)) {
+                    component.dependencies.filterIsInstance<ResolvedDependencyResult>().forEach {
+                        visit(it.selected)
+                    }
+                }
+            }
+            visit(root)
+            visited.filterIsInstance<ModuleComponentIdentifier>()
+                .map { "${it.group}:${it.module}:${it.version}" }.sorted()
+        }
+    val verifyNoRuntimeDependencies = tasks.register<VerifyNoRuntimeDependencies>("verifyNoRuntimeDependencies") {
         group = "verification"
         description = "Fails when production runtimeClasspath contains a third-party module"
-        doLast {
-            val externalModules = configurations.getByName("runtimeClasspath")
-                .incoming.resolutionResult.allComponents
-                .map { it.id }
-                .filterIsInstance<ModuleComponentIdentifier>()
-            val unexpected = externalModules.filterNot {
-                project.name == "skald-optimize-jpegli" && it.group == "no.beint.glimt"
-            }
-            check(unexpected.isEmpty()) {
-                "$name has unexpected third-party runtime dependencies: ${unexpected.joinToString()}"
-            }
-        }
+        externalModules.set(runtimeModules)
+        allowGlimt.set(project.name == "skald-optimize-jpegli")
     }
 
     tasks.named("check") {
@@ -173,5 +198,6 @@ tasks.named("build") {
 }
 
 tasks.register("printReleaseVersion") {
-    doLast { println(releaseVersion) }
+    val versionToPrint = releaseVersion
+    doLast { println(versionToPrint) }
 }

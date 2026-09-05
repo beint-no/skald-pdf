@@ -27,7 +27,14 @@ public final class PdfFont {
     }
 
     public float getWidth(String text, float fontSize) {
-        return glyphRun(text).advance() * fontSize / 1_000f;
+        // Measuring text does not need the defensively copied arrays in GlyphRun.
+        var advance = 0;
+        for (int offset = 0; offset < text.length();) {
+            var codePoint = text.codePointAt(offset);
+            advance += program.pdfWidth(program.glyph(codePoint));
+            offset += Character.charCount(codePoint);
+        }
+        return advance * fontSize / 1_000f;
     }
 
     public float ascent(float fontSize) {
