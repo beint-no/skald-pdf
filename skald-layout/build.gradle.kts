@@ -26,3 +26,12 @@ tasks.register<JavaExec>("writeSiteDemos") {
     args(rootProject.layout.projectDirectory.dir("site/demos").asFile.absolutePath)
     dependsOn(tasks.named("testClasses"))
 }
+
+tasks.register<JavaExec>("performanceBenchmark") {
+    group = "verification"
+    description = "Measure representative generation, parsing, and allocation costs (opt-in)"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("org.skaldpdf.PerformanceBenchmark")
+    javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
+    jvmArgs("-Xms512m", "-Xmx512m", "-Djava.awt.headless=true")
+}

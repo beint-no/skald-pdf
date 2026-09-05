@@ -27,6 +27,7 @@ public final class PdfText {
     private static final Pattern RANGE_ARRAY = Pattern.compile(
         "<([0-9A-Fa-f]+)>\\s*<([0-9A-Fa-f]+)>\\s*\\[(.*?)]", Pattern.DOTALL);
     private static final Pattern HEX_TOKEN = Pattern.compile("<([0-9A-Fa-f]+)>");
+    private static final Pattern NUMBER = Pattern.compile("[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)");
 
     private PdfText() {
     }
@@ -556,7 +557,7 @@ public final class PdfText {
         }
 
         private static boolean isNumber(String token) {
-            return token.matches("[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)");
+            return NUMBER.matcher(token).matches();
         }
     }
 }

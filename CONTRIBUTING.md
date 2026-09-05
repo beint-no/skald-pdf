@@ -40,6 +40,13 @@ The build treats Java compiler warnings as errors, runs Javadoc checks, verifies
 that published modules have no third-party runtime dependencies, and compiles
 explicit JPMS descriptors.
 
+Configuration caching and parallel project execution are enabled by default.
+Use `./gradlew build` for normal iteration; `clean` is useful for a full rebuild
+but discards up-to-date outputs. The runtime-dependency check remains active when
+the configuration cache is reused. Task-output caching is not enabled by default:
+some tests generate PDFs outside their declared Gradle outputs or read optional
+local corpora, which must be modeled before caching their results safely.
+
 ## Design principles
 
 - Emit PDF 2.0 only.

@@ -6,6 +6,8 @@ optimizer:
 - top-level layout elements are consumed incrementally;
 - page content uses one compressed stream per page;
 - fonts are subset and embedded once per font face per document;
+- text-width measurement walks Unicode code points without allocating glyph arrays;
+- structural and content parsers reuse compiled numeric patterns;
 - unused OpenType layout tables are dropped from the subset so a Latin
   invoice stays tens of kilobytes instead of carrying the whole face;
 - small structural objects are grouped into PDF 2.0 object streams;
@@ -50,6 +52,17 @@ every result through PDFBox, and reruns every changed file to assert exact
 idempotence. Private customer documents are never copied into the repository.
 
 ## Generation harness
+
+Run `./gradlew :skald-layout:performanceBenchmark` for an opt-in throughput and
+allocation probe covering text measurement, ReAI-style invoices, Ecomtools
+stickers, 1,000-row reports, parsing, and extraction. It uses a one-second warmup
+and three one-second measurement windows per scenario, with a fixed 512 MiB heap.
+Run it in multiple fresh JVMs on an otherwise idle machine; it is not a CI timing
+assertion or a substitute for application profiling. Allocation counters cover
+the calling Java thread, not native codec memory.
+
+See the [September 2026 audit](performance-audit-2026-09-05.md) for measurements,
+verification, and remaining opportunities.
 
 `GenerationHarness` times and sizes the ReAI + typical document corpus. Tests
 write `build/benchmarks/latest.{json,md}` (and `~/Downloads/skald-benchmarks`
