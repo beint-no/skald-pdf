@@ -11,6 +11,7 @@ import org.skaldpdf.pdf.PdfReader;
 import org.skaldpdf.reai.ReaiStyleDocuments;
 
 import java.lang.management.ManagementFactory;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.function.LongSupplier;
 
@@ -36,25 +37,28 @@ public final class PerformanceBenchmark {
             "80%Nylon, 20%Lycra", "8123613319580", "Orchid");
         var report = report();
         System.out.println("scenario,round,ns_per_operation,allocated_bytes_per_operation,operations");
-        measure(bean, "text-width", 256, () -> {
+        measure(bean, args, "text-width", 256, () -> {
             long total = 0;
             for (int i = 0; i < 256; i++) {
                 total += Float.floatToIntBits(font.getWidth(labels[i % labels.length], 10));
             }
             return total;
         });
-        measure(bean, "reai-invoice", 1, () -> ReaiStyleDocuments.invoice(invoice, logo).length);
-        measure(bean, "ecomtools-sticker", 1, () -> ProductSticker.pdf(sticker).length);
-        measure(bean, "report-1000-rows", 1, () -> report().length);
-        measure(bean, "parse-report", 1, () -> {
+        measure(bean, args, "reai-invoice", 1, () -> ReaiStyleDocuments.invoice(invoice, logo).length);
+        measure(bean, args, "ecomtools-sticker", 1, () -> ProductSticker.pdf(sticker).length);
+        measure(bean, args, "report-1000-rows", 1, () -> report().length);
+        measure(bean, args, "parse-report", 1, () -> {
             try (var document = new PdfDocument(new PdfReader(report))) {
                 return document.getNumberOfPages();
             }
         });
-        measure(bean, "extract-report", 1, () -> Pdf.extractText(report).length());
+        measure(bean, args, "extract-report", 1, () -> Pdf.extractText(report).length());
     }
 
-    private static void measure(ThreadMXBean bean, String name, int batch, LongSupplier operation) {
+    private static void measure(ThreadMXBean bean, String[] scenarios, String name, int batch, LongSupplier operation) {
+        if (scenarios.length > 0 && Arrays.stream(scenarios).noneMatch(name::equals)) {
+            return;
+        }
         var warmupEnd = System.nanoTime() + 1_000_000_000L;
         do {
             consumed = operation.getAsLong();

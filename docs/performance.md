@@ -7,7 +7,7 @@ optimizer:
 - page content uses one compressed stream per page;
 - fonts are subset and embedded once per font face per document;
 - text-width measurement walks Unicode code points without allocating glyph arrays;
-- structural and content parsers reuse compiled numeric patterns;
+- structural and content parsers share an allocation-free ASCII numeric validator;
 - unused OpenType layout tables are dropped from the subset so a Latin
   invoice stays tens of kilobytes instead of carrying the whole face;
 - small structural objects are grouped into PDF 2.0 object streams;
@@ -61,8 +61,13 @@ Run it in multiple fresh JVMs on an otherwise idle machine; it is not a CI timin
 assertion or a substitute for application profiling. Allocation counters cover
 the calling Java thread, not native codec memory.
 
+Select individual scenarios with, for example,
+`./gradlew :skald-layout:performanceBenchmark --args="parse-report extract-report"`.
+
 See the [September 2026 audit](performance-audit-2026-09-05.md) for measurements,
-verification, and remaining opportunities.
+verification, and remaining opportunities, and the
+[final pass](performance-final-pass-2026-09-05.md) for the subsequent numeric
+validation improvement.
 
 `GenerationHarness` times and sizes the ReAI + typical document corpus. Tests
 write `build/benchmarks/latest.{json,md}` (and `~/Downloads/skald-benchmarks`
