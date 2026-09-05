@@ -6,7 +6,7 @@ and **libjxl** with the JDK FFM API. It is not on the core classpath. Invoices,
 stickers, signatures, and callers that provide prepared `ImageData` work without it.
 
 ```kotlin
-implementation("no.beint.skaldpdf:skald-image:1.15.0")
+implementation("no.beint.skaldpdf:skald-image:1.15.1")
 ```
 
 ```java
