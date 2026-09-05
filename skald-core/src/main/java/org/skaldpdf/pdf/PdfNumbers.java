@@ -7,6 +7,36 @@ public final class PdfNumbers {
     private PdfNumbers() {
     }
 
+    static boolean isNumber(String token) {
+        return isNumeric(token, true);
+    }
+
+    static boolean isInteger(String token) {
+        return isNumeric(token, false);
+    }
+
+    // PDF numbers use ASCII digits, an optional leading sign and at most one
+    // decimal point. Unlike Java numbers, exponents and Unicode digits are not allowed.
+    private static boolean isNumeric(String token, boolean allowDecimalPoint) {
+        if (token.isEmpty()) {
+            return false;
+        }
+        var first = token.charAt(0);
+        var start = first == '+' || first == '-' ? 1 : 0;
+        var hasDigit = false;
+        for (int index = start; index < token.length(); index++) {
+            var character = token.charAt(index);
+            if (character >= '0' && character <= '9') {
+                hasDigit = true;
+            } else if (character == '.' && allowDecimalPoint) {
+                allowDecimalPoint = false;
+            } else {
+                return false;
+            }
+        }
+        return hasDigit;
+    }
+
     public static String format(float value) {
         var output = new StringBuilder(12);
         append(output, value);

@@ -25,7 +25,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.DataFormatException;
@@ -43,8 +42,6 @@ final class NativePdfParser {
     private static final int MAXIMUM_DEPTH = 128;
     private static final int MAXIMUM_DECODED_STRUCTURAL_BYTES = 128 * 1024 * 1024;
     private static final int STARTXREF_SEARCH_BYTES = 1024 * 1024;
-    private static final Pattern NUMBER = Pattern.compile("[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)");
-    private static final Pattern INTEGER = Pattern.compile("[+-]?\\d+");
 
     private final byte[] source;
     private final String headerVersion;
@@ -1321,11 +1318,11 @@ final class NativePdfParser {
     }
 
     private static boolean isNumber(String token) {
-        return NUMBER.matcher(token).matches();
+        return PdfNumbers.isNumber(token);
     }
 
     private static boolean isInteger(String token) {
-        return INTEGER.matcher(token).matches();
+        return PdfNumbers.isInteger(token);
     }
 
     private static byte[] ascii(String value) {
