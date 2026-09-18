@@ -27,6 +27,9 @@ public final class PdfText {
     private static final Pattern RANGE_ARRAY = Pattern.compile(
         "<([0-9A-Fa-f]+)>\\s*<([0-9A-Fa-f]+)>\\s*\\[(.*?)]", Pattern.DOTALL);
     private static final Pattern HEX_TOKEN = Pattern.compile("<([0-9A-Fa-f]+)>");
+    private static final Pattern HORIZONTAL_CONTROLS = Pattern.compile("[\\t\\x0b\\f]+");
+    private static final Pattern PADDED_NEWLINE = Pattern.compile(" *\\n *");
+    private static final Pattern REPEATED_SPACES = Pattern.compile(" {2,}");
 
     private PdfText() {
     }
@@ -177,10 +180,9 @@ public final class PdfText {
     }
 
     private static String collapse(String value) {
-        return value.replaceAll("[\\t\\x0b\\f]+", " ")
-            .replaceAll(" *\\n *", "\n")
-            .replaceAll(" {2,}", " ")
-            .strip();
+        var collapsed = HORIZONTAL_CONTROLS.matcher(value).replaceAll(" ");
+        collapsed = PADDED_NEWLINE.matcher(collapsed).replaceAll("\n");
+        return REPEATED_SPACES.matcher(collapsed).replaceAll(" ").strip();
     }
 
     private record Operator(String name) {

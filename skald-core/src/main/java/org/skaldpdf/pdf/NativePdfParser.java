@@ -70,10 +70,11 @@ final class NativePdfParser {
         pages = List.copyOf(readPages());
     }
 
+    private static final java.util.regex.Pattern BYTE_RANGE = java.util.regex.Pattern.compile(
+        "/ByteRange\\s*\\[\\s*(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s*]");
+
     static boolean containsSealedSignature(byte[] pdf) {
-        var matcher = java.util.regex.Pattern.compile(
-            "/ByteRange\\s*\\[\\s*(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s*]").matcher(
-            new String(pdf, StandardCharsets.ISO_8859_1));
+        var matcher = BYTE_RANGE.matcher(new String(pdf, StandardCharsets.ISO_8859_1));
         while (matcher.find()) {
             if (Long.parseLong(matcher.group(2)) > 0 && Long.parseLong(matcher.group(4)) > 0) {
                 return true;

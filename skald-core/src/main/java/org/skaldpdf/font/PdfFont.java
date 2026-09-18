@@ -52,11 +52,17 @@ public final class PdfFont {
     }
 
     public GlyphRun glyphRun(String text) {
-        var codePoints = text.codePoints().toArray();
-        var glyphs = new int[codePoints.length];
+        var length = text.length();
+        var count = text.codePointCount(0, length);
+        var codePoints = new int[count];
+        var glyphs = new int[count];
         var advance = 0;
-        for (int index = 0; index < codePoints.length; index++) {
-            glyphs[index] = program.glyph(codePoints[index]);
+        var index = 0;
+        for (int offset = 0; offset < length; index++) {
+            var codePoint = text.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+            codePoints[index] = codePoint;
+            glyphs[index] = program.glyph(codePoint);
             advance += program.pdfWidth(glyphs[index]);
         }
         return new GlyphRun(glyphs, codePoints, advance);

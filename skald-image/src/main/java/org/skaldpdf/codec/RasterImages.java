@@ -5,6 +5,8 @@ import org.skaldpdf.image.ImageData;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
+import javax.imageio.stream.MemoryCacheImageInputStream;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 import java.awt.Color;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -36,7 +38,7 @@ public final class RasterImages {
         var header = inspect(bytes);
         requireSafeDimensions(header.width, header.height);
         try {
-            var image = ImageIO.read(new ByteArrayInputStream(bytes));
+            var image = readInMemory(bytes);
             if (image == null) {
                 throw new IllegalArgumentException("Unsupported or invalid image data");
             }
@@ -129,7 +131,7 @@ public final class RasterImages {
             var parameters = writer.getDefaultWriteParam();
             parameters.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
             parameters.setCompressionQuality(quality);
-            try (var stream = ImageIO.createImageOutputStream(bytes)) {
+            try (var stream = new MemoryCacheImageOutputStream(bytes)) {
                 writer.setOutput(stream);
                 writer.write(null, new javax.imageio.IIOImage(output, null, null), parameters);
             } finally {
@@ -141,10 +143,18 @@ public final class RasterImages {
         }
     }
 
+    /**
+     * ImageIO's default stream cache spools non-file sources through a temp file; keep decoding in
+     * memory. {@code ImageIO.read(ImageInputStream)} closes the stream itself.
+     */
+    private static @Nullable BufferedImage readInMemory(byte[] bytes) throws IOException {
+        return ImageIO.read(new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)));
+    }
+
     static BufferedImage toBufferedImage(ImageData source) {
         if (source.jpeg()) {
             try {
-                var image = ImageIO.read(new ByteArrayInputStream(source.samples()));
+                var image = readInMemory(source.samples());
                 if (image == null) {
                     throw new IllegalStateException("Unable to decode JPEG samples");
                 }
