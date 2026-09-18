@@ -14,7 +14,7 @@ and implementation proposals.
 
 ## Build and test
 
-Use JDK 26 or newer. `main` is the tip: it always targets the current JDK
+Use JDK 27 or newer. `main` is the tip: it always targets the current JDK
 feature release. Do not lower `--release` to keep older JDKs on the latest
 artifact, and do not add `--enable-preview` to production modules. Keep
 JSpecify `@NullMarked` accurate: do not return or store null for optional

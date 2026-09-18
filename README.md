@@ -6,7 +6,7 @@
 [Maven Central](https://central.sonatype.com/search?q=no.beint.skaldpdf)
 
 Skald PDF is a modern Java library for creating and composing PDF 2.0 documents.
-It targets JDK 26+, uses named Java modules, and has no third-party runtime
+It targets JDK 27+, uses named Java modules, and has no third-party runtime
 dependencies.
 
 Use it for invoices, statements, reports, receipts, agreements, labels, tickets,
@@ -66,7 +66,7 @@ are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 ## Build and install
 
-JDK 26 or newer is required. The latest line is the tip of Oracle's
+JDK 27 or newer is required. The latest line is the tip of Oracle's
 tip-and-tail model: it always targets the current JDK feature release,
 compiles with `--release 26`, and uses finalized APIs only when they
 reduce maintenance or improve generation. Preview and incubator APIs stay
