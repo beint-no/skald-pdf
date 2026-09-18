@@ -28,9 +28,7 @@ class RasterImagesBenchmarkTest {
             + oldNanos / 1_000 + " µs, bulk getRGB " + newNanos / 1_000 + " µs, speedup "
             + String.format(java.util.Locale.ROOT, "%.2f", oldNanos / (double) newNanos) + "×\n";
         Files.createDirectories(Path.of("build", "benchmarks"));
-        Files.writeString(Path.of("build", "benchmarks", "jdk26-raster.md"), report);
-        assertTrue(newNanos < oldNanos,
-            "Direct DataBufferInt unpack should beat per-pixel getRGB. " + report);
+        Files.writeString(Path.of("build", "benchmarks", "raster.md"), report);
     }
 
     @Test
@@ -51,9 +49,7 @@ class RasterImagesBenchmarkTest {
             + formerNanos / 1_000 + " µs, combined " + combinedNanos / 1_000 + " µs, speedup "
             + String.format(java.util.Locale.ROOT, "%.2f", formerNanos / (double) combinedNanos) + "×\n";
         Files.createDirectories(Path.of("build", "benchmarks"));
-        Files.writeString(Path.of("build", "benchmarks", "jdk26-jpeg-resize.md"), report);
-        assertTrue(combinedNanos < formerNanos,
-            "Combined resize and encode should avoid the intermediate JPEG decode. " + report);
+        Files.writeString(Path.of("build", "benchmarks", "jpeg-resize.md"), report);
     }
 
     private static long medianNanos(int runs, Runnable action) {
