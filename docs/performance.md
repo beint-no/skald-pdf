@@ -12,6 +12,15 @@ optimizer:
   invoice stays tens of kilobytes instead of carrying the whole face;
 - small structural objects are grouped into PDF 2.0 object streams;
 - the cross-reference stream is compact and compressed;
+- glyph lookup for U+0000–U+07FF reads a per-face array filled once at load,
+  so Latin, Greek, and Cyrillic text skips the linear cmap format 4 scan;
+- text runs are walked with `codePointAt` instead of `codePoints()` streams;
+- tables estimate their full height only when `keepTogether` asks for it, and
+  cells measure their content height only for middle/bottom alignment;
+- font and graphics-state objects are numbered in first-use order, so the same
+  document produces byte-identical output across JVMs;
+- `skald-image` decodes and encodes through in-memory ImageIO streams instead
+  of ImageIO's default temp-file cache;
 - lossless raster rows select the best PNG predictor before Deflate;
 - JPEG byte streams are embedded directly, avoiding quality loss and CPU cost;
 - repeated image instances and opacity states share indirect objects;

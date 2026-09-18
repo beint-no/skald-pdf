@@ -8,6 +8,7 @@ import org.skaldpdf.geom.Rectangle;
 import org.skaldpdf.image.ImageData;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -200,11 +201,11 @@ public final class PdfPage {
     }
 
     Map<PdfFont, String> fonts() {
-        return Map.copyOf(fonts);
+        return Collections.unmodifiableMap(new LinkedHashMap<>(fonts));
     }
 
     Map<PdfFont, FontUsage> fontUsage() {
-        return Map.copyOf(fontUsage);
+        return Collections.unmodifiableMap(new LinkedHashMap<>(fontUsage));
     }
 
     List<ImageResource> images() {
@@ -212,7 +213,7 @@ public final class PdfPage {
     }
 
     Map<Float, String> opacities() {
-        return Map.copyOf(opacities);
+        return Collections.unmodifiableMap(new LinkedHashMap<>(opacities));
     }
 
     List<LinkAnnotation> links() {

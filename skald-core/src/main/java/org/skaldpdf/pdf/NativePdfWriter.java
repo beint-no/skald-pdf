@@ -122,15 +122,16 @@ final class NativePdfWriter {
             throw new IllegalStateException("A PDF cannot be both encrypted and reserved for signing");
         }
         var objects = new ObjectStore();
-        var fontUsage = collectFonts(document.pages());
+        var pages = document.pages();
+        var fontUsage = collectFonts(pages);
         var fontObjects = new IdentityHashMap<PdfFont, Integer>();
         fontUsage.forEach((font, usage) -> fontObjects.put(font, addFont(objects, font, usage)));
         var sharedImages = new IdentityHashMap<org.skaldpdf.image.ImageData, Integer>();
         var sharedOpacities = new LinkedHashMap<Float, Integer>();
 
         var pagesObject = objects.reserve();
-        var pageObjects = new ArrayList<Integer>(document.pages().size());
-        document.pages().forEach(ignored -> pageObjects.add(objects.reserve()));
+        var pageObjects = new ArrayList<Integer>(pages.size());
+        pages.forEach(ignored -> pageObjects.add(objects.reserve()));
         var signature = document.signatureField();
         Integer signatureObject = null;
         Integer signatureWidget = null;
@@ -142,21 +143,21 @@ final class NativePdfWriter {
             signatureWidget = objects.reserveUnpacked();
         }
         var importers = new IdentityHashMap<NativePdfParser, ImportContext>();
-        for (int index = 0; index < document.pages().size(); index++) {
-            var imported = document.pages().get(index).importedPage();
+        for (int index = 0; index < pages.size(); index++) {
+            var imported = pages.get(index).importedPage();
             if (imported != null) {
                 importers.computeIfAbsent(imported.source(), source -> new ImportContext(source, objects, encryption))
                     .map(imported.reference(), pageObjects.get(index));
             }
         }
 
-        for (int index = 0; index < document.pages().size(); index++) {
-            var page = document.pages().get(index);
+        for (int index = 0; index < pages.size(); index++) {
+            var page = pages.get(index);
             var contentObject = objects.add(stream("", ascii(page.content()), true));
             var imageObjects = addImages(objects, page.images(), sharedImages);
             var opacityObjects = addOpacities(objects, page.opacities(), sharedOpacities);
             var shadingObjects = addShadings(objects, page.shadings());
-            var linkObjects = addLinks(objects, page.links(), pageObjects, document.pages());
+            var linkObjects = addLinks(objects, page.links(), pageObjects, pages);
             if (signature != null && signature.pageNumber() == index + 1) {
                 linkObjects = new ArrayList<>(linkObjects);
                 linkObjects.add(signatureWidget);
@@ -809,7 +810,8 @@ final class NativePdfWriter {
     }
 
     private static Map<PdfFont, FontAggregate> collectFonts(List<PdfPage> pages) {
-        var result = new IdentityHashMap<PdfFont, FontAggregate>();
+        // PdfFont uses identity equality, so a LinkedHashMap keeps first-use order deterministic.
+        var result = new LinkedHashMap<PdfFont, FontAggregate>();
         pages.forEach(page -> page.fontUsage().forEach((font, usage) -> {
             var aggregate = result.computeIfAbsent(font, ignored -> new FontAggregate());
             aggregate.glyphs.addAll(usage.glyphs());

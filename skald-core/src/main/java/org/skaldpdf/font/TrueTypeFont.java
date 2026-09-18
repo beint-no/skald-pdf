@@ -15,6 +15,7 @@ final class TrueTypeFont {
     private final int numberOfHorizontalMetrics;
     private final int[] advances;
     private final Cmap cmap;
+    private final int[] fastGlyphs;
     private final PdfFont.Metrics metrics;
     private final String postScriptName;
 
@@ -49,6 +50,10 @@ final class TrueTypeFont {
             "Invalid OpenType metrics");
         advances = horizontalAdvances();
         cmap = readCmap();
+        fastGlyphs = new int[0x800];
+        for (int codePoint = 0; codePoint < fastGlyphs.length; codePoint++) {
+            fastGlyphs[codePoint] = cmap.glyph(codePoint);
+        }
         var os2 = tables.get("OS/2");
         var post = tables.get("post");
         var capHeight = os2 != null && os2.length >= 90
@@ -64,7 +69,7 @@ final class TrueTypeFont {
     }
 
     int glyph(int codePoint) {
-        return cmap.glyph(codePoint);
+        return codePoint >= 0 && codePoint < fastGlyphs.length ? fastGlyphs[codePoint] : cmap.glyph(codePoint);
     }
 
     int pdfWidth(int glyph) {

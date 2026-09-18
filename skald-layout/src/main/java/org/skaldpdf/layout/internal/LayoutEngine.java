@@ -402,9 +402,11 @@ public final class LayoutEngine {
 
     private void renderFlowTable(Table table, TextContext inherited, float x, float availableWidth) {
         var style = table.style();
-        var estimated = estimate(table, availableWidth, inherited);
-        if (style.keepTogether() && estimated > remainingHeight() && estimated <= contentHeight()) {
-            newPage();
+        if (style.keepTogether()) {
+            var estimated = estimate(table, availableWidth, inherited);
+            if (estimated > remainingHeight() && estimated <= contentHeight()) {
+                newPage();
+            }
         }
         var tableWidth = resolveWidth(style.width(), availableWidth,
             availableWidth - style.marginLeft() - style.marginRight());
@@ -535,11 +537,10 @@ public final class LayoutEngine {
         var style = cell.style();
         var context = resolveTextContext(style, inherited);
         var innerWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight());
-        var contentHeight = cellContentHeight(cell, innerWidth, context);
         var top = switch (style.verticalAlignment(VerticalAlignment.TOP)) {
             case TOP -> bottom + height - style.paddingTop();
-            case MIDDLE -> bottom + (height + contentHeight) / 2f;
-            case BOTTOM -> bottom + style.paddingBottom() + contentHeight;
+            case MIDDLE -> bottom + (height + cellContentHeight(cell, innerWidth, context)) / 2f;
+            case BOTTOM -> bottom + style.paddingBottom() + cellContentHeight(cell, innerWidth, context);
         };
         for (var child : cell.children()) {
             switch (child) {
@@ -845,7 +846,10 @@ public final class LayoutEngine {
             var current = new StringBuilder();
             var whitespace = false;
             PdfFont tokenFont = context.font();
-            for (var codePoint : run.value().codePoints().toArray()) {
+            var value = run.value();
+            for (int offset = 0; offset < value.length();) {
+                var codePoint = value.codePointAt(offset);
+                offset += Character.charCount(codePoint);
                 if (codePoint == '\n') {
                     flushToken(result, current, tokenFont, context);
                     result.add(new ResolvedText("\n", context.font(), context.fontSize(), context.color()));
