@@ -74,19 +74,19 @@ out of production modules. Published APIs are JSpecify `@NullMarked`: Kotlin
 and other consumers see non-null types by default, and `@Nullable` only where
 absence is a real value (logo, bank, due date, encryption). Optional text is
 empty, never null. Older Skald revisions remain the tail for older JDKs.
-Release `1.15.2` is the current line:
+Release `1.15.3` is the current line:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.15.2")
-    implementation("no.beint.skaldpdf:skald-fonts:1.15.2")         // direct SkaldSans API access
-    implementation("no.beint.skaldpdf:skald-barcode:1.15.2")        // optional symbols
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.15.2")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.15.2") // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.15.2")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.15.2")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.15.2")      // optional received-PDF recompress
-    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.15.2") // optional bundled JPEGli encoder
+    implementation("no.beint.skaldpdf:skald-layout:1.15.3")
+    implementation("no.beint.skaldpdf:skald-fonts:1.15.3")         // direct SkaldSans API access
+    implementation("no.beint.skaldpdf:skald-barcode:1.15.3")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.15.3")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.15.3") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.15.3")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.15.3")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.15.3")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.15.3") // optional bundled JPEGli encoder
 }
 ```
 
