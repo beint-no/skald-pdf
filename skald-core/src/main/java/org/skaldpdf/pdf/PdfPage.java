@@ -11,10 +11,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /** A page owned by one {@link PdfDocument}. */
 public final class PdfPage {
@@ -148,7 +146,6 @@ public final class PdfPage {
         var glyphs = run.glyphs();
         var codePoints = run.codePoints();
         for (int index = 0; index < glyphs.length; index++) {
-            usage.glyphs.add(glyphs[index]);
             usage.unicodeByGlyph.putIfAbsent(glyphs[index], codePoints[index]);
         }
         return name;
@@ -274,15 +271,11 @@ public final class PdfPage {
     }
 
     static final class FontUsage {
-        private final Set<Integer> glyphs = new LinkedHashSet<>();
+        // Every used glyph is a key, so the key set doubles as the glyph set.
         private final Map<Integer, Integer> unicodeByGlyph = new LinkedHashMap<>();
 
-        Set<Integer> glyphs() {
-            return Set.copyOf(glyphs);
-        }
-
         Map<Integer, Integer> unicodeByGlyph() {
-            return Map.copyOf(unicodeByGlyph);
+            return Collections.unmodifiableMap(unicodeByGlyph);
         }
     }
 

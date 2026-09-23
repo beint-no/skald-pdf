@@ -188,6 +188,29 @@ public final class PdfDrawing {
             page.append(operators.append("S\nQ\n").toString());
             return;
         }
+        if (radius <= 0 && sameStroke(top, right, bottom, left) && top != null && top.visible()) {
+            // One stroke state and one path for the common four-equal-sides cell border. Each
+            // subpath restarts the dash pattern, so this renders like four separate lines.
+            document.ensureOpen();
+            var operators = new StringBuilder(160).append("q\n");
+            rgb(operators, top.color()).append(" RG\n");
+            PdfNumbers.append(operators, top.width());
+            operators.append(" w\n");
+            if (top.dash() > 0 && top.gap() > 0) {
+                operators.append('[');
+                PdfNumbers.append(operators, top.dash());
+                operators.append(' ');
+                PdfNumbers.append(operators, top.gap());
+                operators.append("] 0 d\n1 J\n");
+            }
+            var inset = top.width() / 2f;
+            appendSegment(operators, x, y + height - inset, x + width, y + height - inset);
+            appendSegment(operators, x + width - inset, y, x + width - inset, y + height);
+            appendSegment(operators, x, y + inset, x + width, y + inset);
+            appendSegment(operators, x + inset, y, x + inset, y + height);
+            page.append(operators.append("S\nQ\n").toString());
+            return;
+        }
         if (top != null && top.visible()) {
             var inset = top.width() / 2f;
             line(document, page, top.color(), top.width(), x, y + height - inset, x + width, y + height - inset,
@@ -208,6 +231,17 @@ public final class PdfDrawing {
             line(document, page, left.color(), left.width(), x + inset, y, x + inset, y + height,
                 left.dash(), left.gap());
         }
+    }
+
+    private static void appendSegment(StringBuilder operators, float x1, float y1, float x2, float y2) {
+        PdfNumbers.append(operators, x1);
+        operators.append(' ');
+        PdfNumbers.append(operators, y1);
+        operators.append(" m\n");
+        PdfNumbers.append(operators, x2);
+        operators.append(' ');
+        PdfNumbers.append(operators, y2);
+        operators.append(" l\n");
     }
 
     public static void beginClip(PdfDocument document, PdfPage page, float x, float y, float width, float height) {

@@ -23,6 +23,11 @@ optimizer:
   of ImageIO's default temp-file cache;
 - lossless raster rows select the best PNG predictor before Deflate;
 - JPEG byte streams are embedded directly, avoiding quality loss and CPU cost;
+- a cell border whose four sides share one stroke is a single path under one
+  graphics state instead of four `q … S Q` blocks; each subpath restarts the
+  dash pattern, so it renders like four separate lines;
+- per-page font usage keeps one glyph-to-Unicode map whose key set is the
+  glyph set, instead of a second set plus defensive copies;
 - repeated image instances and opacity states share indirect objects;
 - received PDFs share only byte-identical embedded font program streams while
   retaining separate descriptors, encodings, and font resources;
@@ -32,10 +37,13 @@ optimizer:
 - content-stream numbers are encoded without temporary formatted strings;
 - batched barcode and QR rectangles reduce content operators;
 - bounded parsers reject decompression and object-count abuse early;
+- text extraction parses each shared font's ToUnicode CMap once per document,
+  not once per page, and classifies content-stream operators without
+  allocating a string per keyword;
 - Deflate uses try-with-resources on `java.util.zip.Deflater`.
 
-Generation is measured on JDK 26. Compact object headers and the JDK 26 G1
-throughput work apply without extra flags. Preview APIs (`LazyConstant`,
+Generation is measured on JDK 27. Compact object headers are on by default
+and need no extra flags. Preview APIs (`LazyConstant`,
 Vector, PEM) were measured or reviewed and are not used: they do not beat
 the current holder-class, packed-int, and JCA paths enough to justify
 `--enable-preview`.

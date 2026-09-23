@@ -332,10 +332,10 @@ final class NativePdfWriter {
     }
 
     private int addFont(ObjectStore objects, PdfFont font, FontAggregate usage) {
-        var program = font.subsetProgram(usage.glyphs);
+        var program = font.subsetProgram(usage.glyphs());
         var fontFile = objects.add(stream("/Length1 " + program.length, program, true));
         var metrics = font.metrics();
-        var postScriptName = subsetTag(font, usage.glyphs) + "+" + pdfFontName(font);
+        var postScriptName = subsetTag(font, usage.glyphs()) + "+" + pdfFontName(font);
         var flags = 32 | (metrics.fixedPitch() ? 1 : 0)
             | (metrics.italicAngle() != 0 ? 64 : 0)
             | (font.bold() ? 262_144 : 0);
@@ -348,7 +348,7 @@ final class NativePdfWriter {
             number(metrics.italicAngle()), metrics.pdfUnit(metrics.ascent()),
             metrics.pdfUnit(metrics.descent()), metrics.pdfUnit(metrics.capHeight()),
             font.bold() ? 120 : 80, fontFile)));
-        var widths = widths(font.widths(usage.glyphs));
+        var widths = widths(font.widths(usage.glyphs()));
         var cidFont = objects.add(ascii(format(
             "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /%s "
                 + "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
@@ -814,7 +814,6 @@ final class NativePdfWriter {
         var result = new LinkedHashMap<PdfFont, FontAggregate>();
         pages.forEach(page -> page.fontUsage().forEach((font, usage) -> {
             var aggregate = result.computeIfAbsent(font, ignored -> new FontAggregate());
-            aggregate.glyphs.addAll(usage.glyphs());
             usage.unicodeByGlyph().forEach(aggregate.unicodeByGlyph::putIfAbsent);
         }));
         return result;
@@ -1056,8 +1055,12 @@ final class NativePdfWriter {
     }
 
     private static final class FontAggregate {
-        private final Set<Integer> glyphs = new LinkedHashSet<>();
+        // Every used glyph is a key, so the key set doubles as the glyph set.
         private final Map<Integer, Integer> unicodeByGlyph = new LinkedHashMap<>();
+
+        Set<Integer> glyphs() {
+            return unicodeByGlyph.keySet();
+        }
     }
 
     private record PackedLocation(int objectStream, int index) {
