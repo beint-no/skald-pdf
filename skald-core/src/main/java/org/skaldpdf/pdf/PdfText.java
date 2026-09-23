@@ -1,12 +1,12 @@
 package org.skaldpdf.pdf;
 
 import static org.skaldpdf.pdf.CosValue.CosDictionary;
-import static org.skaldpdf.pdf.CosValue.CosName;
 import static org.skaldpdf.pdf.CosValue.CosStream;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,14 +43,18 @@ public final class PdfText {
         var parser = new NativePdfParser(pdf);
         var pages = parser.pages();
         var result = new ArrayList<String>(pages.size());
+        // Pages usually share font objects; resolved objects are cached by the parser, so
+        // identity lets every page reuse the ToUnicode map parsed for the first one.
+        var cidMaps = new IdentityHashMap<CosDictionary, CidMap>();
         for (var page : pages) {
-            result.add(extractPage(parser, page));
+            result.add(extractPage(parser, page, cidMaps));
         }
         return List.copyOf(result);
     }
 
-    private static String extractPage(NativePdfParser parser, ImportedPage page) {
-        var fonts = loadFonts(parser, page);
+    private static String extractPage(NativePdfParser parser, ImportedPage page,
+                                      Map<CosDictionary, CidMap> cidMaps) {
+        var fonts = loadFonts(parser, page, cidMaps);
         var scanner = new Scanner(parser.contentBytes(page));
         var operands = new ArrayList<Object>();
         var text = new StringBuilder();
@@ -62,34 +66,33 @@ public final class PdfText {
                 break;
             }
             if (token instanceof Operator operator) {
-                switch (operator.name()) {
-                    case "Tf" -> {
+                switch (operator) {
+                    case SET_FONT -> {
                         if (operands.size() >= 2 && operands.get(operands.size() - 2) instanceof String name) {
                             fontName = name;
                         }
                     }
-                    case "Tm" -> {
+                    case SET_MATRIX -> {
                         if (operands.size() >= 6 && operands.get(operands.size() - 1) instanceof Number y) {
                             lastY = breakLine(text, lastY, y.floatValue());
                         }
                     }
-                    case "Td", "TD" -> {
+                    case MOVE -> {
                         if (!operands.isEmpty() && operands.get(operands.size() - 1) instanceof Number y
                             && Math.abs(y.floatValue()) > 1f) {
                             lastY = breakLine(text, lastY, Float.isNaN(lastY) ? 0 : lastY - y.floatValue());
                         }
                     }
-                    case "Tj", "'" -> appendShow(text, fonts, fontName, lastOperand(operands));
-                    case "\"" -> appendShow(text, fonts, fontName, lastOperand(operands));
-                    case "TJ" -> {
+                    case SHOW -> appendShow(text, fonts, fontName, lastOperand(operands));
+                    case SHOW_ARRAY -> {
                         if (lastOperand(operands) instanceof List<?> array) {
                             for (var item : array) {
                                 appendShow(text, fonts, fontName, item);
                             }
                         }
                     }
-                    case "BI" -> scanner.skipInlineImage();
-                    default -> {
+                    case BEGIN_INLINE_IMAGE -> scanner.skipInlineImage();
+                    case OTHER -> {
                     }
                 }
                 operands.clear();
@@ -132,7 +135,8 @@ public final class PdfText {
         text.append(mapped);
     }
 
-    private static Map<String, CidMap> loadFonts(NativePdfParser parser, ImportedPage page) {
+    private static Map<String, CidMap> loadFonts(NativePdfParser parser, ImportedPage page,
+                                                 Map<CosDictionary, CidMap> cidMaps) {
         var resourcesValue = page.dictionary().get("Resources");
         if (resourcesValue == null) {
             return Map.of();
@@ -153,7 +157,7 @@ public final class PdfText {
         dictionary.values().forEach((name, value) -> {
             var font = parser.resolve(value);
             if (font instanceof CosDictionary fontDictionary) {
-                result.put(name, cidMap(parser, fontDictionary));
+                result.put(name, cidMaps.computeIfAbsent(fontDictionary, key -> cidMap(parser, key)));
             }
         });
         return result;
@@ -165,16 +169,8 @@ public final class PdfText {
             try {
                 return CidMap.parse(parser.decodedStream(stream, "ToUnicode"));
             } catch (RuntimeException ignored) {
-                // Fall through to the encoding name.
+                // Fall back to single-byte WinAnsi.
             }
-        }
-        var encodingValue = font.get("Encoding") == null ? null : parser.resolve(font.get("Encoding"));
-        if (encodingValue instanceof CosName encoding) {
-            return CidMap.named(encoding.value());
-        }
-        if (encodingValue instanceof CosDictionary encoding
-            && encoding.get("BaseEncoding") instanceof CosName base) {
-            return CidMap.named(base.value());
         }
         return CidMap.WIN_ANSI;
     }
@@ -185,7 +181,35 @@ public final class PdfText {
         return REPEATED_SPACES.matcher(collapsed).replaceAll(" ").strip();
     }
 
-    private record Operator(String name) {
+    /** The operators extraction acts on; every other keyword only ends an operand list. */
+    private enum Operator {
+        SET_FONT, SET_MATRIX, MOVE, SHOW, SHOW_ARRAY, BEGIN_INLINE_IMAGE, OTHER;
+
+        static Operator of(byte[] bytes, int start, int length) {
+            if (length == 1) {
+                var value = bytes[start];
+                return value == '\'' || value == '"' ? SHOW : OTHER;
+            }
+            if (length != 2) {
+                return OTHER;
+            }
+            var first = bytes[start];
+            var second = bytes[start + 1];
+            if (first == 'B') {
+                return second == 'I' ? BEGIN_INLINE_IMAGE : OTHER;
+            }
+            if (first != 'T') {
+                return OTHER;
+            }
+            return switch (second) {
+                case 'f' -> SET_FONT;
+                case 'm' -> SET_MATRIX;
+                case 'd', 'D' -> MOVE;
+                case 'j' -> SHOW;
+                case 'J' -> SHOW_ARRAY;
+                default -> OTHER;
+            };
+        }
     }
 
     private static final class CidMap {
@@ -198,13 +222,6 @@ public final class PdfText {
             this.codeBytes = Math.max(1, codeBytes);
             this.map = map;
             this.singleByteFallback = singleByteFallback;
-        }
-
-        static CidMap named(String encoding) {
-            return switch (encoding) {
-                case "WinAnsiEncoding", "MacRomanEncoding", "StandardEncoding", "PDFDocEncoding" -> WIN_ANSI;
-                default -> WIN_ANSI;
-            };
         }
 
         static CidMap parse(byte[] cmap) {
@@ -534,11 +551,17 @@ public final class PdfText {
             while (position < bytes.length && !isDelimiter(bytes[position] & 0xff)) {
                 position++;
             }
-            var token = new String(bytes, start, position - start, StandardCharsets.ISO_8859_1);
-            if (token.isEmpty()) {
+            var length = position - start;
+            if (length == 0) {
                 position++;
                 return next();
             }
+            var first = bytes[start];
+            if (first != '+' && first != '-' && first != '.' && (first < '0' || first > '9')) {
+                // Cannot be a number, so it is a keyword: classify it without allocating a string.
+                return Operator.of(bytes, start, length);
+            }
+            var token = new String(bytes, start, length, StandardCharsets.ISO_8859_1);
             if (isNumber(token)) {
                 try {
                     return Float.parseFloat(token);
@@ -546,7 +569,7 @@ public final class PdfText {
                     return token;
                 }
             }
-            return new Operator(token);
+            return Operator.OTHER;
         }
 
         private static boolean isSpace(int value) {

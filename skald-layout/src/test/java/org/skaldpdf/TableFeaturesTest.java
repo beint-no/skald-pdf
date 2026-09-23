@@ -31,6 +31,21 @@ class TableFeaturesTest {
     }
 
     @Test
+    void strokesAUniformCellBorderAsOnePath() throws Exception {
+        var table = new Table(2).useAllAvailableWidth();
+        table.addRow("A", "B");
+        table.addRow("C", "D");
+        var bytes = Pdf.create(document -> document.add(table));
+        try (var parsed = PdfTestSupport.load(bytes);
+             var contents = parsed.getPage(0).getContents()) {
+            var content = new String(contents.readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1);
+            assertEquals(4, content.split(" RG\n", -1).length - 1, "one stroke state per cell");
+            assertEquals(4, content.split("\nS\nQ\n", -1).length - 1, "one stroke per cell");
+            assertEquals(16, content.split(" l\n", -1).length - 1, "four sides per cell");
+        }
+    }
+
+    @Test
     void repeatsFooterRowsWhenATableSplits() throws Exception {
         var table = new Table(2).useAllAvailableWidth();
         table.addHeaderCell("Line").addHeaderCell("Amount");
