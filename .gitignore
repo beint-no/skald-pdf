@@ -6,3 +6,5 @@ out/
 site/demos/*.pdf
 site/demos/*.png
 /benchmark-corpus/
+__pycache__/
+.DS_Store
