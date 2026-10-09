@@ -256,10 +256,8 @@ Still ordered by what businesses hit next.
 
 - PAdES-B-T (timestamp) and B-LT/B-LTA after a TSA integration. QES remains
   out of scope unless a listed QTSP is used.
-- Optional PDF 2.0 encryption after focused security review.
 - Optional linearization for byte-range web delivery.
 - Safer annotation and form APIs based on current PDF 2.0 structures.
-- Explicit image downsampling/recompression policies; no silent quality loss.
 
 ## Non-goals
 
