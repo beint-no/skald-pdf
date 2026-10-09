@@ -31,7 +31,7 @@ The focus corpus must be selected by byte size rather than by a hand-picked
 list. Recreate it from a source directory with:
 
 ```shell
-python3 tools/select_pdf_corpus.py \
+tools/select_pdf_corpus.py \
   /path/to/production-pdfs benchmark-corpus/largest-250 --limit 250
 ```
 

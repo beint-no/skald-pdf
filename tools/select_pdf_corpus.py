@@ -1,7 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.15"
+# ///
 """Select the largest PDFs into an ignored, reproducible local corpus."""
-
-from __future__ import annotations
 
 import argparse
 import csv
@@ -21,11 +22,8 @@ def arguments() -> argparse.Namespace:
 
 
 def digest(path: Path) -> str:
-    value = hashlib.sha256()
     with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            value.update(block)
-    return value.hexdigest()
+        return hashlib.file_digest(source, "sha256").hexdigest()
 
 
 def main() -> None:
