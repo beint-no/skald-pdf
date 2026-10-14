@@ -2,6 +2,7 @@ package org.skaldpdf.pdf;
 
 import static org.skaldpdf.pdf.CosValue.*;
 
+import org.jspecify.annotations.Nullable;
 import org.skaldpdf.geom.PageSize;
 import org.skaldpdf.geom.Rectangle;
 import org.skaldpdf.image.ImageData;
@@ -988,8 +989,13 @@ final class NativePdfParser {
     }
 
     private byte[] inflate(byte[] encoded, String description) {
-        var inflater = new Inflater();
         var output = new ByteArrayOutputStream(Math.min(encoded.length * 2, 1_048_576));
+        inflate(encoded, description, output);
+        return output.toByteArray();
+    }
+
+    private void inflate(byte[] encoded, String description, @Nullable ByteArrayOutputStream output) {
+        var inflater = new Inflater();
         try {
             inflater.setInput(encoded);
             var buffer = new byte[8192];
@@ -1007,10 +1013,11 @@ final class NativePdfParser {
                 total += read;
                 require(total <= MAXIMUM_DECODED_STRUCTURAL_BYTES,
                     description + " exceeds the decoded size limit");
-                output.write(buffer, 0, read);
+                if (output != null) {
+                    output.write(buffer, 0, read);
+                }
             }
             require(inflater.getRemaining() == 0, description + " has trailing Flate data");
-            return output.toByteArray();
         } catch (DataFormatException exception) {
             throw new IllegalArgumentException("Unable to inflate " + description, exception);
         } finally {
@@ -1058,7 +1065,12 @@ final class NativePdfParser {
         }
         var data = stream.encodedBytes();
         try {
-            for (var filter : filters) {
+            for (var index = 0; index < filters.size(); index++) {
+                var filter = filters.get(index);
+                if (index == filters.size() - 1 && Set.of("FlateDecode", "Fl").contains(filter)) {
+                    inflate(data, "Flate preflight", null);
+                    return true;
+                }
                 data = switch (filter) {
                     case "ASCIIHexDecode", "AHx" -> asciiHex(data, "Flate preflight");
                     case "ASCII85Decode", "A85" -> ascii85(data, "Flate preflight");
