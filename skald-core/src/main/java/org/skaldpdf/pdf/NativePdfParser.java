@@ -174,13 +174,23 @@ final class NativePdfParser {
             return List.of();
         }
         var result = new ArrayList<EmbeddedImage>();
-        imageXObjects(resourcesValue, pageNumber, "", result,
+        Set<CosStream> masks = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        imageXObjects(resourcesValue, pageNumber, "", result, masks,
             java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
-        return List.copyOf(result);
+        /* Producers such as OpenPDF also register a soft mask as its own named
+         * XObject. On its own it looks like an ordinary gray image, so offering
+         * it for recompression would let it be resampled or converted away from
+         * DeviceGray while the parent still points at it. Filtering runs after
+         * the whole traversal because a mask can appear before its parent. */
+        if (masks.isEmpty()) {
+            return List.copyOf(result);
+        }
+        return result.stream().filter(image -> !masks.contains(image.stream())).toList();
     }
 
     private void imageXObjects(CosValue resourcesValue, int pageNumber, String path,
-                               List<EmbeddedImage> result, Set<CosStream> visitedForms) {
+                               List<EmbeddedImage> result, Set<CosStream> masks,
+                               Set<CosStream> visitedForms) {
         var resources = dictionary(resolve(resourcesValue), "page Resources");
         var xobjects = resources.get("XObject");
         if (xobjects == null) {
@@ -199,10 +209,15 @@ final class NativePdfParser {
             var resourceName = path.isEmpty() ? entry.getKey() : path + "/" + entry.getKey();
             if (name.value().equals("Image")) {
                 result.add(embeddedImage(pageNumber, resourceName, stream));
+                for (var maskKey : new String[] {"SMask", "Mask"}) {
+                    if (resolve(stream.dictionary().get(maskKey)) instanceof CosStream mask) {
+                        masks.add(mask);
+                    }
+                }
             } else if (name.value().equals("Form") && visitedForms.add(stream)) {
                 var nestedResources = stream.dictionary().get("Resources");
                 if (nestedResources != null) {
-                    imageXObjects(nestedResources, pageNumber, resourceName, result, visitedForms);
+                    imageXObjects(nestedResources, pageNumber, resourceName, result, masks, visitedForms);
                 }
             }
         }

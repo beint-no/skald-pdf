@@ -44,10 +44,21 @@ Generated fixtures are checked at several independent layers:
 PAdES-B-B attributes are documented in [signing.md](signing.md). QES is out of
 scope without a listed QTSP.
 
-JPEG XL (ISO/IEC 18181) is the PDF Association's preferred HDR candidate for a
-*future* PDF edition (Wyatt, PDF Days Europe 2025). It is not in ISO 32000-2:2020.
-Skald decodes JXL as input and embeds `DCTDecode`. It will not write a
-`/JXLDecode` stream until the ISO filter exists and viewers implement it.
+JPEG XL (ISO/IEC 18181) is the PDF Association's preferred candidate for a
+*future* PDF edition (Wyatt, PDF Days Europe 2025; the Association confirmed the
+intent in November 2025). It is not in ISO 32000-2:2020. Skald decodes JXL as
+input and embeds `DCTDecode`. It will not write a `/JXLDecode` stream until the
+ISO filter exists and viewers implement it.
+
+Browser support moved in 2026 — Firefox 157 and Chrome 155 decode JXL by
+default — but that is the `<img>` path, not a PDF filter. `/JXLDecode` is still
+only a placeholder name in PDFium's experimental design and in a handful of
+library branches, so a PDF written with it opens in no shipping reader. The
+deferral is therefore unchanged, and it is cheap: measured over 40 JPEG streams
+taken from real accounting PDFs, a JXL filter would save a further 10 to 11 %
+over JPEGli at equal SSIMULACRA2, where JPEGli itself already saves 4 to 13 %
+over libjpeg. See
+[received-pdf-recompression-2026-10.md](received-pdf-recompression-2026-10.md).
 
 The PDF specification itself remains authoritative. A validator is a second
 implementation and not a substitute for standards review.

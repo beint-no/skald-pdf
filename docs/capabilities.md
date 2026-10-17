@@ -37,7 +37,7 @@
 | Complex-script shaping | needs a focused OpenType shaping engine or optional integration |
 | Multi-script fallback | a document-level fallback stack exists; script-aware shaping is still deferred |
 | CFF/OTF embedding | TrueType/OpenType glyf faces only until a dedicated CFF reader exists |
-| Emitting JPEG XL in PDF | not in ISO 32000-2; no interoperable viewer filter yet. Decode-as-ingest is shipped |
+| Emitting JPEG XL in PDF | not in ISO 32000-2; `/JXLDecode` is still a placeholder name and no shipping reader opens it. Browsers decoding JXL in 2026 does not change the PDF filter. Worth about 10 % over JPEGli when it lands; decode-as-ingest is shipped |
 | Lossy image optimization | quality and DPI policy belongs at the application boundary (`OptimizeOptions`) |
 
 Priorities and the boundary between planned modules are documented in the

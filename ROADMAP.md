@@ -151,7 +151,10 @@ bigger iText clone:
 4. **PAdES-B-T** — timestamp after a TSA; still not QES.
 5. **CMYK and calibrated-colour image conversion** — only with profile
    validation and rendered colour-difference gates.
-6. **Emit JPEG XL** — only after ISO publishes a filter and viewers implement it.
+6. **Emit JPEG XL** — only after ISO publishes a filter and viewers implement it. Firefox 157 and
+   Chrome 155 now decode JXL in `<img>`, which is not the same thing: `/JXLDecode` remains a
+   placeholder name with no shipping reader. Measured upside over JPEGli at equal quality is
+   10–11 %, so waiting costs little.
 
 ## Shipped in 1.4.1
 

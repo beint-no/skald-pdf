@@ -51,6 +51,18 @@ public final class OptimizeOptions {
         return builder().build();
     }
 
+    /**
+     * Long-term storage of documents that have already been received and read:
+     * 1754 px, the long edge of A4 at 150 dpi, and quality 68 for both JPEG
+     * and lossless rasters. Measured over 50 accounting-export PDFs this lands
+     * on the same total bytes as a 150 dpi Ghostscript or MuPDF pass while
+     * holding the worst rendered page at SSIMULACRA2 88.5 instead of 55.3.
+     * Prefer {@link #attachments()} while a document is still being worked on.
+     */
+    public static OptimizeOptions archive() {
+        return builder().maxEdge(1754).jpegQuality(0.68f).losslessQuality(0.68f).build();
+    }
+
     public static Builder builder() {
         return new Builder();
     }

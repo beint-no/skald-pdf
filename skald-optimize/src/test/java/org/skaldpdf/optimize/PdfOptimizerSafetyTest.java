@@ -226,6 +226,28 @@ class PdfOptimizerSafetyTest {
     }
 
     @Test
+    void keepsASoftMaskThatIsAlsoRegisteredAsItsOwnPageResource() throws Exception {
+        var source = withSoftMaskAlsoInResources(pdfWithSoftMask(false, false));
+
+        try (var document = new PdfDocument(new PdfReader(source))) {
+            var images = document.importedImages();
+            assertEquals(1, images.size(), "the mask must not be offered as an image of its own");
+            assertTrue(images.getFirst().requiresOriginalDimensions());
+        }
+
+        var optimized = PdfOptimizer.recompress(source, TEST_OPTIONS);
+
+        try (var before = Loader.loadPDF(source); var after = Loader.loadPDF(optimized)) {
+            var original = colourImage(before);
+            var replacement = colourImage(after);
+            assertEquals(original.getWidth(), replacement.getWidth());
+            assertEquals(original.getHeight(), replacement.getHeight());
+            assertArrayEquals(decodedSoftMask(original), decodedSoftMask(replacement));
+            assertArrayEquals(alpha(original.getImage()), alpha(replacement.getImage()));
+        }
+    }
+
+    @Test
     void acceptsASoftMaskWithoutItsOptionalTypeEntry() throws Exception {
         var source = withoutSoftMaskType(pdfWithSoftMask(false, false));
         try (var document = new PdfDocument(new PdfReader(source))) {
@@ -814,6 +836,37 @@ class PdfOptimizerSafetyTest {
             document.save(output);
             return output.toByteArray();
         }
+    }
+
+    /**
+     * Some producers, OpenPDF among them, name the soft mask in the page
+     * resources as well as referencing it from the colour image. Looked at on
+     * its own the mask is an ordinary gray raster, so this is what used to let
+     * it be resampled out from under its parent.
+     */
+    private static byte[] withSoftMaskAlsoInResources(byte[] source) throws Exception {
+        try (var document = Loader.loadPDF(source)) {
+            var resources = document.getPage(0).getResources();
+            var image = colourImage(document);
+            var mask = assertInstanceOf(COSStream.class,
+                image.getCOSObject().getDictionaryObject(COSName.SMASK));
+            resources.put(COSName.getPDFName("MaskAlias"), new PDImageXObject(
+                new PDStream(mask), null));
+            var output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private static PDImageXObject colourImage(PDDocument document) throws Exception {
+        var resources = document.getPage(0).getResources();
+        for (var name : resources.getXObjectNames()) {
+            if (resources.getXObject(name) instanceof PDImageXObject image
+                && image.getCOSObject().getDictionaryObject(COSName.SMASK) != null) {
+                return image;
+            }
+        }
+        throw new AssertionError("no image with a soft mask");
     }
 
     private static byte[] decodedSoftMask(PDImageXObject image) throws Exception {
