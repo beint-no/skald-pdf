@@ -10,6 +10,7 @@ public final class OptimizeOptions {
     private final boolean compressStreamsLosslessly;
     private final boolean deduplicateImagesLosslessly;
     private final boolean deduplicateFontProgramsLosslessly;
+    private final boolean preserveConformanceProfiles;
     private final long maximumImagePixels;
     private final int minimumLosslessBytes;
     private final int minimumSavingsBytes;
@@ -34,6 +35,7 @@ public final class OptimizeOptions {
         compressStreamsLosslessly = builder.compressStreamsLosslessly;
         deduplicateImagesLosslessly = builder.deduplicateImagesLosslessly;
         deduplicateFontProgramsLosslessly = builder.deduplicateFontProgramsLosslessly;
+        preserveConformanceProfiles = builder.preserveConformanceProfiles;
         maximumImagePixels = builder.maximumImagePixels;
         minimumLosslessBytes = builder.minimumLosslessBytes;
         minimumSavingsBytes = builder.minimumSavingsBytes;
@@ -91,6 +93,14 @@ public final class OptimizeOptions {
     /** Whether byte-identical embedded font program streams should share one object. */
     public boolean deduplicateFontProgramsLosslessly() {
         return deduplicateFontProgramsLosslessly;
+    }
+
+    /**
+     * Whether a declared PDF/A, PDF/X, PDF/UA, PDF/E or PDF/VT profile keeps the
+     * document byte for byte. The rewrite does not preserve profile conformance.
+     */
+    public boolean preserveConformanceProfiles() {
+        return preserveConformanceProfiles;
     }
 
     public long maximumImagePixels() {
@@ -151,6 +161,7 @@ public final class OptimizeOptions {
         private boolean compressStreamsLosslessly = true;
         private boolean deduplicateImagesLosslessly = true;
         private boolean deduplicateFontProgramsLosslessly = true;
+        private boolean preserveConformanceProfiles;
         private long maximumImagePixels = 20_000_000;
         private int minimumLosslessBytes = 16 * 1024;
         private int minimumSavingsBytes = 4096;
@@ -199,6 +210,12 @@ public final class OptimizeOptions {
         /** Enables exact sharing of byte-identical embedded font program streams. */
         public Builder deduplicateFontProgramsLosslessly(boolean value) {
             deduplicateFontProgramsLosslessly = value;
+            return this;
+        }
+
+        /** Leaves documents that declare a conformance profile untouched instead of optimizing them. */
+        public Builder preserveConformanceProfiles(boolean value) {
+            preserveConformanceProfiles = value;
             return this;
         }
 

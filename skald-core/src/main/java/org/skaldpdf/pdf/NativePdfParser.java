@@ -55,6 +55,7 @@ final class NativePdfParser {
     private boolean hasPreviousRevision;
     private final int startXref;
     private final List<ImportedPage> pages;
+    private Set<CosStream> maskStreams;
 
     NativePdfParser(byte[] source) {
         if (source == null || source.length < 8 || source.length > MAXIMUM_SOURCE_BYTES) {
@@ -135,7 +136,9 @@ final class NativePdfParser {
         if (hasSignatureDictionary()) {
             constraints.add(CanonicalRewriteConstraint.DIGITAL_SIGNATURE);
         }
-        if (constraints.isEmpty() && hasMalformedFlateStream()) {
+        // A declared profile alone may be waived by the optimizer, so it still needs the stream check.
+        if ((constraints.isEmpty() || constraints.equals(EnumSet.of(CanonicalRewriteConstraint.CONFORMANCE_PROFILE)))
+            && hasMalformedFlateStream()) {
             constraints.add(CanonicalRewriteConstraint.MALFORMED_STREAM);
         }
         return Set.copyOf(constraints);
@@ -391,9 +394,48 @@ final class NativePdfParser {
             && identityImageDecode(dictionary.get("Decode"), components)
             && safeSoftMask(softMask)
             && !hasAny(dictionary, "Mask", "Metadata", "Alternates", "OPI", "Matte", "SMaskInData")
-            && !booleanValue(dictionary.get("ImageMask"));
+            && !booleanValue(dictionary.get("ImageMask"))
+            && !maskStreams().contains(stream);
         return new EmbeddedImage(pageNumber, resourceName, width, height, filter,
             colorSpace, bits, jpeg, safe, hasSoftMask && safe, stream.encodedBytes(), this, stream);
+    }
+
+    /**
+     * Images that another image uses as its SMask or Mask. Some producers also list
+     * them as page XObjects; replacing one as a standalone image would turn a
+     * one-channel mask into RGB, which readers reject, so they stay byte exact.
+     */
+    private Set<CosStream> maskStreams() {
+        if (maskStreams == null) {
+            var masks = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<CosStream, Boolean>());
+            var visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<CosStream, Boolean>());
+            for (var page : pages) {
+                collectMaskStreams(page.dictionary().get("Resources"), masks, visited);
+            }
+            maskStreams = masks;
+        }
+        return maskStreams;
+    }
+
+    private void collectMaskStreams(CosValue resourcesValue, Set<CosStream> masks, Set<CosStream> visited) {
+        if (resourcesValue == null || !(resolve(resourcesValue) instanceof CosDictionary resources)
+            || resources.get("XObject") == null || !(resolve(resources.get("XObject")) instanceof CosDictionary xobjects)) {
+            return;
+        }
+        for (var value : xobjects.values().values()) {
+            if (!(resolve(value) instanceof CosStream stream) || !visited.add(stream)) {
+                continue;
+            }
+            var dictionary = stream.dictionary();
+            for (var key : List.of("SMask", "Mask")) {
+                if (dictionary.get(key) != null && resolve(dictionary.get(key)) instanceof CosStream mask) {
+                    masks.add(mask);
+                }
+            }
+            if (isName(dictionary.get("Subtype"), "Form")) {
+                collectMaskStreams(dictionary.get("Resources"), masks, visited);
+            }
+        }
     }
 
     /**
