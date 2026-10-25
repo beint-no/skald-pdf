@@ -233,8 +233,9 @@ raw and ASCII-armoured streams, selectively improves weak Flate streams, and
 shares byte-identical simple image XObjects and embedded font program streams
 without changing decoded bytes.
 Skald returns the original byte array for malformed,
-encrypted, signed, linearized, incrementally revised, or declared PDF/A/PDF/X/
-PDF/UA inputs. Successful rewrites reparse themselves and compare the complete
+encrypted, signed, linearized or incrementally revised inputs. Declared
+PDF/A/PDF/X/PDF/UA inputs are optimized like any other file, without keeping the
+profile valid, unless `preserveConformanceProfiles(true)` is set. Successful rewrites reparse themselves and compare the complete
 reachable object graph before returning. A private JPEG marker makes the same
 policy byte-for-byte idempotent. See the
 [optimizer safety model](docs/pdf-optimization-safety.md) and

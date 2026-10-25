@@ -121,7 +121,7 @@ class PdfOptimizerSafetyTest {
     }
 
     @Test
-    void leavesDeclaredConformanceProfilesByteForByteUntouched() throws Exception {
+    void optimizesDeclaredConformanceProfilesUnlessAskedToPreserveThem() throws Exception {
         var source = pdfWith(RasterImages.decode(noisyPng(640, 480)));
         byte[] archival;
         try (var document = Loader.loadPDF(source)) {
@@ -141,7 +141,50 @@ class PdfOptimizerSafetyTest {
             document.save(output);
             archival = output.toByteArray();
         }
-        assertSame(archival, PdfOptimizer.recompress(archival, TEST_OPTIONS));
+        assertTrue(PdfOptimizer.recompress(archival, TEST_OPTIONS).length < archival.length);
+        var preserving = OptimizeOptions.builder().maxEdge(320).minimumLosslessBytes(0)
+            .minimumSavingsBytes(1).minimumSavingsPercent(0).preserveConformanceProfiles(true).build();
+        assertSame(archival, PdfOptimizer.recompress(archival, preserving));
+    }
+
+    @Test
+    void keepsSoftMasksThatAreAlsoListedAsPageXObjectsByteForByte() throws Exception {
+        // TCPDF lists a logo's soft mask in the page XObjects next to the logo itself.
+        var logo = new BufferedImage(900, 300, BufferedImage.TYPE_INT_ARGB);
+        var random = new java.util.Random(7);
+        for (var y = 0; y < logo.getHeight(); y++) {
+            for (var x = 0; x < logo.getWidth(); x++) {
+                logo.setRGB(x, y, random.nextInt(256) << 24 | random.nextInt(0x0100_0000));
+            }
+        }
+        byte[] source;
+        byte[] originalMask;
+        try (var document = new PDDocument()) {
+            var page = new PDPage(new PDRectangle(400, 300));
+            document.addPage(page);
+            var image = LosslessFactory.createFromImage(document, logo);
+            var mask = image.getSoftMask();
+            originalMask = rawBytes(mask.getCOSObject());
+            try (var content = new PDPageContentStream(document, page)) {
+                content.drawImage(image, 10, 10, 380, 127);
+            }
+            page.getResources().add(mask);
+            var output = new ByteArrayOutputStream();
+            document.save(output);
+            source = output.toByteArray();
+        }
+
+        var result = PdfOptimizer.recompress(source, TEST_OPTIONS);
+
+        try (var document = Loader.loadPDF(result)) {
+            var resources = document.getPage(0).getResources();
+            for (var name : resources.getXObjectNames()) {
+                var image = (PDImageXObject) resources.getXObject(name);
+                var mask = image.getSoftMask() == null ? image : image.getSoftMask();
+                assertEquals(COSName.DEVICEGRAY.getName(), mask.getColorSpace().getName());
+                assertArrayEquals(originalMask, rawBytes(mask.getCOSObject()));
+            }
+        }
     }
 
     @Test
@@ -983,6 +1026,12 @@ class PdfOptimizerSafetyTest {
             image.drawOn(pdf, pdf.addNewPage(new PageSize(400, 300)), 10, 10, 380, 280);
         }
         return output.toByteArray();
+    }
+
+    private static byte[] rawBytes(COSStream stream) throws java.io.IOException {
+        try (var input = stream.createRawInputStream()) {
+            return input.readAllBytes();
+        }
     }
 
     private static byte[] noisyPng(int width, int height) throws Exception {

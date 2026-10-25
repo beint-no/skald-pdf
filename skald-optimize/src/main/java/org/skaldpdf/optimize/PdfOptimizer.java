@@ -2,6 +2,7 @@ package org.skaldpdf.optimize;
 
 import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.image.ImageData;
+import org.skaldpdf.pdf.CanonicalRewriteConstraint;
 import org.skaldpdf.pdf.EmbeddedImage;
 import org.skaldpdf.pdf.Compression;
 import org.skaldpdf.pdf.PdfDocument;
@@ -12,6 +13,7 @@ import org.skaldpdf.pdf.WriterProperties;
 import java.io.ByteArrayOutputStream;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Recompresses image XObjects inside a received PDF. Generation-time helpers
@@ -23,7 +25,10 @@ import java.util.Optional;
  *
  * <p>The safe entry points return the original array when parsing, image
  * conversion, post-write verification, or configured savings gates reject a
- * candidate. They also preserve protected document classes byte for byte.
+ * candidate. They also preserve linearized, incrementally updated, signed and
+ * malformed documents byte for byte. A declared conformance profile is not
+ * protected unless {@link OptimizeOptions#preserveConformanceProfiles()} asks for it:
+ * the claim is usually unverified, and the rewrite does not keep it valid.
  */
 public final class PdfOptimizer {
     private PdfOptimizer() {
@@ -55,7 +60,9 @@ public final class PdfOptimizer {
         try {
             var writer = new PdfWriter(output, new WriterProperties(Compression.MAXIMUM));
             try (var document = new PdfDocument(new PdfReader(pdf), writer)) {
-                if (!document.isSafeForCanonicalOptimization()) {
+                var constraints = document.canonicalRewriteConstraints();
+                if (!(constraints.isEmpty() || !options.preserveConformanceProfiles()
+                    && constraints.equals(Set.of(CanonicalRewriteConstraint.CONFORMANCE_PROFILE)))) {
                     return pdf;
                 }
                 if (options.compressStreamsLosslessly()) {

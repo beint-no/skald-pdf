@@ -51,8 +51,9 @@ practical document coverage it adds.
 - Recursive Form XObject image discovery, shared-stream replacement, strict
   mask/filter/colour gates, document and image savings thresholds, and a
   20-megapixel attachment preset.
-- Signed, encrypted, linearized, incrementally revised, and declared PDF/A,
-  PDF/X, PDF/UA, PDF/E, and PDF/VT files remain byte-for-byte untouched.
+- Signed, encrypted, linearized, and incrementally revised files remain
+  byte-for-byte untouched; declared PDF/A, PDF/X, PDF/UA, PDF/E, and PDF/VT
+  files are optimized unless `preserveConformanceProfiles(true)` is set.
 - Private JPEG policy marker prevents repeated lossy transcoding.
 - `skald-optimize-jpegli` supplies a reusable Glimt JPEGli encoder with direct
   native resize for lossless PDF rasters. PDFBox remains test-only.

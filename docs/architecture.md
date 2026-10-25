@@ -78,8 +78,9 @@ written into the file.
 
 The default recompressor uses JDK ImageIO. `skald-optimize-jpegli` is a separate
 adapter around Glimt so PDFBox and native codec concerns never enter core.
-Signed, encrypted, linearized, incrementally revised, and declared conformance
-profiles are returned untouched.
+Signed, encrypted, linearized, and incrementally revised files are returned
+untouched. Declared conformance profiles are optimized unless the options
+preserve them.
 
 Workflow-to-module mapping against iText's suite is in [workflows.md](workflows.md).
 
