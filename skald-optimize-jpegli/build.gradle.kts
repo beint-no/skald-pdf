@@ -1,4 +1,4 @@
-val glimtVersion = "0.6.3"
+val glimtVersion = "0.6.4"
 
 dependencies {
     api(project(":skald-optimize"))
