@@ -18,7 +18,7 @@ lossless stream strategy also tracks the independently implemented
 | Generate object and cross-reference streams | Every reachable value is imported and a graph digest independent of object numbers and dictionary order must match. |
 | Raw, ASCIIHex, or ASCII85 stream to Flate | The old filter is decoded within bounded memory, the new stream is inflated again, and decoded bytes must be identical. |
 | Recompress an existing Flate stream | Decoded bytes must be identical. Image planes use balanced Deflate; other data uses a bounded level-6/level-9 sample to avoid maximum compression when it cannot pay. |
-| Recompress a JPEG image with JPEGli | Only 8-bit DeviceGray, DeviceRGB, or three-component ICCBased image XObjects with supported filters qualify. An optional, semantically simple DeviceGray soft mask is retained byte-exact and forces the colour plane to keep its original dimensions. ASCII85, ASCIIHex, and Flate wrappers around DCT streams are decoded in bounded memory. ICCBased replacements retain the original profile object and color-space dictionary. The replacement must clear both per-image and whole-document savings gates. |
+| Recompress a JPEG image with JPEGli | Only 8-bit DeviceGray, DeviceRGB, or three-component ICCBased image XObjects with supported filters qualify. An optional, semantically simple DeviceGray soft mask is retained byte-exact and forces the colour plane to keep its original dimensions, except when the image is downsampled by placed resolution (below) and the mask belongs to that image alone; then the mask is area-averaged to the new size and stored as 8-bit Flate DeviceGray. ASCII85, ASCIIHex, and Flate wrappers around DCT streams are decoded in bounded memory. ICCBased replacements retain the original profile object and color-space dictionary. The replacement must clear both per-image and whole-document savings gates. |
 | Convert a lossless raster to JPEGli | The same image restrictions apply, plus pixel, source-size, quality, and resize limits. Explicit identity `/Decode` arrays are retained; any inversion or remapping remains excluded. |
 | Share exact image XObjects | Semantically simple image streams share one object only when their complete canonical stream bodies are byte-identical. The semantic digest receives an explicit source-reference alias map. Similar pixels or payload-only matches never qualify. |
 | Share exact font programs | Only indirect `FontFile`, `FontFile2`, and `FontFile3` streams under a `FontDescriptor` qualify. Their complete canonical stream dictionaries and encoded bytes must be identical and contain no indirect values. Descriptors, font dictionaries, encodings, CMaps, glyph data, and content operators remain unchanged. |
@@ -88,9 +88,16 @@ for a zero-surprise attachment optimizer.
   objects serialize identically; object identity can participate in forms,
   structure, annotations, and extension semantics. Deduplication is limited to
   the simple image XObjects and font program streams described above.
-* Effective-DPI downsampling needs a complete graphics-state walk across every
-  use of an image, including forms, patterns, and appearance streams. The
-  current fixed pixel cap is more conservative.
+* Placed-resolution downsampling follows `q`, `Q`, `cm` and `Do` through page
+  content and nested Forms (with their `/Matrix` and `/UserUnit`) and keeps the
+  largest placement of every image. Images painted above 450 ppi are resized to
+  300 ppi of that placement, which is print resolution. An image keeps its size
+  when any use cannot be followed: content that does not parse cleanly,
+  unbalanced `Q`, a missing XObject, deep or cyclic Forms, or reachability from
+  annotation appearances, patterns, soft-mask groups or Type3 glyphs; an image
+  that page content never paints also keeps its size. On 600 random production
+  attachments this changed 97 PDFs and saved 7.2% of their bytes (the 1.16.5
+  policy alone: 0.7%), with identical text and at most 0.009 RMSE at 150 DPI.
 * Zopfli is not a request-time default. qpdf describes it as roughly 100 times
   slower than zlib for about 5% improvement over the best ordinary Deflate.
 
@@ -117,8 +124,7 @@ The remaining commercial techniques are not interchangeable with safe
 attachment optimization. Removing metadata, forms, actions, tags, attachments,
 or layers changes document semantics. Transparency flattening and colour-space
 conversion can change rendering. JBIG2 symbol substitution is inappropriate
-for financial text. Effective-DPI downsampling needs a complete graphics-state
-walk. The measured font-subsetting prototype is intentionally not retained;
+for financial text. The measured font-subsetting prototype is intentionally not retained;
 revisit it only if a future corpus has enough eligible unique font data to
 justify a complete interpreter and a mature retained-glyph-ID subsetter.
 

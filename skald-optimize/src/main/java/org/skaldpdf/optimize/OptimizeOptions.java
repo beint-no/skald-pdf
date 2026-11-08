@@ -15,6 +15,8 @@ public final class OptimizeOptions {
     private final int minimumLosslessBytes;
     private final int minimumSavingsBytes;
     private final int minimumSavingsPercent;
+    private final int downsampleAbovePixelsPerInch;
+    private final int downsampleToPixelsPerInch;
 
     /**
      * Compatibility constructor for the original Skald optimizer API. Lossless
@@ -40,6 +42,8 @@ public final class OptimizeOptions {
         minimumLosslessBytes = builder.minimumLosslessBytes;
         minimumSavingsBytes = builder.minimumSavingsBytes;
         minimumSavingsPercent = builder.minimumSavingsPercent;
+        downsampleAbovePixelsPerInch = builder.downsampleAbovePixelsPerInch;
+        downsampleToPixelsPerInch = builder.downsampleToPixelsPerInch;
         validate();
     }
 
@@ -47,7 +51,8 @@ public final class OptimizeOptions {
      * Supplier invoices, receipts, and other camera-heavy business attachments:
      * 2400 px, JPEG quality 75, lossless-raster quality 90, 20 MP, exact
      * stream compression, exact image/font-program sharing, a 16 KiB
-     * lossless-raster work floor, and 4 KiB / 2% savings gates.
+     * lossless-raster work floor, 4 KiB / 2% savings gates, and images painted
+     * above 450 ppi downsampled to 300 ppi of their largest placement.
      */
     public static OptimizeOptions attachments() {
         return builder().build();
@@ -119,6 +124,38 @@ public final class OptimizeOptions {
         return minimumSavingsPercent;
     }
 
+    /**
+     * Images whose largest placement on the page exceeds this resolution are
+     * downsampled to {@link #downsampleToPixelsPerInch()}; 0 disables it. Images
+     * with a preserved soft mask or any use that cannot be followed keep their size.
+     */
+    public int downsampleAbovePixelsPerInch() {
+        return downsampleAbovePixelsPerInch;
+    }
+
+    /** Target resolution, in pixels per inch of the largest placement, for downsampled images. */
+    public int downsampleToPixelsPerInch() {
+        return downsampleToPixelsPerInch;
+    }
+
+    /** This policy with a smaller longest edge for one image. */
+    OptimizeOptions withMaxEdge(int value) {
+        if (value == maxEdge) {
+            return this;
+        }
+        var builder = builder().maxEdge(value).jpegQuality(jpegQuality).losslessQuality(losslessQuality)
+            .recompressJpeg(recompressJpeg).convertLosslessRaster(convertLosslessRaster)
+            .compressStreamsLosslessly(compressStreamsLosslessly)
+            .deduplicateImagesLosslessly(deduplicateImagesLosslessly)
+            .deduplicateFontProgramsLosslessly(deduplicateFontProgramsLosslessly)
+            .preserveConformanceProfiles(preserveConformanceProfiles).maximumImagePixels(maximumImagePixels)
+            .minimumLosslessBytes(minimumLosslessBytes).minimumSavingsBytes(minimumSavingsBytes)
+            .minimumSavingsPercent(minimumSavingsPercent)
+            .downsampleAbovePixelsPerInch(downsampleAbovePixelsPerInch)
+            .downsampleToPixelsPerInch(downsampleToPixelsPerInch);
+        return builder.build();
+    }
+
     boolean worthReplacing(long originalBytes, long candidateBytes) {
         var saved = originalBytes - candidateBytes;
         return saved >= minimumSavingsBytes
@@ -144,6 +181,11 @@ public final class OptimizeOptions {
             || minimumSavingsPercent < 0 || minimumSavingsPercent > 100) {
             throw new IllegalArgumentException("Image limits and savings thresholds are outside their supported range");
         }
+        if (downsampleAbovePixelsPerInch != 0 && (downsampleToPixelsPerInch < 72
+            || downsampleAbovePixelsPerInch < downsampleToPixelsPerInch)) {
+            throw new IllegalArgumentException(
+                "downsampleToPixelsPerInch must be at least 72 and at most downsampleAbovePixelsPerInch");
+        }
     }
 
     private static void quality(float value, String name) {
@@ -166,6 +208,8 @@ public final class OptimizeOptions {
         private int minimumLosslessBytes = 16 * 1024;
         private int minimumSavingsBytes = 4096;
         private int minimumSavingsPercent = 2;
+        private int downsampleAbovePixelsPerInch = 450;
+        private int downsampleToPixelsPerInch = 300;
 
         private Builder() {
         }
@@ -236,6 +280,17 @@ public final class OptimizeOptions {
 
         public Builder minimumSavingsPercent(int value) {
             minimumSavingsPercent = value;
+            return this;
+        }
+
+        /** Downsample images painted above this resolution; 0 keeps every image's resolution. */
+        public Builder downsampleAbovePixelsPerInch(int value) {
+            downsampleAbovePixelsPerInch = value;
+            return this;
+        }
+
+        public Builder downsampleToPixelsPerInch(int value) {
+            downsampleToPixelsPerInch = value;
             return this;
         }
 
