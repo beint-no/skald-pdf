@@ -76,6 +76,9 @@ public final class PdfOptimizer {
                 if (options.deduplicateFontProgramsLosslessly()) {
                     document.deduplicateImportedFontProgramsLosslessly();
                 }
+                if (options.removeTrueTypeHinting()) {
+                    document.removeImportedTrueTypeHinting();
+                }
                 for (var image : document.importedImages()) {
                     var target = downsampled(image, options);
                     var replacement = recompress(target.image(), target.options(), recompressor);

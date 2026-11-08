@@ -17,6 +17,7 @@ public final class OptimizeOptions {
     private final int minimumSavingsPercent;
     private final int downsampleAbovePixelsPerInch;
     private final int downsampleToPixelsPerInch;
+    private final boolean removeTrueTypeHinting;
 
     /**
      * Compatibility constructor for the original Skald optimizer API. Lossless
@@ -44,6 +45,7 @@ public final class OptimizeOptions {
         minimumSavingsPercent = builder.minimumSavingsPercent;
         downsampleAbovePixelsPerInch = builder.downsampleAbovePixelsPerInch;
         downsampleToPixelsPerInch = builder.downsampleToPixelsPerInch;
+        removeTrueTypeHinting = builder.removeTrueTypeHinting;
         validate();
     }
 
@@ -52,7 +54,8 @@ public final class OptimizeOptions {
      * 2400 px, JPEG quality 75, lossless-raster quality 90, 20 MP, exact
      * stream compression, exact image/font-program sharing, a 16 KiB
      * lossless-raster work floor, 4 KiB / 2% savings gates, and images painted
-     * above 450 ppi downsampled to 300 ppi of their largest placement.
+     * above 450 ppi downsampled to 300 ppi of their largest placement, and
+     * TrueType hinting and layout tables removed from embedded fonts.
      */
     public static OptimizeOptions attachments() {
         return builder().build();
@@ -138,6 +141,14 @@ public final class OptimizeOptions {
         return downsampleToPixelsPerInch;
     }
 
+    /**
+     * Whether embedded TrueType programs lose hinting instructions and the layout
+     * tables PDF rendering never reads. Text, glyph outlines and metrics are unchanged.
+     */
+    public boolean removeTrueTypeHinting() {
+        return removeTrueTypeHinting;
+    }
+
     /** This policy with a smaller longest edge for one image. */
     OptimizeOptions withMaxEdge(int value) {
         if (value == maxEdge) {
@@ -152,7 +163,8 @@ public final class OptimizeOptions {
             .minimumLosslessBytes(minimumLosslessBytes).minimumSavingsBytes(minimumSavingsBytes)
             .minimumSavingsPercent(minimumSavingsPercent)
             .downsampleAbovePixelsPerInch(downsampleAbovePixelsPerInch)
-            .downsampleToPixelsPerInch(downsampleToPixelsPerInch);
+            .downsampleToPixelsPerInch(downsampleToPixelsPerInch)
+            .removeTrueTypeHinting(removeTrueTypeHinting);
         return builder.build();
     }
 
@@ -210,6 +222,7 @@ public final class OptimizeOptions {
         private int minimumSavingsPercent = 2;
         private int downsampleAbovePixelsPerInch = 450;
         private int downsampleToPixelsPerInch = 300;
+        private boolean removeTrueTypeHinting = true;
 
         private Builder() {
         }
@@ -291,6 +304,11 @@ public final class OptimizeOptions {
 
         public Builder downsampleToPixelsPerInch(int value) {
             downsampleToPixelsPerInch = value;
+            return this;
+        }
+
+        public Builder removeTrueTypeHinting(boolean value) {
+            removeTrueTypeHinting = value;
             return this;
         }
 

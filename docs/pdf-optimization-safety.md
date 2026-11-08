@@ -22,6 +22,7 @@ lossless stream strategy also tracks the independently implemented
 | Convert a lossless raster to JPEGli | The same image restrictions apply, plus pixel, source-size, quality, and resize limits. Explicit identity `/Decode` arrays are retained; any inversion or remapping remains excluded. |
 | Share exact image XObjects | Semantically simple image streams share one object only when their complete canonical stream bodies are byte-identical. The semantic digest receives an explicit source-reference alias map. Similar pixels or payload-only matches never qualify. |
 | Share exact font programs | Only indirect `FontFile`, `FontFile2`, and `FontFile3` streams under a `FontDescriptor` qualify. Their complete canonical stream dictionaries and encoded bytes must be identical and contain no indirect values. Descriptors, font dictionaries, encodings, CMaps, glyph data, and content operators remain unchanged. |
+| Remove TrueType hinting | Only indirect `FontFile2` streams that are unfiltered or plain Flate qualify, with `true`/`0x00010000` sfnt headers and well-formed `head`, `maxp`, `loca` and `glyf` tables. Hinting and layout tables PDF rendering never reads (`fpgm`, `prep`, `cvt `, `hdmx`, `VDMX`, `LTSH`, `gasp`, `GSUB`, `GPOS`, `GDEF`, `JSTF`, `BASE`, `kern`, `morx`, `feat`, `DSIG`) are dropped and each glyph loses its instructions; glyph IDs, outlines, metrics, `cmap`, `post`, `name` and `OS/2` stay byte for byte. Anything else keeps the original program. The rewritten stream gets a new `/Length1` and is covered by the semantic digest like any approved replacement. |
 
 Images reached through nested Form XObjects and shared image objects are
 handled once. An APP15 policy marker makes JPEG processing exactly idempotent.
@@ -124,7 +125,12 @@ The remaining commercial techniques are not interchangeable with safe
 attachment optimization. Removing metadata, forms, actions, tags, attachments,
 or layers changes document semantics. Transparency flattening and colour-space
 conversion can change rendering. JBIG2 symbol substitution is inappropriate
-for financial text. The measured font-subsetting prototype is intentionally not retained;
+for financial text. Removing TrueType hinting is retained because it needs no
+content interpretation: on 400 random production attachments it changed 237
+PDFs and saved 21.4% of their bytes, with identical text, identical glyph
+outlines, metrics and cmaps in all 649 rewritten programs (fontTools), and at
+most 0.0005 RMSE at 150 DPI in both Poppler and MuPDF. The measured
+font-subsetting prototype is intentionally not retained;
 revisit it only if a future corpus has enough eligible unique font data to
 justify a complete interpreter and a mature retained-glyph-ID subsetter.
 
