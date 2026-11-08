@@ -49,7 +49,8 @@ final class NativePdfWriter {
                 writeCanonical(source, document.importedImageReplacements(), document.importedSoftMaskReplacements(),
                     document.shouldCompressImportedStreamsLosslessly(),
                     document.shouldDeduplicateImportedImagesLosslessly(),
-                    document.shouldDeduplicateImportedFontProgramsLosslessly(), target);
+                    document.shouldDeduplicateImportedFontProgramsLosslessly(),
+                    document.shouldRemoveImportedTrueTypeHinting(), target);
             }
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to write PDF", exception);
@@ -62,6 +63,7 @@ final class NativePdfWriter {
                                 boolean compressStreamsLosslessly,
                                 boolean deduplicateImagesLosslessly,
                                 boolean deduplicateFontProgramsLosslessly,
+                                boolean removeTrueTypeHinting,
                                 OutputStream target) throws IOException {
         var replacements = new IdentityHashMap<CosValue.CosStream, CosValue.CosStream>();
         images.forEach((stream, image) -> replacements.put(stream,
@@ -74,7 +76,7 @@ final class NativePdfWriter {
         var objects = new ObjectStore();
         var importer = new CanonicalImportContext(source, objects, replacements,
             compressStreamsLosslessly, deduplicateImagesLosslessly,
-            deduplicateFontProgramsLosslessly, compressionLevel);
+            deduplicateFontProgramsLosslessly, removeTrueTypeHinting, compressionLevel);
         objects.rootObject = importer.importReference(source.catalogReference());
         var trailer = new StringBuilder();
         source.trailer().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
@@ -1267,6 +1269,8 @@ final class NativePdfWriter {
         private final Map<ByteBuffer, DuplicateStream> duplicateImages = new LinkedHashMap<>();
         private final Map<ByteBuffer, DuplicateStream> duplicateFontPrograms = new LinkedHashMap<>();
         private final Set<CosValue.CosReference> fontProgramReferences;
+        private final Set<CosValue.CosStream> trueTypePrograms =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
         private final Map<CosValue.CosReference, CosValue.CosReference> referenceAliases = new LinkedHashMap<>();
         private final boolean compressStreamsLosslessly;
         private final boolean deduplicateImagesLosslessly;
@@ -1277,6 +1281,7 @@ final class NativePdfWriter {
                                IdentityHashMap<CosValue.CosStream, CosValue.CosStream> replacements,
                                boolean compressStreamsLosslessly, boolean deduplicateImagesLosslessly,
                                boolean deduplicateFontProgramsLosslessly,
+                               boolean removeTrueTypeHinting,
                                int compressionLevel) {
             this.source = source;
             this.target = target;
@@ -1286,6 +1291,13 @@ final class NativePdfWriter {
             this.deduplicateFontProgramsLosslessly = deduplicateFontProgramsLosslessly;
             fontProgramReferences = deduplicateFontProgramsLosslessly
                 ? source.fontProgramReferences() : Set.of();
+            if (removeTrueTypeHinting) {
+                for (var reference : source.trueTypeFontProgramReferences()) {
+                    if (source.resolve(reference) instanceof CosValue.CosStream program) {
+                        trueTypePrograms.add(program);
+                    }
+                }
+            }
             this.compressionLevel = compressionLevel;
         }
 
@@ -1341,6 +1353,13 @@ final class NativePdfWriter {
 
         private CosValue.CosStream replacement(CosValue.CosStream stream) {
             var replacement = replacements.get(stream);
+            if (replacement == null && trueTypePrograms.contains(stream)) {
+                var stripped = source.withoutTrueTypeHinting(stream, compressionLevel);
+                if (stripped != stream) {
+                    replacements.put(stream, stripped);
+                    replacement = stripped;
+                }
+            }
             if (replacement == null && compressStreamsLosslessly) {
                 replacement = source.compressStreamLosslessly(stream, compressionLevel);
                 if (replacement != stream) {

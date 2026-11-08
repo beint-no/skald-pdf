@@ -248,6 +248,42 @@ final class NativePdfParser {
         return decoded(stream, description);
     }
 
+    /**
+     * The TrueType program without hinting and layout tables ({@link TrueTypeHinting}),
+     * Flate-encoded with an updated {@code /Length1}, or the original stream when it is
+     * not a plain unencrypted Flate or unfiltered TrueType program or would not shrink.
+     */
+    CosStream withoutTrueTypeHinting(CosStream stream, int compressionLevel) {
+        var dictionary = stream.dictionary();
+        if (dictionary.get("F") != null || dictionary.get("FFilter") != null
+            || dictionary.get("FDecodeParms") != null || dictionary.get("DecodeParms") != null) {
+            return stream;
+        }
+        var filters = filterNames(dictionary.get("Filter"));
+        if (!filters.isEmpty() && (filters.size() != 1 || !Set.of("FlateDecode", "Fl").contains(filters.getFirst()))) {
+            return stream;
+        }
+        byte[] program;
+        try {
+            program = filters.isEmpty() ? stream.encodedBytes() : inflate(stream.encodedBytes(), "TrueType program");
+        } catch (RuntimeException malformed) {
+            return stream;
+        }
+        var stripped = TrueTypeHinting.remove(program);
+        if (stripped == null) {
+            return stream;
+        }
+        var encoded = deflate(stripped, compressionLevel);
+        if (encoded.length >= stream.encodedBytes().length) {
+            return stream;
+        }
+        var values = new LinkedHashMap<String, CosValue>(dictionary.values());
+        values.remove("Length");
+        values.put("Filter", new CosName("FlateDecode"));
+        values.put("Length1", new CosNumber(Integer.toString(stripped.length)));
+        return new CosStream(new CosDictionary(values), encoded);
+    }
+
     CosStream compressStreamLosslessly(CosStream stream, int compressionLevel) {
         var dictionary = stream.dictionary();
         if (dictionary.get("F") != null || dictionary.get("FFilter") != null
@@ -642,6 +678,15 @@ final class NativePdfParser {
     }
 
     Set<CosReference> fontProgramReferences() {
+        return fontProgramReferences(Set.of("FontFile", "FontFile2", "FontFile3"));
+    }
+
+    /** Embedded TrueType programs: {@code /FontFile2} of every reachable font descriptor. */
+    Set<CosReference> trueTypeFontProgramReferences() {
+        return fontProgramReferences(Set.of("FontFile2"));
+    }
+
+    private Set<CosReference> fontProgramReferences(Set<String> keys) {
         var result = new LinkedHashSet<CosReference>();
         var references = new HashSet<CosReference>();
         var direct = java.util.Collections.newSetFromMap(new IdentityHashMap<CosValue, Boolean>());
@@ -668,7 +713,7 @@ final class NativePdfParser {
                 continue;
             }
             if (isName(dictionary.get("Type"), "FontDescriptor")) {
-                for (var key : Set.of("FontFile", "FontFile2", "FontFile3")) {
+                for (var key : keys) {
                     if (dictionary.get(key) instanceof CosReference reference
                         && resolve(reference) instanceof CosStream) {
                         result.add(reference);
