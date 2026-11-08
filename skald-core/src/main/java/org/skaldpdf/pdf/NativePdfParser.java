@@ -58,6 +58,7 @@ final class NativePdfParser {
     private Set<CosStream> maskStreams;
     private java.util.IdentityHashMap<CosStream, Integer> maskUses;
     private ImagePlacements imagePlacements;
+    private Map<CosStream, java.util.BitSet> usedGlyphs;
 
     NativePdfParser(byte[] source) {
         if (source == null || source.length < 8 || source.length > MAXIMUM_SOURCE_BYTES) {
@@ -173,6 +174,18 @@ final class NativePdfParser {
         return pages;
     }
 
+    /** Glyph IDs drawn from each fully followed TrueType program ({@link FontGlyphUsage}), computed once. */
+    Map<CosStream, java.util.BitSet> usedGlyphsByProgram() {
+        if (usedGlyphs == null) {
+            try {
+                usedGlyphs = FontGlyphUsage.analyze(this);
+            } catch (RuntimeException unfollowable) {
+                usedGlyphs = Map.of();
+            }
+        }
+        return usedGlyphs;
+    }
+
     /** Placement analysis of every page, computed once per parsed document. */
     ImagePlacements imagePlacements() {
         if (imagePlacements == null) {
@@ -249,11 +262,15 @@ final class NativePdfParser {
     }
 
     /**
-     * The TrueType program without hinting and layout tables ({@link TrueTypeHinting}),
-     * Flate-encoded with an updated {@code /Length1}, or the original stream when it is
-     * not a plain unencrypted Flate or unfiltered TrueType program or would not shrink.
+     * The TrueType program without hinting and layout tables and, when {@code usedGlyphs}
+     * is known, without the outlines and metrics of glyphs no page draws
+     * ({@link TrueTypePrograms}). Flate-encoded with an updated {@code /Length1}; the
+     * original stream when it is not a plain unencrypted Flate or unfiltered TrueType
+     * program or would not shrink.
      */
-    CosStream withoutTrueTypeHinting(CosStream stream, int compressionLevel) {
+    CosStream optimizedTrueTypeProgram(CosStream stream, boolean removeHinting,
+                                       java.util.@org.jspecify.annotations.Nullable BitSet usedGlyphs,
+                                       int compressionLevel) {
         var dictionary = stream.dictionary();
         if (dictionary.get("F") != null || dictionary.get("FFilter") != null
             || dictionary.get("FDecodeParms") != null || dictionary.get("DecodeParms") != null) {
@@ -269,8 +286,16 @@ final class NativePdfParser {
         } catch (RuntimeException malformed) {
             return stream;
         }
-        var stripped = TrueTypeHinting.remove(program);
-        if (stripped == null) {
+        var stripped = program;
+        if (removeHinting) {
+            var withoutHinting = TrueTypePrograms.withoutHinting(stripped);
+            stripped = withoutHinting == null ? stripped : withoutHinting;
+        }
+        if (usedGlyphs != null) {
+            var withoutUnused = TrueTypePrograms.withoutUnusedGlyphs(stripped, usedGlyphs);
+            stripped = withoutUnused == null ? stripped : withoutUnused;
+        }
+        if (stripped == program) {
             return stream;
         }
         var encoded = deflate(stripped, compressionLevel);

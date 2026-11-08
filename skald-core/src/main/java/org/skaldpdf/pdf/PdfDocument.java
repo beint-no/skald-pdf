@@ -37,6 +37,7 @@ public final class PdfDocument implements AutoCloseable {
     private boolean deduplicateImportedImagesLosslessly;
     private boolean deduplicateImportedFontProgramsLosslessly;
     private boolean removeImportedTrueTypeHinting;
+    private boolean removeImportedUnusedGlyphs;
     private boolean closed;
     private boolean closing;
 
@@ -230,6 +231,18 @@ public final class PdfDocument implements AutoCloseable {
     }
 
     /**
+     * Requests that embedded TrueType programs of composite Identity fonts lose the
+     * outlines and metrics of glyphs no page draws, during a canonical rewrite.
+     * Glyph IDs stay stable; fonts used by forms, annotations or anything the
+     * analysis cannot follow are left unchanged.
+     */
+    public PdfDocument removeImportedUnusedGlyphs() {
+        ensureOpen();
+        removeImportedUnusedGlyphs = true;
+        return this;
+    }
+
+    /**
      * Replaces one imported image XObject. The page content stream keeps the
      * same resource name, so the existing {@code Do} operator continues to
      * work. The replacement is written as a new DCT or Flate stream.
@@ -310,6 +323,10 @@ public final class PdfDocument implements AutoCloseable {
 
     boolean shouldRemoveImportedTrueTypeHinting() {
         return removeImportedTrueTypeHinting;
+    }
+
+    boolean shouldRemoveImportedUnusedGlyphs() {
+        return removeImportedUnusedGlyphs;
     }
 
     public void copyPagesFrom(PdfDocument source, int fromPage, int toPage) {
