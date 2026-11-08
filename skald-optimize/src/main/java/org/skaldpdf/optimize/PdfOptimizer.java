@@ -31,6 +31,8 @@ import java.util.Set;
  * the claim is usually unverified, and the rewrite does not keep it valid.
  */
 public final class PdfOptimizer {
+    private static final int MINIMUM_EDGE = 32;
+
     private PdfOptimizer() {
     }
 
@@ -75,8 +77,19 @@ public final class PdfOptimizer {
                     document.deduplicateImportedFontProgramsLosslessly();
                 }
                 for (var image : document.importedImages()) {
-                    var replacement = recompress(image, options, recompressor);
-                    if (replacement != null) {
+                    var target = downsampled(image, options);
+                    var replacement = recompress(target.image(), target.options(), recompressor);
+                    if (replacement == null) {
+                        continue;
+                    }
+                    var resized = replacement.width() != image.width() || replacement.height() != image.height();
+                    if (target.image() != image && resized) {
+                        var mask = target.image().decodeSoftMask().orElse(null);
+                        if (mask != null) {
+                            document.replaceImportedImage(target.image(), replacement,
+                                areaAverage(mask, replacement.width(), replacement.height()));
+                        }
+                    } else if (!resized || !image.requiresOriginalDimensions()) {
                         document.replaceImportedImage(image, replacement);
                     }
                 }
@@ -122,6 +135,65 @@ public final class PdfOptimizer {
         }
         return data;
     }
+
+    /**
+     * Lowers the longest edge of an image painted above the downsampling threshold so its
+     * largest placement keeps the target resolution. A logo of 2400 px painted 3 cm wide is
+     * about 2000 ppi; 300 ppi is print quality, so the extra pixels only cost bytes. An image
+     * with its own soft mask is returned as a view whose mask is resampled with it.
+     */
+    private static Target downsampled(EmbeddedImage image, OptimizeOptions options) {
+        var unchanged = new Target(image, options);
+        if (options.downsampleAbovePixelsPerInch() == 0 || !image.safeToRecompress()) {
+            return unchanged;
+        }
+        var placed = image.placedPixelsPerInch();
+        if (placed.isEmpty() || placed.getAsDouble() <= options.downsampleAbovePixelsPerInch()) {
+            return unchanged;
+        }
+        var subject = image;
+        if (image.requiresOriginalDimensions()) {
+            subject = image.withResampledSoftMask().orElse(null);
+            if (subject == null) {
+                return unchanged;
+            }
+        }
+        var longest = Math.max(image.width(), image.height());
+        var edge = (int) Math.ceil(longest * options.downsampleToPixelsPerInch() / placed.getAsDouble());
+        return new Target(subject, options.withMaxEdge(Math.max(MINIMUM_EDGE, Math.min(options.maxEdge(), edge))));
+    }
+
+    /** Box-filter resampling of 8-bit gray samples; each output pixel averages the area it covers. */
+    static ImageData areaAverage(ImageData gray, int width, int height) {
+        var source = gray.samples();
+        var sourceWidth = gray.width();
+        var sourceHeight = gray.height();
+        var output = new byte[Math.multiplyExact(width, height)];
+        for (int y = 0; y < height; y++) {
+            var top = (double) y * sourceHeight / height;
+            var bottom = (double) (y + 1) * sourceHeight / height;
+            for (int x = 0; x < width; x++) {
+                var left = (double) x * sourceWidth / width;
+                var right = (double) (x + 1) * sourceWidth / width;
+                double sum = 0;
+                double area = 0;
+                for (int sy = (int) top; sy < Math.min(sourceHeight, Math.ceil(bottom)); sy++) {
+                    var coverY = Math.min(bottom, sy + 1) - Math.max(top, sy);
+                    for (int sx = (int) left; sx < Math.min(sourceWidth, Math.ceil(right)); sx++) {
+                        var cover = coverY * (Math.min(right, sx + 1) - Math.max(left, sx));
+                        sum += cover * (source[sy * sourceWidth + sx] & 0xff);
+                        area += cover;
+                    }
+                }
+                output[y * width + x] = (byte) Math.round(area > 0 ? sum / area : 0);
+            }
+        }
+        return ImageData.fromGray(width, height, output);
+    }
+
+    private record Target(EmbeddedImage image, OptimizeOptions options) {
+    }
+
 
     private static Optional<ImageData> recompressWithJdk(EmbeddedImage image, OptimizeOptions options) {
         var maxEdge = image.requiresOriginalDimensions()

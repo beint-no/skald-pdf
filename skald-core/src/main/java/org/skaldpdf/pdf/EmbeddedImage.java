@@ -5,6 +5,7 @@ import org.skaldpdf.image.ImageData;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalDouble;
 
 /**
  * An {@code /XObject /Image} found on an imported page. The encoded stream is
@@ -23,6 +24,7 @@ public final class EmbeddedImage {
     private final boolean jpeg;
     private final boolean safeToRecompress;
     private final boolean requiresOriginalDimensions;
+    private final boolean softMaskResampled;
     private final byte[] encodedBytes;
     private final NativePdfParser parser;
     private final CosValue.CosStream stream;
@@ -33,6 +35,15 @@ public final class EmbeddedImage {
                   String colorSpace, int bitsPerComponent, boolean jpeg, boolean safeToRecompress,
                   boolean requiresOriginalDimensions, byte[] encodedBytes,
                   NativePdfParser parser, CosValue.CosStream stream) {
+        this(pageNumber, resourceName, width, height, filter, colorSpace, bitsPerComponent, jpeg, safeToRecompress,
+            requiresOriginalDimensions, false, encodedBytes, parser, stream);
+    }
+
+    private EmbeddedImage(int pageNumber, String resourceName, int width, int height, String filter,
+                          String colorSpace, int bitsPerComponent, boolean jpeg, boolean safeToRecompress,
+                          boolean requiresOriginalDimensions, boolean softMaskResampled, byte[] encodedBytes,
+                          NativePdfParser parser, CosValue.CosStream stream) {
+        this.softMaskResampled = softMaskResampled;
         this.pageNumber = pageNumber;
         this.resourceName = Objects.requireNonNull(resourceName, "resourceName");
         this.width = width;
@@ -117,6 +128,51 @@ public final class EmbeddedImage {
             }
         }
         return Optional.ofNullable(decoded);
+    }
+
+    /**
+     * The lowest resolution, in pixels per inch, at which imported page content
+     * paints this image, taken from its largest placement on any page. Empty when
+     * any use cannot be followed (annotation appearances, patterns, soft-mask
+     * groups, Type3 glyphs, content that does not parse cleanly) or the image is
+     * never painted, so callers can treat empty as "keep the resolution".
+     */
+    public OptionalDouble placedPixelsPerInch() {
+        try {
+            return parser.imagePlacements().pixelsPerInch(stream);
+        } catch (RuntimeException unfollowable) {
+            return OptionalDouble.empty();
+        }
+    }
+
+    /**
+     * This image with permission to change its size because its soft mask will be
+     * resampled with it, or empty when the image has no soft mask of its own.
+     * Replace it with {@link PdfDocument#replaceImportedImage(EmbeddedImage, ImageData, ImageData)}
+     * when the size changes.
+     */
+    public Optional<EmbeddedImage> withResampledSoftMask() {
+        if (!safeToRecompress || !requiresOriginalDimensions || !parser.softMaskResamplable(stream)) {
+            return Optional.empty();
+        }
+        return Optional.of(new EmbeddedImage(pageNumber, resourceName, width, height, filter, colorSpace,
+            bitsPerComponent, jpeg, true, false, true, encodedBytes, parser, stream));
+    }
+
+    /** The soft mask as 8-bit gray samples at its own size, for an image from {@link #withResampledSoftMask()}. */
+    public Optional<ImageData> decodeSoftMask() {
+        if (!softMaskResampled) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(parser.decodeSoftMask(stream));
+        } catch (RuntimeException unsupported) {
+            return Optional.empty();
+        }
+    }
+
+    boolean softMaskResampled() {
+        return softMaskResampled;
     }
 
     NativePdfParser parser() {

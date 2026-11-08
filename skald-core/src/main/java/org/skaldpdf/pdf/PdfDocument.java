@@ -28,6 +28,7 @@ public final class PdfDocument implements AutoCloseable {
     private final List<OutlineItem> outlines = new ArrayList<>();
     private final Map<String, NamedDestination> namedDestinations = new LinkedHashMap<>();
     private final IdentityHashMap<CosValue.CosStream, ImageData> importedImageReplacements = new IdentityHashMap<>();
+    private final IdentityHashMap<CosValue.CosStream, ImageData> importedSoftMaskReplacements = new IdentityHashMap<>();
     private final Map<ImportedImageKey, ImageData> importedPageImageReplacements = new LinkedHashMap<>();
     private String language = "";
     private @Nullable SignatureField signatureField;
@@ -251,8 +252,31 @@ public final class PdfDocument implements AutoCloseable {
         return this;
     }
 
+    /**
+     * Replaces an image together with its soft mask, for an image obtained from
+     * {@link EmbeddedImage#withResampledSoftMask()}. The mask must be 8-bit gray
+     * samples of the replacement's size; the original mask belongs to this image alone.
+     */
+    public PdfDocument replaceImportedImage(EmbeddedImage embedded, ImageData image, ImageData softMask) {
+        Objects.requireNonNull(softMask, "softMask");
+        if (!embedded.softMaskResampled()) {
+            throw new IllegalArgumentException("The image's soft mask is not resampled");
+        }
+        if (softMask.jpeg() || softMask.alpha() != null || softMask.components() != 1
+            || softMask.width() != image.width() || softMask.height() != image.height()) {
+            throw new IllegalArgumentException("A soft mask replacement must be gray samples of the image's size");
+        }
+        replaceImportedImage(embedded, image);
+        importedSoftMaskReplacements.put(embedded.stream(), softMask);
+        return this;
+    }
+
     IdentityHashMap<CosValue.CosStream, ImageData> importedImageReplacements() {
         return new IdentityHashMap<>(importedImageReplacements);
+    }
+
+    IdentityHashMap<CosValue.CosStream, ImageData> importedSoftMaskReplacements() {
+        return new IdentityHashMap<>(importedSoftMaskReplacements);
     }
 
     Map<ImportedImageKey, ImageData> importedPageImageReplacements() {

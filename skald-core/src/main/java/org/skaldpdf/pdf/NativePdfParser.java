@@ -56,6 +56,8 @@ final class NativePdfParser {
     private final int startXref;
     private final List<ImportedPage> pages;
     private Set<CosStream> maskStreams;
+    private java.util.IdentityHashMap<CosStream, Integer> maskUses;
+    private ImagePlacements imagePlacements;
 
     NativePdfParser(byte[] source) {
         if (source == null || source.length < 8 || source.length > MAXIMUM_SOURCE_BYTES) {
@@ -169,6 +171,14 @@ final class NativePdfParser {
 
     List<ImportedPage> pages() {
         return pages;
+    }
+
+    /** Placement analysis of every page, computed once per parsed document. */
+    ImagePlacements imagePlacements() {
+        if (imagePlacements == null) {
+            imagePlacements = ImagePlacements.analyze(this);
+        }
+        return imagePlacements;
     }
 
     List<EmbeddedImage> imageXObjects(ImportedPage page, int pageNumber) {
@@ -409,6 +419,7 @@ final class NativePdfParser {
         if (maskStreams == null) {
             var masks = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<CosStream, Boolean>());
             var visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<CosStream, Boolean>());
+            maskUses = new java.util.IdentityHashMap<>();
             for (var page : pages) {
                 collectMaskStreams(page.dictionary().get("Resources"), masks, visited);
             }
@@ -430,6 +441,7 @@ final class NativePdfParser {
             for (var key : List.of("SMask", "Mask")) {
                 if (dictionary.get(key) != null && resolve(dictionary.get(key)) instanceof CosStream mask) {
                     masks.add(mask);
+                    maskUses.merge(mask, 1, Integer::sum);
                 }
             }
             if (isName(dictionary.get("Subtype"), "Form")) {
@@ -439,7 +451,8 @@ final class NativePdfParser {
     }
 
     /**
-     * A preserved soft mask remains byte exact. Matte masks are excluded: the
+     * A preserved soft mask remains byte exact unless it belongs to one image that is
+     * downsampled by placed resolution. Matte masks are excluded: the
      * parent colour samples are preblended and lossy recompression could alter
      * the unblending result at transparent edges.
      */
@@ -515,16 +528,77 @@ final class NativePdfParser {
             ? imageColorComponents(stream.dictionary().get("ColorSpace")) : 0;
     }
 
-    boolean preservesImageSoftMask(CosStream stream, int replacementWidth, int replacementHeight) {
+    boolean preservesImageSoftMask(CosStream stream, int replacementWidth, int replacementHeight,
+                                   boolean softMaskResampled) {
         var embedded = embeddedImage(0, "", stream);
         if (!embedded.safeToRecompress() || !embedded.requiresOriginalDimensions()) {
             return false;
+        }
+        if (softMaskResampled) {
+            require(softMaskResamplable(stream), "The soft mask cannot be resampled");
+            return true;
         }
         var width = integer(resolve(stream.dictionary().get("Width")), "image Width");
         var height = integer(resolve(stream.dictionary().get("Height")), "image Height");
         require(replacementWidth == width && replacementHeight == height,
             "An image with a soft mask must preserve its dimensions");
         return true;
+    }
+
+    /**
+     * Whether an image's soft mask belongs to it alone and decodes to plain gray
+     * samples, so both can be resampled together without affecting another image.
+     */
+    boolean softMaskResamplable(CosStream image) {
+        try {
+            if (!(resolve(image.dictionary().get("SMask")) instanceof CosStream mask)) {
+                return false;
+            }
+            maskStreams();
+            if (maskUses.getOrDefault(mask, 0) != 1 || mask.dictionary().get("Decode") != null) {
+                return false;
+            }
+            var filters = filterNames(mask.dictionary().get("Filter"));
+            return filters.isEmpty() || filters.size() == 1 && Set.of("FlateDecode", "Fl").contains(filters.getFirst());
+        } catch (RuntimeException malformed) {
+            return false;
+        }
+    }
+
+    /** The image's soft mask as 8-bit gray samples at the mask's own size. */
+    ImageData decodeSoftMask(CosStream image) {
+        require(softMaskResamplable(image), "The soft mask cannot be resampled");
+        var mask = (CosStream) resolve(image.dictionary().get("SMask"));
+        var dictionary = mask.dictionary();
+        var width = integer(resolve(dictionary.get("Width")), "soft-mask Width");
+        var height = integer(resolve(dictionary.get("Height")), "soft-mask Height");
+        var bits = integer(resolve(dictionary.get("BitsPerComponent")), "soft-mask BitsPerComponent");
+        var data = mask.encodedBytes();
+        if (!filterNames(dictionary.get("Filter")).isEmpty()) {
+            data = inflate(data, "soft mask");
+        }
+        data = applyPredictor(data, dictionary.get("DecodeParms"), "soft mask");
+        var rowBytes = (Math.multiplyExact(width, bits) + 7) / 8;
+        require(data.length >= Math.multiplyExact(rowBytes, height), "Soft mask samples are truncated");
+        var gray = new byte[Math.multiplyExact(width, height)];
+        var maximum = (1 << Math.min(bits, 8)) - 1;
+        for (int y = 0; y < height; y++) {
+            var row = y * rowBytes;
+            for (int x = 0; x < width; x++) {
+                int value;
+                if (bits == 16) {
+                    value = data[row + 2 * x] & 0xff;
+                } else if (bits == 8) {
+                    value = data[row + x] & 0xff;
+                } else {
+                    var bit = x * bits;
+                    value = ((data[row + bit / 8] & 0xff) >>> (8 - bits - bit % 8)) & maximum;
+                    value = value * 255 / maximum;
+                }
+                gray[y * width + x] = (byte) value;
+            }
+        }
+        return ImageData.fromGray(width, height, gray);
     }
 
     private int imageColorComponents(CosValue value) {

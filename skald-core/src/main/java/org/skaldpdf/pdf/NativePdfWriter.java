@@ -46,7 +46,7 @@ final class NativePdfWriter {
             if (source == null) {
                 writeObjects(buildObjects(document), target, HEADER);
             } else {
-                writeCanonical(source, document.importedImageReplacements(),
+                writeCanonical(source, document.importedImageReplacements(), document.importedSoftMaskReplacements(),
                     document.shouldCompressImportedStreamsLosslessly(),
                     document.shouldDeduplicateImportedImagesLosslessly(),
                     document.shouldDeduplicateImportedFontProgramsLosslessly(), target);
@@ -58,6 +58,7 @@ final class NativePdfWriter {
 
     private void writeCanonical(NativePdfParser source,
                                 IdentityHashMap<CosValue.CosStream, org.skaldpdf.image.ImageData> images,
+                                IdentityHashMap<CosValue.CosStream, org.skaldpdf.image.ImageData> softMasks,
                                 boolean compressStreamsLosslessly,
                                 boolean deduplicateImagesLosslessly,
                                 boolean deduplicateFontProgramsLosslessly,
@@ -65,7 +66,11 @@ final class NativePdfWriter {
         var replacements = new IdentityHashMap<CosValue.CosStream, CosValue.CosStream>();
         images.forEach((stream, image) -> replacements.put(stream,
             replacementImage(stream, image, source.preservedImageColorComponents(stream),
-                source.preservesImageSoftMask(stream, image.width(), image.height()))));
+                source.preservesImageSoftMask(stream, image.width(), image.height(), softMasks.containsKey(stream)))));
+        softMasks.forEach((stream, mask) -> {
+            var original = (CosValue.CosStream) source.resolve(stream.dictionary().get("SMask"));
+            replacements.put(original, softMaskReplacement(original, mask));
+        });
         var objects = new ObjectStore();
         var importer = new CanonicalImportContext(source, objects, replacements,
             compressStreamsLosslessly, deduplicateImagesLosslessly,
@@ -115,6 +120,20 @@ final class NativePdfWriter {
         values.put("BitsPerComponent", new CosValue.CosNumber("8"));
         values.put("Filter", new CosValue.CosName("DCTDecode"));
         return new CosValue.CosStream(new CosValue.CosDictionary(values), image.samples());
+    }
+
+    /** A resampled soft mask: 8-bit DeviceGray, Flate-compressed, other entries kept. */
+    private CosValue.CosStream softMaskReplacement(CosValue.CosStream source, org.skaldpdf.image.ImageData mask) {
+        var values = new LinkedHashMap<String, CosValue>(source.dictionary().values());
+        values.keySet().removeAll(IMAGE_ENCODING_KEYS);
+        values.put("Type", new CosValue.CosName("XObject"));
+        values.put("Subtype", new CosValue.CosName("Image"));
+        values.put("Width", new CosValue.CosNumber(Integer.toString(mask.width())));
+        values.put("Height", new CosValue.CosNumber(Integer.toString(mask.height())));
+        values.put("ColorSpace", new CosValue.CosName("DeviceGray"));
+        values.put("BitsPerComponent", new CosValue.CosNumber("8"));
+        values.put("Filter", new CosValue.CosName("FlateDecode"));
+        return new CosValue.CosStream(new CosValue.CosDictionary(values), deflate(mask.samples()));
     }
 
     private ObjectStore buildObjects(PdfDocument document) {
