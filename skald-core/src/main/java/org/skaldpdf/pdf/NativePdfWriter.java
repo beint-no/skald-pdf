@@ -50,7 +50,8 @@ final class NativePdfWriter {
                     document.shouldCompressImportedStreamsLosslessly(),
                     document.shouldDeduplicateImportedImagesLosslessly(),
                     document.shouldDeduplicateImportedFontProgramsLosslessly(),
-                    document.shouldRemoveImportedTrueTypeHinting(), target);
+                    document.shouldRemoveImportedTrueTypeHinting(),
+                    document.shouldRemoveImportedUnusedGlyphs(), target);
             }
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to write PDF", exception);
@@ -64,6 +65,7 @@ final class NativePdfWriter {
                                 boolean deduplicateImagesLosslessly,
                                 boolean deduplicateFontProgramsLosslessly,
                                 boolean removeTrueTypeHinting,
+                                boolean removeUnusedGlyphs,
                                 OutputStream target) throws IOException {
         var replacements = new IdentityHashMap<CosValue.CosStream, CosValue.CosStream>();
         images.forEach((stream, image) -> replacements.put(stream,
@@ -76,7 +78,7 @@ final class NativePdfWriter {
         var objects = new ObjectStore();
         var importer = new CanonicalImportContext(source, objects, replacements,
             compressStreamsLosslessly, deduplicateImagesLosslessly,
-            deduplicateFontProgramsLosslessly, removeTrueTypeHinting, compressionLevel);
+            deduplicateFontProgramsLosslessly, removeTrueTypeHinting, removeUnusedGlyphs, compressionLevel);
         objects.rootObject = importer.importReference(source.catalogReference());
         var trailer = new StringBuilder();
         source.trailer().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
@@ -1271,6 +1273,8 @@ final class NativePdfWriter {
         private final Set<CosValue.CosReference> fontProgramReferences;
         private final Set<CosValue.CosStream> trueTypePrograms =
             java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        private final boolean removeTrueTypeHinting;
+        private final Map<CosValue.CosStream, java.util.BitSet> usedGlyphs;
         private final Map<CosValue.CosReference, CosValue.CosReference> referenceAliases = new LinkedHashMap<>();
         private final boolean compressStreamsLosslessly;
         private final boolean deduplicateImagesLosslessly;
@@ -1282,6 +1286,7 @@ final class NativePdfWriter {
                                boolean compressStreamsLosslessly, boolean deduplicateImagesLosslessly,
                                boolean deduplicateFontProgramsLosslessly,
                                boolean removeTrueTypeHinting,
+                               boolean removeUnusedGlyphs,
                                int compressionLevel) {
             this.source = source;
             this.target = target;
@@ -1291,7 +1296,9 @@ final class NativePdfWriter {
             this.deduplicateFontProgramsLosslessly = deduplicateFontProgramsLosslessly;
             fontProgramReferences = deduplicateFontProgramsLosslessly
                 ? source.fontProgramReferences() : Set.of();
-            if (removeTrueTypeHinting) {
+            this.removeTrueTypeHinting = removeTrueTypeHinting;
+            usedGlyphs = removeUnusedGlyphs ? source.usedGlyphsByProgram() : Map.of();
+            if (removeTrueTypeHinting || removeUnusedGlyphs) {
                 for (var reference : source.trueTypeFontProgramReferences()) {
                     if (source.resolve(reference) instanceof CosValue.CosStream program) {
                         trueTypePrograms.add(program);
@@ -1354,7 +1361,8 @@ final class NativePdfWriter {
         private CosValue.CosStream replacement(CosValue.CosStream stream) {
             var replacement = replacements.get(stream);
             if (replacement == null && trueTypePrograms.contains(stream)) {
-                var stripped = source.withoutTrueTypeHinting(stream, compressionLevel);
+                var stripped = source.optimizedTrueTypeProgram(stream, removeTrueTypeHinting,
+                    usedGlyphs.get(stream), compressionLevel);
                 if (stripped != stream) {
                     replacements.put(stream, stripped);
                     replacement = stripped;

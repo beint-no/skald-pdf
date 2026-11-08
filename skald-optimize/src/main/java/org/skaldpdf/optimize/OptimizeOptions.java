@@ -18,6 +18,7 @@ public final class OptimizeOptions {
     private final int downsampleAbovePixelsPerInch;
     private final int downsampleToPixelsPerInch;
     private final boolean removeTrueTypeHinting;
+    private final boolean removeUnusedGlyphs;
 
     /**
      * Compatibility constructor for the original Skald optimizer API. Lossless
@@ -46,6 +47,7 @@ public final class OptimizeOptions {
         downsampleAbovePixelsPerInch = builder.downsampleAbovePixelsPerInch;
         downsampleToPixelsPerInch = builder.downsampleToPixelsPerInch;
         removeTrueTypeHinting = builder.removeTrueTypeHinting;
+        removeUnusedGlyphs = builder.removeUnusedGlyphs;
         validate();
     }
 
@@ -55,7 +57,8 @@ public final class OptimizeOptions {
      * stream compression, exact image/font-program sharing, a 16 KiB
      * lossless-raster work floor, 4 KiB / 2% savings gates, and images painted
      * above 450 ppi downsampled to 300 ppi of their largest placement, and
-     * TrueType hinting and layout tables removed from embedded fonts.
+     * TrueType hinting, layout tables and the data of glyphs no page draws
+     * removed from embedded fonts.
      */
     public static OptimizeOptions attachments() {
         return builder().build();
@@ -149,6 +152,14 @@ public final class OptimizeOptions {
         return removeTrueTypeHinting;
     }
 
+    /**
+     * Whether TrueType programs of composite Identity fonts lose the outlines and
+     * metrics of glyphs no page draws. Glyph IDs and every drawn glyph are unchanged.
+     */
+    public boolean removeUnusedGlyphs() {
+        return removeUnusedGlyphs;
+    }
+
     /** This policy with a smaller longest edge for one image. */
     OptimizeOptions withMaxEdge(int value) {
         if (value == maxEdge) {
@@ -164,7 +175,8 @@ public final class OptimizeOptions {
             .minimumSavingsPercent(minimumSavingsPercent)
             .downsampleAbovePixelsPerInch(downsampleAbovePixelsPerInch)
             .downsampleToPixelsPerInch(downsampleToPixelsPerInch)
-            .removeTrueTypeHinting(removeTrueTypeHinting);
+            .removeTrueTypeHinting(removeTrueTypeHinting)
+            .removeUnusedGlyphs(removeUnusedGlyphs);
         return builder.build();
     }
 
@@ -223,6 +235,7 @@ public final class OptimizeOptions {
         private int downsampleAbovePixelsPerInch = 450;
         private int downsampleToPixelsPerInch = 300;
         private boolean removeTrueTypeHinting = true;
+        private boolean removeUnusedGlyphs = true;
 
         private Builder() {
         }
@@ -309,6 +322,11 @@ public final class OptimizeOptions {
 
         public Builder removeTrueTypeHinting(boolean value) {
             removeTrueTypeHinting = value;
+            return this;
+        }
+
+        public Builder removeUnusedGlyphs(boolean value) {
+            removeUnusedGlyphs = value;
             return this;
         }
 

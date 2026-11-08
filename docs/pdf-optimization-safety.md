@@ -23,6 +23,7 @@ lossless stream strategy also tracks the independently implemented
 | Share exact image XObjects | Semantically simple image streams share one object only when their complete canonical stream bodies are byte-identical. The semantic digest receives an explicit source-reference alias map. Similar pixels or payload-only matches never qualify. |
 | Share exact font programs | Only indirect `FontFile`, `FontFile2`, and `FontFile3` streams under a `FontDescriptor` qualify. Their complete canonical stream dictionaries and encoded bytes must be identical and contain no indirect values. Descriptors, font dictionaries, encodings, CMaps, glyph data, and content operators remain unchanged. |
 | Remove TrueType hinting | Only indirect `FontFile2` streams that are unfiltered or plain Flate qualify, with `true`/`0x00010000` sfnt headers and well-formed `head`, `maxp`, `loca` and `glyf` tables. Hinting and layout tables PDF rendering never reads (`fpgm`, `prep`, `cvt `, `hdmx`, `VDMX`, `LTSH`, `gasp`, `GSUB`, `GPOS`, `GDEF`, `JSTF`, `BASE`, `kern`, `morx`, `feat`, `DSIG`) are dropped and each glyph loses its instructions; glyph IDs, outlines, metrics, `cmap`, `post`, `name` and `OS/2` stay byte for byte. Anything else keeps the original program. The rewritten stream gets a new `/Length1` and is covered by the semantic digest like any approved replacement. |
+| Remove unused glyph data | Only `FontFile2` programs whose every font dictionary in the document is a `Type0` font with `Identity-H` or `Identity-V` encoding and a single `CIDFontType2` descendant (`/CIDToGIDMap` `/Identity`, absent, or a stream) qualify, and only when page content selects each of those fonts. `Tf`, `Tj`, `TJ`, `'` and `"` are followed through `q`/`Q` on every imported page and the Forms it paints; codes are CIDs and map to glyph IDs through `/CIDToGIDMap`. Fonts reachable from AcroForm resources and fields, annotation appearances, patterns, soft-mask groups, Type3 glyphs or graphics states that set a font, and pages whose content does not parse cleanly, are left unchanged. Glyphs outside the drawn set, glyph 0 and composite components lose their outline and metrics; glyph IDs, `maxp`, `cmap`, `post` and every drawn glyph stay byte for byte. |
 
 Images reached through nested Form XObjects and shared image objects are
 handled once. An APP15 policy marker makes JPEG processing exactly idempotent.
@@ -129,7 +130,13 @@ for financial text. Removing TrueType hinting is retained because it needs no
 content interpretation: on 400 random production attachments it changed 237
 PDFs and saved 21.4% of their bytes, with identical text, identical glyph
 outlines, metrics and cmaps in all 649 rewritten programs (fontTools), and at
-most 0.0005 RMSE at 150 DPI in both Poppler and MuPDF. The measured
+most 0.0005 RMSE at 150 DPI in both Poppler and MuPDF. Removing unused glyph
+data is retained for the same reason: on 500 random already-optimized production
+attachments it changed 79 PDFs and saved 16% of their bytes (4.3% of the
+sample), with identical text, renders identical to the pixel in Poppler and
+MuPDF, and all 7,464 drawn glyphs in 221 rewritten programs identical in outline
+and metrics (fontTools). Trimming trailing glyph IDs and pruning `cmap` would add
+at most about 0.5% and is not done. The measured
 font-subsetting prototype is intentionally not retained;
 revisit it only if a future corpus has enough eligible unique font data to
 justify a complete interpreter and a mature retained-glyph-ID subsetter.

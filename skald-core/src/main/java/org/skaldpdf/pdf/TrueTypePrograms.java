@@ -5,11 +5,16 @@ import org.jspecify.annotations.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * Removes TrueType hinting and text-layout tables from an embedded font program.
+ * Shrinks embedded TrueType programs without changing any glyph a page draws.
+ *
+ * <p>{@link #withoutHinting} removes hinting and text-layout tables.
+ * {@link #withoutUnusedGlyphs} empties the outlines and metrics of glyph IDs no
+ * page uses while keeping every glyph ID stable.
  *
  * <p>PDF content positions every glyph itself, so layout tables (GSUB, GPOS, GDEF,
  * kern, ...) are never consulted, and hinting only tunes rasterisation on
@@ -17,7 +22,7 @@ import java.util.TreeMap;
  * byte for byte; each glyph only loses its instruction bytes. Anything unexpected
  * (CFF outlines, collections, malformed tables) keeps the original program.
  */
-final class TrueTypeHinting {
+final class TrueTypePrograms {
     private static final Set<String> REMOVED_TABLES = Set.of(
         "fpgm", "prep", "cvt ", "hdmx", "VDMX", "LTSH", "gasp",
         "GPOS", "GSUB", "GDEF", "JSTF", "BASE", "kern", "morx", "feat", "DSIG");
@@ -28,11 +33,11 @@ final class TrueTypeHinting {
     private static final int WE_HAVE_A_TWO_BY_TWO = 0x0080;
     private static final int WE_HAVE_INSTRUCTIONS = 0x0100;
 
-    private TrueTypeHinting() {
+    private TrueTypePrograms() {
     }
 
     /** The program without hinting and layout tables, or null when it would not change or is not plain TrueType. */
-    static byte @Nullable [] remove(byte[] font) {
+    static byte @Nullable [] withoutHinting(byte[] font) {
         try {
             var result = rewrite(font);
             return result != null && result.length < font.length ? result : null;
@@ -41,7 +46,142 @@ final class TrueTypeHinting {
         }
     }
 
-    private static byte @Nullable [] rewrite(byte[] font) {
+    /**
+     * The program with every glyph outside {@code used} (and the glyphs their
+     * composites reference) reduced to an empty outline with zero metrics, or null
+     * when nothing changes or the program is not plain TrueType. Glyph IDs, glyph 0,
+     * {@code cmap}, {@code post} and all other tables stay as they are.
+     */
+    static byte @Nullable [] withoutUnusedGlyphs(byte[] font, BitSet used) {
+        try {
+            // Zeroed metrics keep the size of the program; the caller keeps it only when it compresses smaller.
+            return prune(font, used);
+        } catch (RuntimeException malformed) {
+            return null;
+        }
+    }
+
+    private static byte @Nullable [] prune(byte[] font, BitSet used) {
+        var version = u32(font, 0);
+        var tables = tables(font);
+        if (tables == null) {
+            return null;
+        }
+        var head = tables.get("head");
+        var maxp = tables.get("maxp");
+        var glyf = tables.get("glyf");
+        var hhea = tables.get("hhea");
+        var hmtx = tables.get("hmtx");
+        require(hhea != null && hhea.length >= 36 && hmtx != null);
+        var glyphCount = u16(maxp, 4);
+        var longOffsets = s16(head, 50) == 1;
+        var offsets = offsets(tables, glyphCount);
+        var metrics = u16(hhea, 34);
+        require(metrics >= 1 && metrics <= glyphCount && hmtx.length >= 4L * metrics + 2L * (glyphCount - metrics));
+
+        var kept = new BitSet(glyphCount);
+        kept.set(0);
+        var pending = new java.util.ArrayDeque<Integer>();
+        pending.add(0);
+        for (int glyph = used.nextSetBit(0); glyph >= 0 && glyph < glyphCount; glyph = used.nextSetBit(glyph + 1)) {
+            if (!kept.get(glyph)) {
+                kept.set(glyph);
+                pending.add(glyph);
+            }
+        }
+        while (!pending.isEmpty()) {
+            var glyph = pending.poll();
+            var start = (int) offsets[glyph];
+            var end = (int) offsets[glyph + 1];
+            if (end - start >= 10 && s16(glyf, start) < 0) {
+                for (var component : components(glyf, start, end)) {
+                    require(component < glyphCount);
+                    if (!kept.get(component)) {
+                        kept.set(component);
+                        pending.add(component);
+                    }
+                }
+            }
+        }
+
+        var changed = false;
+        var glyphs = new ByteArrayOutputStream(glyf.length);
+        var newOffsets = new long[glyphCount + 1];
+        for (int index = 0; index < glyphCount; index++) {
+            newOffsets[index] = glyphs.size();
+            var length = (int) (offsets[index + 1] - offsets[index]);
+            if (kept.get(index)) {
+                glyphs.write(glyf, (int) offsets[index], length);
+                while (glyphs.size() % (longOffsets ? 4 : 2) != 0) {
+                    glyphs.write(0);
+                }
+            } else {
+                changed |= length != 0;
+            }
+        }
+        newOffsets[glyphCount] = glyphs.size();
+        var newHmtx = hmtx.clone();
+        for (int index = 0; index < glyphCount; index++) {
+            if (kept.get(index)) {
+                continue;
+            }
+            if (index < metrics) {
+                // The last full metric also supplies the advance of every later glyph.
+                var position = 4 * index;
+                if (index != metrics - 1 && (u16(newHmtx, position) != 0 || u16(newHmtx, position + 2) != 0)) {
+                    put16(newHmtx, position, 0);
+                    put16(newHmtx, position + 2, 0);
+                    changed = true;
+                }
+            } else {
+                var position = 4 * metrics + 2 * (index - metrics);
+                if (u16(newHmtx, position) != 0) {
+                    put16(newHmtx, position, 0);
+                    changed = true;
+                }
+            }
+        }
+        if (!changed) {
+            return null;
+        }
+        var newGlyf = glyphs.toByteArray();
+        var newHead = head.clone();
+        put32(newHead, 8, 0);
+        if (!longOffsets && newGlyf.length / 2 > 0xffff) {
+            longOffsets = true;
+            put16(newHead, 50, 1);
+        }
+        tables.put("glyf", newGlyf);
+        tables.put("loca", loca(newOffsets, longOffsets));
+        tables.put("head", newHead);
+        tables.put("hmtx", newHmtx);
+        return write(version, tables);
+    }
+
+    /** Glyph indices that a composite glyph references. */
+    private static java.util.List<Integer> components(byte[] glyf, int start, int end) {
+        var result = new java.util.ArrayList<Integer>();
+        var position = start + 10;
+        int flags;
+        do {
+            require(position + 4 <= end);
+            flags = u16(glyf, position);
+            result.add(u16(glyf, position + 2));
+            position += 4 + ((flags & ARG_1_AND_2_ARE_WORDS) != 0 ? 4 : 2);
+            if ((flags & WE_HAVE_A_SCALE) != 0) {
+                position += 2;
+            } else if ((flags & WE_HAVE_AN_X_AND_Y_SCALE) != 0) {
+                position += 4;
+            } else if ((flags & WE_HAVE_A_TWO_BY_TWO) != 0) {
+                position += 8;
+            }
+            require(position <= end);
+        } while ((flags & MORE_COMPONENTS) != 0);
+        return result;
+    }
+
+    /** The table bodies of a plain TrueType program, or null for CFF outlines and collections. */
+    private static @Nullable TreeMap<String, byte[]> tables(byte[] font) {
         var version = u32(font, 0);
         if (version != 0x00010000 && version != 0x74727565) { // 'true'
             return null;
@@ -59,17 +199,48 @@ final class TrueTypeHinting {
         }
         var head = tables.get("head");
         var maxp = tables.get("maxp");
+        require(head != null && head.length >= 54 && maxp != null && maxp.length >= 6
+            && tables.get("glyf") != null && tables.get("loca") != null
+            && (s16(head, 50) == 0 || s16(head, 50) == 1));
+        return tables;
+    }
+
+    private static long[] offsets(TreeMap<String, byte[]> tables, int glyphCount) {
         var glyf = tables.get("glyf");
         var loca = tables.get("loca");
-        require(head != null && head.length >= 54 && maxp != null && maxp.length >= 6 && glyf != null && loca != null);
-        var glyphCount = u16(maxp, 4);
-        var longOffsets = s16(head, 50) == 1;
-        require(s16(head, 50) == 0 || longOffsets);
+        var longOffsets = s16(tables.get("head"), 50) == 1;
         var offsets = new long[glyphCount + 1];
         for (int index = 0; index <= glyphCount; index++) {
             offsets[index] = longOffsets ? u32(loca, index * 4) : 2L * u16(loca, index * 2);
             require(offsets[index] <= glyf.length && (index == 0 || offsets[index] >= offsets[index - 1]));
         }
+        return offsets;
+    }
+
+    private static byte[] loca(long[] offsets, boolean longOffsets) {
+        var loca = new byte[offsets.length * (longOffsets ? 4 : 2)];
+        for (int index = 0; index < offsets.length; index++) {
+            if (longOffsets) {
+                put32(loca, index * 4, offsets[index]);
+            } else {
+                put16(loca, index * 2, (int) (offsets[index] / 2));
+            }
+        }
+        return loca;
+    }
+
+    private static byte @Nullable [] rewrite(byte[] font) {
+        var version = u32(font, 0);
+        var tables = tables(font);
+        if (tables == null) {
+            return null;
+        }
+        var head = tables.get("head");
+        var maxp = tables.get("maxp");
+        var glyf = tables.get("glyf");
+        var glyphCount = u16(maxp, 4);
+        var longOffsets = s16(head, 50) == 1;
+        var offsets = offsets(tables, glyphCount);
 
         var hinted = tables.keySet().stream().anyMatch(REMOVED_TABLES::contains);
         var glyphs = new ByteArrayOutputStream(glyf.length);
@@ -92,14 +263,7 @@ final class TrueTypeHinting {
         if (!longOffsets && newGlyf.length / 2 > 0xffff) {
             longOffsets = true;
         }
-        var newLoca = new byte[(glyphCount + 1) * (longOffsets ? 4 : 2)];
-        for (int index = 0; index <= glyphCount; index++) {
-            if (longOffsets) {
-                put32(newLoca, index * 4, newOffsets[index]);
-            } else {
-                put16(newLoca, index * 2, (int) (newOffsets[index] / 2));
-            }
-        }
+        var newLoca = loca(newOffsets, longOffsets);
         var newHead = head.clone();
         put16(newHead, 50, longOffsets ? 1 : 0);
         put32(newHead, 8, 0);

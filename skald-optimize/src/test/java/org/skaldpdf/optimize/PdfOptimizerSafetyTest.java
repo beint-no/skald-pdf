@@ -479,7 +479,7 @@ class PdfOptimizerSafetyTest {
 
         var disabled = OptimizeOptions.builder().recompressJpeg(false).convertLosslessRaster(false)
             .compressStreamsLosslessly(false).deduplicateImagesLosslessly(false)
-            .deduplicateFontProgramsLosslessly(false).removeTrueTypeHinting(false)
+            .deduplicateFontProgramsLosslessly(false).removeTrueTypeHinting(false).removeUnusedGlyphs(false)
             .minimumSavingsBytes(1).minimumSavingsPercent(0).build();
         assertSame(source, PdfOptimizer.recompress(source, disabled));
     }
