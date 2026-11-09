@@ -1275,6 +1275,7 @@ final class NativePdfWriter {
             java.util.Collections.newSetFromMap(new IdentityHashMap<>());
         private final boolean removeTrueTypeHinting;
         private final Map<CosValue.CosStream, java.util.BitSet> usedGlyphs;
+        private final Map<CosValue.CosStream, java.util.BitSet> usedCids;
         private final Map<CosValue.CosReference, CosValue.CosReference> referenceAliases = new LinkedHashMap<>();
         private final boolean compressStreamsLosslessly;
         private final boolean deduplicateImagesLosslessly;
@@ -1297,7 +1298,9 @@ final class NativePdfWriter {
             fontProgramReferences = deduplicateFontProgramsLosslessly
                 ? source.fontProgramReferences() : Set.of();
             this.removeTrueTypeHinting = removeTrueTypeHinting;
-            usedGlyphs = removeUnusedGlyphs ? source.usedGlyphsByProgram() : Map.of();
+            var fontUsage = removeUnusedGlyphs ? source.fontUsage() : FontGlyphUsage.Usage.NONE;
+            usedGlyphs = fontUsage.glyphsByProgram();
+            usedCids = fontUsage.cidsByMap();
             if (removeTrueTypeHinting || removeUnusedGlyphs) {
                 for (var reference : source.trueTypeFontProgramReferences()) {
                     if (source.resolve(reference) instanceof CosValue.CosStream program) {
@@ -1366,6 +1369,13 @@ final class NativePdfWriter {
                 if (stripped != stream) {
                     replacements.put(stream, stripped);
                     replacement = stripped;
+                }
+            }
+            if (replacement == null && usedCids.containsKey(stream)) {
+                var pruned = source.prunedCidToGidMap(stream, usedCids.get(stream), compressionLevel);
+                if (pruned != stream) {
+                    replacements.put(stream, pruned);
+                    replacement = pruned;
                 }
             }
             if (replacement == null && compressStreamsLosslessly) {

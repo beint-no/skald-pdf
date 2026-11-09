@@ -43,13 +43,19 @@ final class FontGlyphUsage {
         this.parser = parser;
     }
 
-    static Map<CosStream, BitSet> analyze(NativePdfParser parser) {
+    /** Drawn glyph IDs per TrueType program and drawn CIDs per {@code /CIDToGIDMap} stream. */
+    record Usage(Map<CosStream, BitSet> glyphsByProgram, Map<CosStream, BitSet> cidsByMap) {
+        static final Usage NONE = new Usage(Map.of(), Map.of());
+    }
+
+    static Usage analyze(NativePdfParser parser) {
         var usage = new FontGlyphUsage(parser);
         for (var page : parser.pages()) {
             usage.page(page);
         }
         usage.markInteractiveFormFonts();
-        return usage.glyphsByProgram();
+        var fonts = usage.documentFonts();
+        return new Usage(usage.glyphsByProgram(fonts), usage.cidsByMap(fonts));
     }
 
     private void page(ImportedPage page) {
@@ -222,10 +228,10 @@ final class FontGlyphUsage {
      * program must be a qualifying composite font that page content uses and that no
      * unfollowed context reaches; otherwise the program is left out.
      */
-    private Map<CosStream, BitSet> glyphsByProgram() {
+    private Map<CosStream, BitSet> glyphsByProgram(List<CosDictionary> fonts) {
         var users = new IdentityHashMap<CosStream, List<CosDictionary>>();
         var excluded = Collections.newSetFromMap(new IdentityHashMap<CosStream, Boolean>());
-        for (var font : documentFonts()) {
+        for (var font : fonts) {
             var program = program(font);
             if (program != null) {
                 users.computeIfAbsent(program, ignored -> new ArrayList<>()).add(font);
@@ -252,6 +258,35 @@ final class FontGlyphUsage {
                 result.put(entry.getKey(), glyphs);
             }
         }
+        return result;
+    }
+
+    /**
+     * Drawn CIDs per {@code /CIDToGIDMap} stream. Every font whose descendant names the
+     * stream must be a qualifying composite font that page content uses and that no
+     * unfollowed context reaches; otherwise the stream is left out.
+     */
+    private Map<CosStream, BitSet> cidsByMap(List<CosDictionary> fonts) {
+        var result = new IdentityHashMap<CosStream, BitSet>();
+        var excluded = Collections.newSetFromMap(new IdentityHashMap<CosStream, Boolean>());
+        for (var font : fonts) {
+            if (!(resolve(font.get("DescendantFonts")) instanceof CosArray descendants)) {
+                continue;
+            }
+            for (var value : descendants.values()) {
+                if (!(resolve(value) instanceof CosDictionary descendant)
+                    || !(resolve(descendant.get("CIDToGIDMap")) instanceof CosStream map)) {
+                    continue;
+                }
+                var used = cids.get(font);
+                if (program(font) == null || used == null || unknown.contains(font)) {
+                    excluded.add(map);
+                } else {
+                    result.computeIfAbsent(map, ignored -> new BitSet()).or(used);
+                }
+            }
+        }
+        result.keySet().removeAll(excluded);
         return result;
     }
 
