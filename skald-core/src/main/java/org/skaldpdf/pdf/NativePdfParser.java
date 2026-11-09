@@ -187,9 +187,10 @@ final class NativePdfParser {
     }
 
     /**
-     * The {@code /CIDToGIDMap} with every CID outside {@code usedCids} mapped to glyph 0
-     * and the trailing zeros removed (absent CIDs map to glyph 0), Flate-encoded; the
-     * original stream when it is not plain Flate or unfiltered, or would not shrink.
+     * The {@code /CIDToGIDMap} with every CID outside {@code usedCids} mapped to glyph 0,
+     * Flate-encoded; the original stream when it is not plain Flate or unfiltered, or
+     * would not shrink. The map keeps its length: readers differ for CIDs past its end
+     * (MuPDF treats them as glyph IDs), and the zeros compress to almost nothing.
      */
     CosStream prunedCidToGidMap(CosStream stream, java.util.BitSet usedCids, int compressionLevel) {
         var dictionary = stream.dictionary();
@@ -207,16 +208,11 @@ final class NativePdfParser {
         } catch (RuntimeException malformed) {
             return stream;
         }
-        var pruned = new byte[Math.min(map.length & ~1, 2 * (usedCids.length()))];
-        for (int cid = usedCids.nextSetBit(0); cid >= 0 && 2 * cid + 1 < pruned.length; cid = usedCids.nextSetBit(cid + 1)) {
+        var pruned = new byte[map.length];
+        for (int cid = usedCids.nextSetBit(0); cid >= 0 && 2 * cid + 1 < map.length; cid = usedCids.nextSetBit(cid + 1)) {
             pruned[2 * cid] = map[2 * cid];
             pruned[2 * cid + 1] = map[2 * cid + 1];
         }
-        var end = pruned.length;
-        while (end >= 2 && pruned[end - 2] == 0 && pruned[end - 1] == 0) {
-            end -= 2;
-        }
-        pruned = Arrays.copyOf(pruned, Math.max(end, 2));
         var encoded = deflate(pruned, compressionLevel);
         if (encoded.length >= stream.encodedBytes().length) {
             return stream;
