@@ -58,7 +58,7 @@ final class NativePdfParser {
     private Set<CosStream> maskStreams;
     private java.util.IdentityHashMap<CosStream, Integer> maskUses;
     private ImagePlacements imagePlacements;
-    private Map<CosStream, java.util.BitSet> usedGlyphs;
+    private FontGlyphUsage.Usage fontUsage;
 
     NativePdfParser(byte[] source) {
         if (source == null || source.length < 8 || source.length > MAXIMUM_SOURCE_BYTES) {
@@ -174,16 +174,57 @@ final class NativePdfParser {
         return pages;
     }
 
-    /** Glyph IDs drawn from each fully followed TrueType program ({@link FontGlyphUsage}), computed once. */
-    Map<CosStream, java.util.BitSet> usedGlyphsByProgram() {
-        if (usedGlyphs == null) {
+    /** Drawn glyphs and CIDs of every fully followed composite TrueType font ({@link FontGlyphUsage}), computed once. */
+    FontGlyphUsage.Usage fontUsage() {
+        if (fontUsage == null) {
             try {
-                usedGlyphs = FontGlyphUsage.analyze(this);
+                fontUsage = FontGlyphUsage.analyze(this);
             } catch (RuntimeException unfollowable) {
-                usedGlyphs = Map.of();
+                fontUsage = FontGlyphUsage.Usage.NONE;
             }
         }
-        return usedGlyphs;
+        return fontUsage;
+    }
+
+    /**
+     * The {@code /CIDToGIDMap} with every CID outside {@code usedCids} mapped to glyph 0
+     * and the trailing zeros removed (absent CIDs map to glyph 0), Flate-encoded; the
+     * original stream when it is not plain Flate or unfiltered, or would not shrink.
+     */
+    CosStream prunedCidToGidMap(CosStream stream, java.util.BitSet usedCids, int compressionLevel) {
+        var dictionary = stream.dictionary();
+        if (dictionary.get("F") != null || dictionary.get("FFilter") != null
+            || dictionary.get("FDecodeParms") != null || dictionary.get("DecodeParms") != null) {
+            return stream;
+        }
+        var filters = filterNames(dictionary.get("Filter"));
+        if (!filters.isEmpty() && (filters.size() != 1 || !Set.of("FlateDecode", "Fl").contains(filters.getFirst()))) {
+            return stream;
+        }
+        byte[] map;
+        try {
+            map = filters.isEmpty() ? stream.encodedBytes() : inflate(stream.encodedBytes(), "CIDToGIDMap");
+        } catch (RuntimeException malformed) {
+            return stream;
+        }
+        var pruned = new byte[Math.min(map.length & ~1, 2 * (usedCids.length()))];
+        for (int cid = usedCids.nextSetBit(0); cid >= 0 && 2 * cid + 1 < pruned.length; cid = usedCids.nextSetBit(cid + 1)) {
+            pruned[2 * cid] = map[2 * cid];
+            pruned[2 * cid + 1] = map[2 * cid + 1];
+        }
+        var end = pruned.length;
+        while (end >= 2 && pruned[end - 2] == 0 && pruned[end - 1] == 0) {
+            end -= 2;
+        }
+        pruned = Arrays.copyOf(pruned, Math.max(end, 2));
+        var encoded = deflate(pruned, compressionLevel);
+        if (encoded.length >= stream.encodedBytes().length) {
+            return stream;
+        }
+        var values = new LinkedHashMap<String, CosValue>(dictionary.values());
+        values.remove("Length");
+        values.put("Filter", new CosName("FlateDecode"));
+        return new CosStream(new CosDictionary(values), encoded);
     }
 
     /** Placement analysis of every page, computed once per parsed document. */
@@ -341,14 +382,13 @@ final class NativePdfParser {
         } catch (RuntimeException malformed) {
             return stream;
         }
-        var image = isName(dictionary.get("Subtype"), "Image");
-        var sourceLevel = flate ? deflateLevelHint(original) : -1;
-        if (sourceLevel == 3 || image && sourceLevel >= 2
-            || !image && sourceLevel == 2 && !maximumCompressionPays(decoded)) {
+        // Every stream, images included, is tried at the writer's level: logos and rendered
+        // graphics often shrink a third at level 9 compared with the default producers write,
+        // and a sample of the start (often blank margin) does not predict that.
+        if (flate && deflateLevelHint(original) == 3) {
             return stream;
         }
-        var targetLevel = image ? Math.min(Compression.BALANCED.deflateLevel(), compressionLevel) : compressionLevel;
-        var compressed = deflate(decoded, targetLevel);
+        var compressed = deflate(decoded, compressionLevel);
         if (compressed.length + 64 >= original.length
             || !Arrays.equals(decoded, inflate(compressed, "stream recompression verification"))) {
             return stream;
@@ -369,14 +409,6 @@ final class NativePdfParser {
         var cmf = encoded[0] & 0xff;
         var flg = encoded[1] & 0xff;
         return (cmf & 0x0f) == 8 && ((cmf << 8) | flg) % 31 == 0 ? flg >>> 6 : -1;
-    }
-
-    private static boolean maximumCompressionPays(byte[] decoded) {
-        var sample = decoded.length <= 32 * 1024 ? decoded : Arrays.copyOf(decoded, 32 * 1024);
-        var balanced = deflate(sample, Compression.BALANCED.deflateLevel());
-        var maximum = deflate(sample, Compression.MAXIMUM.deflateLevel());
-        var saved = balanced.length - maximum.length;
-        return saved >= 128 && saved * 100 >= balanced.length;
     }
 
     private boolean identityDecodeParameters(CosValue value) {
