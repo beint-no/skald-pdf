@@ -37,6 +37,7 @@
 | Complex-script shaping | needs a focused OpenType shaping engine or optional integration |
 | Multi-script fallback | a document-level fallback stack exists; script-aware shaping is still deferred |
 | CFF/OTF embedding | TrueType/OpenType glyf faces only until a dedicated CFF reader exists |
+| Brotli PDF streams | optional `skald-brotli`: bounded decode, explicit opt-in encode, TIFF/PNG predictors and large-window decode; defaults remain Flate. See [Brotli](brotli.md) |
 | Emitting JPEG XL in PDF | not in ISO 32000-2; no interoperable viewer filter yet. Decode-as-ingest is shipped |
 | Lossy image optimization | quality and DPI policy belongs at the application boundary (`OptimizeOptions`) |
 

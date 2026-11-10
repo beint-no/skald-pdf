@@ -37,6 +37,7 @@ plugins {
 val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.20.1").get()
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
+    "skald-brotli" to "Skald Brotli",
     "skald-fonts" to "Skald Fonts",
     "skald-layout" to "Skald Layout",
     "skald-barcode" to "Skald Barcode",
@@ -54,6 +55,7 @@ val moduleTitles = mapOf(
     "skald-purchase-order-no" to "Skald Norwegian Purchase Order"
 )
 val moduleDescriptions = mapOf(
+    "skald-brotli" to "Optional bounded native Brotli encoding and decoding for PDF 2.0 streams",
     "skald-core" to "Native PDF 2.0 writing, reading, custom fonts, prepared images, and composition",
     "skald-fonts" to "Lazily loaded Skald Sans faces for Skald PDF",
     "skald-layout" to "Flow layout and high-level document API for Skald PDF",

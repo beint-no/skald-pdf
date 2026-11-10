@@ -1,7 +1,12 @@
 package org.skaldpdf.optimize;
 
+import org.skaldpdf.pdf.Compression;
+
+import java.util.Objects;
+
 /** Immutable policy for image recompression inside received PDFs. */
 public final class OptimizeOptions {
+    private final Compression streamCompression;
     private final int maxEdge;
     private final float jpegQuality;
     private final float losslessQuality;
@@ -31,6 +36,7 @@ public final class OptimizeOptions {
     }
 
     private OptimizeOptions(Builder builder) {
+        streamCompression = builder.streamCompression;
         maxEdge = builder.maxEdge;
         jpegQuality = builder.jpegQuality;
         losslessQuality = builder.losslessQuality;
@@ -66,6 +72,11 @@ public final class OptimizeOptions {
 
     public static Builder builder() {
         return new Builder();
+    }
+
+    /** Codec for new and eligible losslessly recompressed streams; Flate MAXIMUM by default. */
+    public Compression streamCompression() {
+        return streamCompression;
     }
 
     public int maxEdge() {
@@ -165,7 +176,7 @@ public final class OptimizeOptions {
         if (value == maxEdge) {
             return this;
         }
-        var builder = builder().maxEdge(value).jpegQuality(jpegQuality).losslessQuality(losslessQuality)
+        var builder = builder().streamCompression(streamCompression).maxEdge(value).jpegQuality(jpegQuality).losslessQuality(losslessQuality)
             .recompressJpeg(recompressJpeg).convertLosslessRaster(convertLosslessRaster)
             .compressStreamsLosslessly(compressStreamsLosslessly)
             .deduplicateImagesLosslessly(deduplicateImagesLosslessly)
@@ -219,6 +230,7 @@ public final class OptimizeOptions {
     }
 
     public static final class Builder {
+        private Compression streamCompression = Compression.MAXIMUM;
         private int maxEdge = 2400;
         private float jpegQuality = 0.75f;
         private float losslessQuality = 0.90f;
@@ -238,6 +250,12 @@ public final class OptimizeOptions {
         private boolean removeUnusedGlyphs = true;
 
         private Builder() {
+        }
+
+        /** Opts into a stream codec. Brotli needs skald-brotli and compatible viewers. */
+        public Builder streamCompression(Compression value) {
+            streamCompression = Objects.requireNonNull(value, "value");
+            return this;
         }
 
         public Builder maxEdge(int value) {

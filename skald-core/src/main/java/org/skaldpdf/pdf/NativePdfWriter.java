@@ -30,11 +30,16 @@ final class NativePdfWriter {
     private static final byte[] HEADER = "%PDF-2.0\n%\u00e2\u00e3\u00cf\u00d3\n"
         .getBytes(StandardCharsets.ISO_8859_1);
     private final int compressionLevel;
+    private final Compression compression;
     private final Revision6Encryption encryption;
 
     NativePdfWriter(WriterProperties properties) {
         Objects.requireNonNull(properties, "properties");
-        this.compressionLevel = properties.compression().deflateLevel();
+        this.compression = properties.compression();
+        if (!compression.available()) {
+            throw new IllegalStateException("Brotli writing requires skald-brotli, libbrotli and native-access permission");
+        }
+        this.compressionLevel = compression.deflateLevel();
         this.encryption = properties.encryption() == null ? null : new Revision6Encryption(properties.encryption());
     }
 
@@ -76,9 +81,15 @@ final class NativePdfWriter {
             replacements.put(original, softMaskReplacement(original, mask));
         });
         var objects = new ObjectStore();
+        if (compression.brotli() && source.canonicalRewriteConstraints()
+            .contains(CanonicalRewriteConstraint.CONFORMANCE_PROFILE)) {
+            throw new IllegalArgumentException("Brotli output cannot retain an unvalidated PDF conformance profile");
+        }
+        var originalCatalog = (CosDictionary) source.resolve(source.catalogReference());
+        var catalog = compression.brotli() ? BrotliExtensions.declare(source, originalCatalog) : originalCatalog;
         var importer = new CanonicalImportContext(source, objects, replacements,
             compressStreamsLosslessly, deduplicateImagesLosslessly,
-            deduplicateFontProgramsLosslessly, removeTrueTypeHinting, removeUnusedGlyphs, compressionLevel);
+            deduplicateFontProgramsLosslessly, removeTrueTypeHinting, removeUnusedGlyphs, compression, catalog);
         objects.rootObject = importer.importReference(source.catalogReference());
         var trailer = new StringBuilder();
         source.trailer().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
@@ -89,9 +100,9 @@ final class NativePdfWriter {
         });
         objects.trailerEntries = trailer.toString();
         var candidate = new ByteArrayOutputStream();
-        writeObjects(objects, candidate, source.canonicalHeader());
+        writeObjects(objects, candidate, compression.brotli() ? HEADER : source.canonicalHeader());
         var bytes = candidate.toByteArray();
-        var expected = source.semanticDigest(replacements, importer.referenceAliases());
+        var expected = source.semanticDigest(replacements, importer.referenceAliases(), catalog);
         var actual = new NativePdfParser(bytes).semanticDigest(new IdentityHashMap<>());
         if (!MessageDigest.isEqual(expected, actual)) {
             throw new IllegalStateException("Canonical PDF rewrite changed document semantics");
@@ -136,8 +147,8 @@ final class NativePdfWriter {
         values.put("Height", new CosValue.CosNumber(Integer.toString(mask.height())));
         values.put("ColorSpace", new CosValue.CosName("DeviceGray"));
         values.put("BitsPerComponent", new CosValue.CosNumber("8"));
-        values.put("Filter", new CosValue.CosName("FlateDecode"));
-        return new CosValue.CosStream(new CosValue.CosDictionary(values), deflate(mask.samples()));
+        values.put("Filter", new CosValue.CosName(compression.brotli() ? "BrotliDecode" : "FlateDecode"));
+        return new CosValue.CosStream(new CosValue.CosDictionary(values), compress(mask.samples()));
     }
 
     private ObjectStore buildObjects(PdfDocument document) {
@@ -215,6 +226,11 @@ final class NativePdfWriter {
         var catalog = new StringBuilder("<< /Type /Catalog /Version /2.0 /Pages ")
             .append(pagesObject).append(" 0 R /Metadata ").append(metadataObject)
             .append(" 0 R /ViewerPreferences << /DisplayDocTitle true >>");
+        if (compression.brotli() || importers.keySet().stream().anyMatch(NativePdfParser::usesBrotli)) {
+            catalog.append(" /Extensions << /PDFa << /Type /DeveloperExtensions /BaseVersion /2.0 /ExtensionLevel 1")
+                .append(" /ExtensionRevision ").append(literalString("2026"))
+                .append(" /URL ").append(literalString("https://pdfa.org/resource/extension-brotli")).append(" >> >>");
+        }
         if (!document.language().isEmpty()) {
             catalog.append(" /Lang ").append(literalString(document.language()));
         }
@@ -766,11 +782,11 @@ final class NativePdfWriter {
 
     private byte[] stream(String dictionary, byte[] bytes, boolean compress, String explicitFilter,
                           boolean applyEncryption) {
-        var payload = compress ? deflate(bytes) : bytes;
+        var payload = compress ? compress(bytes) : bytes;
         if (applyEncryption && encryption != null) {
             payload = encryption.encrypt(payload);
         }
-        var filter = compress ? "/FlateDecode" : explicitFilter;
+        var filter = compress ? (compression.brotli() ? "/BrotliDecode" : "/FlateDecode") : explicitFilter;
         var header = new StringBuilder("<< ").append(dictionary);
         if (filter != null) {
             header.append(" /Filter ").append(filter);
@@ -785,6 +801,10 @@ final class NativePdfWriter {
             throw new AssertionError(impossible);
         }
         return result.toByteArray();
+    }
+
+    private byte[] compress(byte[] bytes) {
+        return compression.brotli() ? compression.brotliEncode(bytes) : deflate(bytes);
     }
 
     private byte[] deflate(byte[] bytes) {
@@ -1281,6 +1301,8 @@ final class NativePdfWriter {
         private final boolean deduplicateImagesLosslessly;
         private final boolean deduplicateFontProgramsLosslessly;
         private final int compressionLevel;
+        private final Compression compression;
+        private final CosDictionary catalog;
 
         CanonicalImportContext(NativePdfParser source, ObjectStore target,
                                IdentityHashMap<CosValue.CosStream, CosValue.CosStream> replacements,
@@ -1288,7 +1310,7 @@ final class NativePdfWriter {
                                boolean deduplicateFontProgramsLosslessly,
                                boolean removeTrueTypeHinting,
                                boolean removeUnusedGlyphs,
-                               int compressionLevel) {
+                               Compression compression, CosDictionary catalog) {
             this.source = source;
             this.target = target;
             this.replacements = replacements;
@@ -1308,7 +1330,9 @@ final class NativePdfWriter {
                     }
                 }
             }
-            this.compressionLevel = compressionLevel;
+            this.compression = compression;
+            this.compressionLevel = compression.deflateLevel();
+            this.catalog = catalog;
         }
 
         int importReference(CosValue.CosReference reference) {
@@ -1316,7 +1340,7 @@ final class NativePdfWriter {
             if (existing != null) {
                 return existing;
             }
-            var value = source.resolve(reference);
+            var value = reference.equals(source.catalogReference()) ? catalog : source.resolve(reference);
             if (deduplicateImagesLosslessly && value instanceof CosValue.CosStream stream
                 && source.safeToDeduplicateImage(stream)) {
                 var body = rawStream(replacement(stream));
@@ -1379,7 +1403,7 @@ final class NativePdfWriter {
                 }
             }
             if (replacement == null && compressStreamsLosslessly) {
-                replacement = source.compressStreamLosslessly(stream, compressionLevel);
+                replacement = source.compressStreamLosslessly(stream, compression);
                 if (replacement != stream) {
                     replacements.put(stream, replacement);
                 }

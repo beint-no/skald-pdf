@@ -16,8 +16,9 @@ RGB bytes have SHA-256
 `c7dd2e8943b3727e303c3f54907db88033ec9b7120eec48c399571401a2e4b72`.
 The test independently checks the Flate samples with PDFBox. For Brotli it checks
 safe refusal to decode/recompress, unchanged encoded bytes and predictor
-parameters through a Skald rewrite, and unchanged invoice text. **Skald core does
-not decode or emit Brotli streams.** The Brotli variants declare the PDFa Brotli
+parameters through a Skald rewrite, and unchanged invoice text. **Core alone
+keeps Brotli opaque; the optional `skald-brotli` module adds decoding and opt-in
+encoding.** The Brotli variants declare the PDFa Brotli
 extension; the control needs no such extension.
 
 ## Provenance and reuse
@@ -58,5 +59,6 @@ layout or require private ReAI code. From the repository root:
 ```
 
 These files can also validate predictor decoding in other libraries: both Brotli
-variants must decode to the same RGB bytes as the Flate control. Skald's current
-Brotli tests deliberately check opaque preservation instead of decoding.
+variants must decode to the same RGB bytes as the Flate control. The core-only
+tests check opaque preservation; `skald-brotli` additionally checks exact decoded
+samples and rewriting with both output codecs.

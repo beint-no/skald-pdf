@@ -189,7 +189,7 @@ public final class PdfDocument implements AutoCloseable {
     /**
      * Requests exact re-encoding of eligible imported streams during a
      * canonical rewrite. Stream dictionaries and decoded bytes are preserved;
-     * the writer keeps the original representation unless Deflate is smaller.
+     * the writer keeps the original representation unless the selected codec is smaller.
      */
     public PdfDocument compressImportedStreamsLosslessly() {
         ensureOpen();

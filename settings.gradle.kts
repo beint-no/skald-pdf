@@ -2,6 +2,7 @@ rootProject.name = "skald-pdf"
 
 include(
     "skald-core",
+    "skald-brotli",
     "skald-fonts",
     "skald-layout",
     "skald-barcode",
