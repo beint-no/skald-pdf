@@ -27,6 +27,22 @@ public final class RasterImages {
     private RasterImages() {
     }
 
+    /** Returns unpacked samples without inserting an intermediate JPEG encoding. */
+    public static ImageData decodeSamples(ImageData source) {
+        Objects.requireNonNull(source, "source");
+        if (source.jpegXl()) return org.skaldpdf.image.JpegXlCodecs.decode(source.samples());
+        if (!source.jpeg()) return source;
+        var bitmap = toBufferedImage(source);
+        if (source.components() == 1 && bitmap.getRaster().getNumBands() == 1) {
+            var samples = new byte[source.width() * source.height()];
+            for (int y = 0; y < source.height(); y++) for (int x = 0; x < source.width(); x++) {
+                samples[y * source.width() + x] = (byte) bitmap.getRaster().getSample(x, y, 0);
+            }
+            return ImageData.fromGray(source.width(), source.height(), samples);
+        }
+        return fromBufferedImage(bitmap);
+    }
+
     public static ImageData decode(byte[] bytes) {
         Objects.requireNonNull(bytes, "bytes");
         if (bytes.length == 0) {
@@ -152,6 +168,7 @@ public final class RasterImages {
     }
 
     static BufferedImage toBufferedImage(ImageData source) {
+        if (source.jpegXl()) return toBufferedImage(org.skaldpdf.image.JpegXlCodecs.decode(source.samples()));
         if (source.jpeg()) {
             try {
                 var image = readInMemory(source.samples());

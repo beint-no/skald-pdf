@@ -52,6 +52,7 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-brotli` | `org.skaldpdf.brotli` | Optional native Brotli PDF stream codec; explicit opt-in output |
 | `skald-image` | `org.skaldpdf.codec` | Optional JDK raster processing and FFM TurboJPEG / libheif / libjxl ingest |
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
+| `skald-optimize-jxl` | `org.skaldpdf.optimize.jxl` | Explicitly experimental JPEG XL image replacement; see [readiness and quality settings](docs/jpeg-xl.md) |
 | `skald-optimize-jpegli` | `org.skaldpdf.optimize.jpegli` | Optional Glimt/JPEGli encoder for received-PDF optimization |
 
 Engine modules depend on core. Layout and human-readable barcodes also use the
@@ -76,19 +77,19 @@ out of production modules. Published APIs are JSpecify `@NullMarked`: Kotlin
 and other consumers see non-null types by default, and `@Nullable` only where
 absence is a real value (logo, bank, due date, encryption). Optional text is
 empty, never null. Older Skald revisions remain the tail for older JDKs.
-Release `1.16.2` is the current line:
+Release `1.21.0` is the current line:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.16.2")
-    implementation("no.beint.skaldpdf:skald-fonts:1.16.2")         // direct SkaldSans API access
-    implementation("no.beint.skaldpdf:skald-barcode:1.16.2")        // optional symbols
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.16.2")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.16.2") // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.16.2")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.16.2")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.16.2")      // optional received-PDF recompress
-    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.16.2") // optional bundled JPEGli encoder
+    implementation("no.beint.skaldpdf:skald-layout:1.21.0")
+    implementation("no.beint.skaldpdf:skald-fonts:1.21.0")         // direct SkaldSans API access
+    implementation("no.beint.skaldpdf:skald-barcode:1.21.0")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.21.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.21.0") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.21.0")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.21.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.21.0")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.21.0") // optional bundled JPEGli encoder
 }
 ```
 

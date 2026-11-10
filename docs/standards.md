@@ -52,8 +52,9 @@ see [configuration, bounds and compatibility](brotli.md).
 
 JPEG XL (ISO/IEC 18181) is the PDF Association's preferred HDR candidate for a
 *future* PDF edition (Wyatt, PDF Days Europe 2025). It is not in ISO 32000-2:2020.
-Skald decodes JXL as input and embeds `DCTDecode`. It will not write a
-`/JXLDecode` stream until the ISO filter exists and viewers implement it.
+Normal settings convert JXL input to `DCTDecode`. The separately gated
+[experimental JXL adapter](jpeg-xl.md) can emit provisional `/JXLDecode` output
+for interop work; that is not finalized ISO or browser support.
 
 The PDF specification itself remains authoritative. A validator is a second
 implementation and not a substitute for standards review.

@@ -9,7 +9,7 @@ import java.util.Objects;
  *
  * <p>Missing libraries are not fatal: {@link #jpegAvailable()} / {@link #heifAvailable()}
  * / {@link #jpegXlAvailable()} report what this machine can do. Core PDF
- * generation never requires this module. JPEG XL is decode-only ingest —
+ * generation never requires this module. JPEG XL photo ingest converts to JPEG; explicit JXL encoding is also available —
  * prepared output is always a DCT JPEG that current PDF viewers can display.
  */
 public final class NativeImages {
@@ -23,6 +23,15 @@ public final class NativeImages {
     public static boolean heifAvailable() {
         return Heif.AVAILABLE;
     }
+
+    /** Encodes opaque RGB8/Gray8 samples or a reversible JPEG for experimental PDF use. */
+    public static org.skaldpdf.image.ImageData jpegXlEncode(
+        org.skaldpdf.image.ImageData image, JpegXlOptions options) {
+        return JpegXlEncoder.encode(image, options);
+    }
+
+    /** Whether libjxl 0.11+ is available for validated experimental encoding/PDF use. */
+    public static boolean jpegXlEncodingAvailable() { return JpegXl.pdfAvailable(); }
 
     public static boolean jpegXlAvailable() {
         return JpegXl.AVAILABLE;

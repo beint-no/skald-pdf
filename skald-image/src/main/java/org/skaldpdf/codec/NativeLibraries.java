@@ -38,6 +38,7 @@ final class NativeLibraries {
     }
 
     static Optional<SymbolLookup> jxl() {
+        if (java.lang.foreign.ValueLayout.ADDRESS.byteSize() != Long.BYTES) return Optional.empty();
         return load("SKALD_JXL", List.of(
             "/opt/homebrew/opt/jpeg-xl/lib/libjxl.dylib",
             "/opt/homebrew/lib/libjxl.dylib",
@@ -52,31 +53,36 @@ final class NativeLibraries {
         ), "jxl");
     }
 
+    private static Optional<SymbolLookup> safeLookup(Path path) {
+        try { return Optional.of(SymbolLookup.libraryLookup(path, ARENA)); }
+        catch (IllegalArgumentException | IllegalCallerException | UnsatisfiedLinkError unavailable) { return Optional.empty(); }
+    }
+
     private static Optional<SymbolLookup> load(String envName, List<String> paths, String libraryName) {
         var override = System.getenv(envName);
         if (override != null && !override.isBlank()) {
             var path = Path.of(override);
             if (Files.isRegularFile(path)) {
-                return Optional.of(SymbolLookup.libraryLookup(path, ARENA));
+                return safeLookup(path);
             }
             return Optional.empty();
         }
         for (var candidate : paths) {
             var path = Path.of(candidate);
             if (Files.isRegularFile(path)) {
-                return Optional.of(SymbolLookup.libraryLookup(path, ARENA));
+                return safeLookup(path);
             }
         }
         try {
             return Optional.of(SymbolLookup.libraryLookup(libraryName, ARENA));
-        } catch (IllegalArgumentException ignored) {
+        } catch (IllegalArgumentException | IllegalCallerException | UnsatisfiedLinkError ignored) {
             var os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
             var prefix = os.contains("win") ? "" : "lib";
             var suffix = os.contains("mac") || os.contains("darwin") ? ".dylib"
                 : os.contains("win") ? ".dll" : ".so";
             try {
                 return Optional.of(SymbolLookup.libraryLookup(prefix + libraryName + suffix, ARENA));
-            } catch (IllegalArgumentException alsoIgnored) {
+            } catch (IllegalArgumentException | IllegalCallerException | UnsatisfiedLinkError alsoIgnored) {
                 return Optional.empty();
             }
         }

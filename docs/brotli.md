@@ -3,7 +3,7 @@
 Skald supports the PDF Association's [Brotli extension, EXTN-BROTLI-1 v1.3](https://pdfa.org/resource/extension-brotli/).
 Reading uses an optional codec service; writing requires an explicit Brotli
 compression policy. Adding the module never changes the default output format.
-This implementation is on `main` and will be available in the next release.
+Available since 1.21.0.
 
 ## Install
 

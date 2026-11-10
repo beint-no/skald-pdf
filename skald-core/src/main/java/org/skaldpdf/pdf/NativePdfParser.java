@@ -528,7 +528,17 @@ final class NativePdfParser {
         require(bits == 8, "Only 8-bit images can be decoded");
         var filters = filterNames(dictionary.get("Filter"));
         var jpeg = !filters.isEmpty() && Set.of("DCTDecode", "DCT").contains(filters.getLast());
-        var data = decodeFilters(stream, "image", jpeg);
+        var jxl = !filters.isEmpty() && filters.getLast().equals("JXLDecode");
+        var data = decodeFilters(stream, "image", jpeg || jxl);
+        if (jxl) {
+            var decoded = org.skaldpdf.image.JpegXlCodecs.decode(data);
+            require(decoded.width() == width && decoded.height() == height, "JPEG XL dimensions disagree with image dictionary");
+            var colorSpace = colorSpaceName(dictionary.get("ColorSpace"));
+            require(colorSpace.equals("DeviceRGB") && decoded.components() == 3
+                || colorSpace.equals("DeviceGray") && decoded.components() == 1,
+                "Experimental JPEG XL supports explicit DeviceRGB/DeviceGray only");
+            return decoded;
+        }
         if (jpeg) {
             return ImageData.fromJpeg(data);
         }
@@ -655,6 +665,12 @@ final class NativePdfParser {
     }
 
     private static boolean supportedImageFilters(List<String> filters, boolean jpeg) {
+        if (!filters.isEmpty() && filters.getLast().equals("JXLDecode")) {
+            return org.skaldpdf.image.JpegXlCodecs.available()
+                && filters.subList(0, filters.size() - 1).stream().allMatch(filter ->
+                    Set.of("FlateDecode", "Fl", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85").contains(filter)
+                        || filter.equals("BrotliDecode") && BrotliCodecs.canDecode());
+        }
         if (!jpeg) {
             return !filters.isEmpty() && filters.stream().allMatch(filter ->
                 Set.of("FlateDecode", "Fl", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85").contains(filter)
@@ -1265,8 +1281,8 @@ final class NativePdfParser {
                     BrotliCodecs.decode(result, MAXIMUM_DECODED_STRUCTURAL_BYTES), parameters, description);
                 case "ASCIIHexDecode", "AHx" -> asciiHex(result, description);
                 case "ASCII85Decode", "A85" -> ascii85(result, description);
-                case "DCTDecode", "DCT" -> {
-                    require(allowJpeg && index == filters.size() - 1, "Unsupported DCT filter in " + description);
+                case "DCTDecode", "DCT", "JXLDecode" -> {
+                    require(allowJpeg && index == filters.size() - 1, "Unsupported terminal image filter in " + description);
                     yield result;
                 }
                 default -> throw new IllegalArgumentException(

@@ -87,6 +87,11 @@ public final class EmbeddedImage {
         return bitsPerComponent;
     }
 
+    /** Whether this is a provisional /JXLDecode stream. */
+    public boolean jpegXl() {
+        return filter.endsWith("JXLDecode");
+    }
+
     public boolean jpeg() {
         return jpeg;
     }

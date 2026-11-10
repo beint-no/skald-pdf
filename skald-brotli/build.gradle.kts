@@ -37,3 +37,13 @@ val testWithoutNativeLibraries = tasks.register<Test>("testWithoutNativeLibrarie
 tasks.named("check") {
     dependsOn(testWithoutNativeLibraries)
 }
+
+// Run :skald-layout:test first to generate the representative public corpus.
+tasks.register<JavaExec>("compressionBenchmark") {
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("org.skaldpdf.brotli.PdfCompressionBenchmark")
+    workingDir = rootProject.projectDir
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-Xmx2g")
+    if (providers.gradleProperty("benchmarkCorpus").isPresent) args(providers.gradleProperty("benchmarkCorpus").get())
+}

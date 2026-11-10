@@ -38,7 +38,7 @@
 | Multi-script fallback | a document-level fallback stack exists; script-aware shaping is still deferred |
 | CFF/OTF embedding | TrueType/OpenType glyf faces only until a dedicated CFF reader exists |
 | Brotli PDF streams | optional `skald-brotli`: bounded decode, explicit opt-in encode, TIFF/PNG predictors and large-window decode; defaults remain Flate. See [Brotli](brotli.md) |
-| Emitting JPEG XL in PDF | not in ISO 32000-2; no interoperable viewer filter yet. Decode-as-ingest is shipped |
+| Emitting JPEG XL in PDF | explicitly experimental `/JXLDecode`, quality/effort settings and uploaded-image replacement via `skald-optimize-jxl`; [not finalized viewer/standards support](jpeg-xl.md) |
 | Lossy image optimization | quality and DPI policy belongs at the application boundary (`OptimizeOptions`) |
 
 Priorities and the boundary between planned modules are documented in the

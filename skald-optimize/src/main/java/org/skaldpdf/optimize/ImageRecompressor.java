@@ -11,6 +11,9 @@ import java.util.Optional;
  */
 @FunctionalInterface
 public interface ImageRecompressor {
-    /** Returns an opaque one- or three-component JPEG, or empty to keep the original stream. */
+    /** Encoding produced by this adapter; existing JPEG adapters need no changes. */
+    default org.skaldpdf.image.ImageEncoding encoding() { return org.skaldpdf.image.ImageEncoding.JPEG; }
+
+    /** Returns an opaque one- or three-component encoded image, or empty to keep the original stream. */
     Optional<ImageData> recompress(EmbeddedImage image, OptimizeOptions options);
 }

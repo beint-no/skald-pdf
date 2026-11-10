@@ -6,7 +6,7 @@ and **libjxl** with the JDK FFM API. It is not on the core classpath. Invoices,
 stickers, signatures, and callers that provide prepared `ImageData` work without it.
 
 ```kotlin
-implementation("no.beint.skaldpdf:skald-image:1.16.2")
+implementation("no.beint.skaldpdf:skald-image:1.21.0")
 ```
 
 ```java
@@ -27,7 +27,8 @@ On the class path use `--enable-native-access=ALL-UNNAMED`.
 ## What it is for
 
 - HEIC/AVIF from phones → packed RGB → JPEG `ImageData`
-- JPEG XL photos → packed RGB → JPEG `ImageData` (decode only)
+- JPEG XL photo ingest → packed RGB → conventional JPEG `ImageData`
+- Explicit JPEG XL encoding → experimental PDF image data, with distance/effort controls
 - Faster / smaller JPEG encode than `ImageIO` for noisy photos
 - Explicit `prepare(bytes, PrepareOptions.photos())` so quality and max edge
   are a policy, not a surprise
@@ -41,16 +42,11 @@ for a future PDF specification. There is no published filter name that
 Acrobat, Preview, or PDFBox must implement. Experimental PDFium work uses a
 placeholder `/JXLDecode` that may change.
 
-Therefore Skald:
-
-- **does** decode JPEG XL as photo ingest, the same way it decodes HEIC;
-- **does not** emit JPEG XL inside a PDF 2.0 file;
-- **will** add a writer filter only after ISO publishes one and the major
-  viewers ship it.
-
-PDF/A and PDF/X still require converting JXL to an existing filter
-(`DCTDecode` or Flate). `NativeImages.prepare` always returns a JPEG
-`ImageData`.
+Normal Skald settings still decode JPEG XL input and embed conventional JPEG.
+Since 1.21.0, explicitly experimental encoding and received-PDF optimization
+are available through [the JXL adapter](jpeg-xl.md). The provisional PDF filter
+is gated at both the optimizer and writer. It is not finalized standards support.
+PDF/A and PDF/X still require an existing supported image filter.
 
 ## What it is not
 

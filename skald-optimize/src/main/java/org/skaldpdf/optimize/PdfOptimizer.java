@@ -19,8 +19,8 @@ import java.util.Set;
  * ({@link RasterImages#scaleToFit}, {@code NativeImages.prepare}) stay on the
  * create path; this module is for files that already arrived as PDF.
  *
- * <p>JPEG XL is not written into the file. ISO 32000-2 has no interoperable
- * JXL filter, so replacements are DCT or Flate only.
+ * <p>Default output remains conventional JPEG/Flate. Provisional JPEG XL output
+ * requires an explicit experimental policy and a matching encoder adapter.
  *
  * <p>The safe entry points return the original array when parsing, image
  * conversion, post-write verification, or configured savings gates reject a
@@ -57,9 +57,15 @@ public final class PdfOptimizer {
         Objects.requireNonNull(pdf, "pdf");
         Objects.requireNonNull(options, "options");
         Objects.requireNonNull(recompressor, "recompressor");
+        if (recompressor.encoding() == org.skaldpdf.image.ImageEncoding.EXPERIMENTAL_JPEG_XL
+            && !options.experimentalJpegXl()) {
+            throw new IllegalArgumentException("JPEG XL optimization requires experimentalJpegXl(true)");
+        }
         var output = new ByteArrayOutputStream(pdf.length);
         try {
-            var writer = new PdfWriter(output, new WriterProperties(options.streamCompression()));
+            var properties = new WriterProperties(options.streamCompression());
+            if (options.experimentalJpegXl()) properties = properties.withExperimentalJpegXl();
+            var writer = new PdfWriter(output, properties);
             try (var document = new PdfDocument(new PdfReader(pdf), writer)) {
                 var constraints = document.canonicalRewriteConstraints();
                 if (!(constraints.isEmpty() || !options.preserveConformanceProfiles()
@@ -110,13 +116,14 @@ public final class PdfOptimizer {
         EmbeddedImage image, OptimizeOptions options, ImageRecompressor recompressor
     ) {
         var pixels = (long) image.width() * image.height();
-        if (!image.safeToRecompress() || pixels <= 0 || pixels > options.maximumImagePixels()
+        if (image.jpegXl() || !image.safeToRecompress() || pixels <= 0 || pixels > options.maximumImagePixels()
             || image.jpeg() && !options.recompressJpeg()
             || !image.jpeg() && (!options.convertLosslessRaster()
                 || image.encodedLength() < options.minimumLosslessBytes())) {
             return null;
         }
-        if (image.jpeg() && OptimizedJpeg.alreadySatisfies(
+        if (recompressor.encoding() == org.skaldpdf.image.ImageEncoding.JPEG
+            && image.jpeg() && OptimizedJpeg.alreadySatisfies(
             image.encodedBytes(), options, image.width(), image.height(), image.requiresOriginalDimensions())) {
             return null;
         }
@@ -126,14 +133,14 @@ public final class PdfOptimizer {
         } catch (RuntimeException unsupported) {
             return null;
         }
-        if (data == null || !data.jpeg() || data.alpha() != null
+        if (data == null || data.encoding() != recompressor.encoding() || data.alpha() != null
             || data.components() != 1 && data.components() != 3
             || image.requiresOriginalDimensions()
                 && (data.width() != image.width() || data.height() != image.height())
         ) {
             return null;
         }
-        data = OptimizedJpeg.mark(data, options,
+        if (data.jpeg()) data = OptimizedJpeg.mark(data, options,
             image.jpeg() ? options.jpegQuality() : options.losslessQuality());
         if (!options.worthReplacing(image.encodedLength(), data.samples().length)) {
             return null;

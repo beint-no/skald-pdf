@@ -78,8 +78,8 @@ qualified certificates. See [signing.md](signing.md).
 `ImageRecompressor` for approved replacements. The canonical core writer copies
 the complete reachable COS graph, preserves unknown dictionaries and streams,
 packs small objects, reparses its output, and compares an object-number-
-independent SHA-256 semantic digest before returning it. JPEG XL is never
-written into the file.
+independent SHA-256 semantic digest before returning it. Experimental JPEG XL replacement is separately gated through
+[`skald-optimize-jxl`](jpeg-xl.md); conventional output defaults remain unchanged.
 
 The default recompressor uses JDK ImageIO. `skald-optimize-jpegli` is a separate
 adapter around Glimt so PDFBox and native codec concerns never enter core.

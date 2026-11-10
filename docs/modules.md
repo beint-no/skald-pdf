@@ -35,6 +35,7 @@ These are the building blocks. They have stable, spec-shaped jobs.
 | `skald-brotli` | Optional native Brotli service for core PDF streams; no `java.desktop` dependency |
 | `skald-image` | Optional JDK raster processing and native photo ingest; requires `java.desktop` |
 | `skald-optimize` | Recompress images already inside a received PDF using `skald-image` |
+| `skald-optimize-jxl` | Explicitly experimental JPEG XL adapter; host libjxl, quality controls and savings gates |
 | `skald-optimize-jpegli` | Plug Glimt's bundled JPEGli encoder into `skald-optimize` |
 
 The JPEGli adapter is the only engine artifact with a non-Skald runtime module:
