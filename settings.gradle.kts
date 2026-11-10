@@ -9,6 +9,7 @@ include(
     "skald-sign",
     "skald-image",
     "skald-optimize",
+    "skald-optimize-jxl",
     "skald-optimize-jpegli",
     "skald-label-sticker",
     "skald-label-shipping",

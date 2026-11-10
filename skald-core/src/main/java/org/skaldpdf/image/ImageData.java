@@ -17,7 +17,7 @@ public final class ImageData implements ImageSource {
     private final int width;
     private final int height;
     private final int components;
-    private final boolean jpeg;
+    private final ImageEncoding encoding;
 
     /** Creates a pass-through DCT image after validating its header and safe dimensions. */
     public static ImageData fromJpeg(byte[] bytes) {
@@ -37,6 +37,41 @@ public final class ImageData implements ImageSource {
             throw new IllegalArgumentException("JPEG must use DeviceGray or DeviceRGB samples");
         }
         return new ImageData(bytes.clone(), null, header.width, header.height, header.components, true);
+    }
+
+    /**
+     * Validates a static opaque RGB8/Gray8 JPEG XL image through an optional codec.
+     * Writing it requires an explicit experimental writer policy. /JXLDecode is provisional.
+     */
+    public static ImageData fromExperimentalJpegXl(byte[] bytes) {
+        Objects.requireNonNull(bytes, "bytes");
+        if (bytes.length == 0 || bytes.length > MAXIMUM_ENCODED_BYTES) {
+            throw new IllegalArgumentException("JPEG XL encoded-size limit exceeded");
+        }
+        var decoded = JpegXlCodecs.decode(bytes);
+        if (decoded.encoding() != ImageEncoding.RAW || decoded.alpha() != null) {
+            throw new IllegalArgumentException("JPEG XL provider must return opaque raster samples");
+        }
+        return new ImageData(bytes, decoded.width(), decoded.height(), decoded.components());
+    }
+
+    private ImageData(byte[] bytes, int width, int height, int components) {
+        this.samples = bytes.clone();
+        this.alpha = null;
+        this.width = width;
+        this.height = height;
+        this.components = components;
+        this.encoding = ImageEncoding.EXPERIMENTAL_JPEG_XL;
+    }
+
+    /** The representation of samples returned by this image. */
+    public ImageEncoding encoding() {
+        return encoding;
+    }
+
+    /** Whether samples contain an experimental JPEG XL codestream. */
+    public boolean jpegXl() {
+        return encoding == ImageEncoding.EXPERIMENTAL_JPEG_XL;
     }
 
     private static ImageHeader jpegHeader(byte[] bytes) {
@@ -139,7 +174,7 @@ public final class ImageData implements ImageSource {
         this.width = width;
         this.height = height;
         this.components = components;
-        this.jpeg = jpeg;
+        this.encoding = jpeg ? ImageEncoding.JPEG : ImageEncoding.RAW;
     }
 
     public byte[] samples() {
@@ -163,7 +198,7 @@ public final class ImageData implements ImageSource {
     }
 
     public boolean jpeg() {
-        return jpeg;
+        return encoding == ImageEncoding.JPEG;
     }
 
     @Override

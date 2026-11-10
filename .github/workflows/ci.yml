@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -27,7 +27,7 @@ jobs:
       - name: Install PDF validator and optional codecs
         run: |
           sudo apt-get update
-          sudo apt-get install --yes qpdf libjxl-dev libbrotli-dev brotli
+          sudo apt-get install --yes qpdf libjxl-dev libjxl-tools libbrotli-dev brotli
       - name: Build, test, and verify Maven publications
         env:
           SKALD_JXL: /usr/lib/x86_64-linux-gnu/libjxl.so
@@ -55,3 +55,11 @@ jobs:
           path: build/brotli-pdfs/
           if-no-files-found: warn
           retention-days: 14
+      - name: Upload experimental JPEG XL viewer corpus
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: experimental-jpeg-xl-pdfs
+          path: build/jpeg-xl-pdfs/
+          if-no-files-found: warn
+          retention-days: 1

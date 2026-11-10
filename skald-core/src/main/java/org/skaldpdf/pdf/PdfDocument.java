@@ -363,7 +363,7 @@ public final class PdfDocument implements AutoCloseable {
             }
             if (writer != null) {
                 try (writer) {
-                    new NativePdfWriter(writer.properties()).write(this, writer.output());
+                    new NativePdfWriter(writer.properties(), writer.experimentalJpegXl()).write(this, writer.output());
                 }
             }
         } finally {

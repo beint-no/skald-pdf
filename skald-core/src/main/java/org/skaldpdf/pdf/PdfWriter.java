@@ -10,6 +10,7 @@ public final class PdfWriter implements AutoCloseable {
     private final OutputStream output;
     private final WriterProperties properties;
     private final boolean closeOutput;
+    private final boolean experimentalJpegXl;
 
     public PdfWriter(OutputStream output) {
         this(output, new WriterProperties(), false);
@@ -28,10 +29,26 @@ public final class PdfWriter implements AutoCloseable {
     }
 
     private PdfWriter(OutputStream output, WriterProperties properties, boolean closeOutput) {
+        this(output, properties, closeOutput, false);
+    }
+
+    private PdfWriter(OutputStream output, WriterProperties properties, boolean closeOutput, boolean experimentalJpegXl) {
+        this.experimentalJpegXl = experimentalJpegXl;
         this.output = Objects.requireNonNull(output, "output");
         this.properties = Objects.requireNonNull(properties, "properties");
         this.closeOutput = closeOutput;
     }
+
+    /**
+     * Returns a writer over the same output with provisional /JXLDecode explicitly enabled.
+     * Use the returned writer as the resource owner instead of closing both instances.
+     * WriterProperties retains its existing two-component record contract.
+     */
+    public PdfWriter withExperimentalJpegXl() {
+        return new PdfWriter(output, properties, closeOutput, true);
+    }
+
+    boolean experimentalJpegXl() { return experimentalJpegXl; }
 
     OutputStream output() {
         return output;

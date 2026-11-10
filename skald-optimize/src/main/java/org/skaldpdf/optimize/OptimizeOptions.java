@@ -6,6 +6,7 @@ import java.util.Objects;
 
 /** Immutable policy for image recompression inside received PDFs. */
 public final class OptimizeOptions {
+    private final boolean experimentalJpegXl;
     private final Compression streamCompression;
     private final int maxEdge;
     private final float jpegQuality;
@@ -36,6 +37,7 @@ public final class OptimizeOptions {
     }
 
     private OptimizeOptions(Builder builder) {
+        experimentalJpegXl = builder.experimentalJpegXl;
         streamCompression = builder.streamCompression;
         maxEdge = builder.maxEdge;
         jpegQuality = builder.jpegQuality;
@@ -73,6 +75,9 @@ public final class OptimizeOptions {
     public static Builder builder() {
         return new Builder();
     }
+
+    /** Whether provisional JPEG XL image output is explicitly permitted. */
+    public boolean experimentalJpegXl() { return experimentalJpegXl; }
 
     /** Codec for new and eligible losslessly recompressed streams; Flate MAXIMUM by default. */
     public Compression streamCompression() {
@@ -176,7 +181,7 @@ public final class OptimizeOptions {
         if (value == maxEdge) {
             return this;
         }
-        var builder = builder().streamCompression(streamCompression).maxEdge(value).jpegQuality(jpegQuality).losslessQuality(losslessQuality)
+        var builder = builder().experimentalJpegXl(experimentalJpegXl).streamCompression(streamCompression).maxEdge(value).jpegQuality(jpegQuality).losslessQuality(losslessQuality)
             .recompressJpeg(recompressJpeg).convertLosslessRaster(convertLosslessRaster)
             .compressStreamsLosslessly(compressStreamsLosslessly)
             .deduplicateImagesLosslessly(deduplicateImagesLosslessly)
@@ -230,6 +235,10 @@ public final class OptimizeOptions {
     }
 
     public static final class Builder {
+        private boolean experimentalJpegXl;
+        /** Explicitly permits provisional JPEG XL PDF output. */
+        public Builder experimentalJpegXl(boolean value) { experimentalJpegXl = value; return this; }
+
         private Compression streamCompression = Compression.MAXIMUM;
         private int maxEdge = 2400;
         private float jpegQuality = 0.75f;

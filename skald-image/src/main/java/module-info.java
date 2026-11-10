@@ -8,4 +8,5 @@ module org.skaldpdf.codec {
     requires java.desktop;
 
     exports org.skaldpdf.codec;
+    provides org.skaldpdf.pdf.spi.JpegXlCodec with org.skaldpdf.codec.PdfJpegXlCodec;
 }

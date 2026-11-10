@@ -12,6 +12,7 @@ module org.skaldpdf.core {
     exports org.skaldpdf.pdf;
     exports org.skaldpdf.pdf.spi;
     uses org.skaldpdf.pdf.spi.BrotliCodec;
+    uses org.skaldpdf.pdf.spi.JpegXlCodec;
     exports org.skaldpdf.pdf.canvas;
     exports org.skaldpdf.pdf.extgstate;
     exports org.skaldpdf.pdf.merge;

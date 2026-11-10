@@ -34,7 +34,7 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.20.1").get()
+val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.21.0").get()
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-brotli" to "Skald Brotli",
@@ -43,6 +43,7 @@ val moduleTitles = mapOf(
     "skald-barcode" to "Skald Barcode",
     "skald-sign" to "Skald Sign",
     "skald-image" to "Skald Image",
+    "skald-optimize-jxl" to "Skald Experimental JPEG XL Optimizer",
     "skald-optimize" to "Skald Optimize",
     "skald-optimize-jpegli" to "Skald Optimize JPEGli",
     "skald-label-sticker" to "Skald Clothing Sticker",
@@ -61,6 +62,7 @@ val moduleDescriptions = mapOf(
     "skald-layout" to "Flow layout and high-level document API for Skald PDF",
     "skald-barcode" to "Immutable EAN-13, UPC-A, Code 128, GS1-128, and QR symbols for Skald PDF",
     "skald-sign" to "Optional PKCS#7/CMS PAdES-B-B sealing for Skald PDF documents",
+    "skald-optimize-jxl" to "Experimental JPEG XL encoding for received PDF images",
     "skald-image" to "Optional JDK and native decoding, scaling, and photo ingest for Skald PDF",
     "skald-optimize" to "Optional recompression of image XObjects already stored in a received PDF",
     "skald-optimize-jpegli" to "Optional JPEGli image encoder for Skald PDF optimization",

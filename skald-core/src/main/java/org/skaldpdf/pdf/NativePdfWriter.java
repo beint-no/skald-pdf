@@ -31,11 +31,17 @@ final class NativePdfWriter {
         .getBytes(StandardCharsets.ISO_8859_1);
     private final int compressionLevel;
     private final Compression compression;
+    private final boolean experimentalJpegXl;
     private final Revision6Encryption encryption;
 
     NativePdfWriter(WriterProperties properties) {
+        this(properties, false);
+    }
+
+    NativePdfWriter(WriterProperties properties, boolean experimentalJpegXl) {
         Objects.requireNonNull(properties, "properties");
         this.compression = properties.compression();
+        this.experimentalJpegXl = experimentalJpegXl;
         if (!compression.available()) {
             throw new IllegalStateException("Brotli writing requires skald-brotli, libbrotli and native-access permission");
         }
@@ -81,12 +87,18 @@ final class NativePdfWriter {
             replacements.put(original, softMaskReplacement(original, mask));
         });
         var objects = new ObjectStore();
-        if (compression.brotli() && source.canonicalRewriteConstraints()
+        if ((compression.brotli() || experimentalJpegXl) && source.canonicalRewriteConstraints()
             .contains(CanonicalRewriteConstraint.CONFORMANCE_PROFILE)) {
-            throw new IllegalArgumentException("Brotli output cannot retain an unvalidated PDF conformance profile");
+            throw new IllegalArgumentException("Extended output cannot retain an unvalidated PDF conformance profile");
         }
         var originalCatalog = (CosDictionary) source.resolve(source.catalogReference());
         var catalog = compression.brotli() ? BrotliExtensions.declare(source, originalCatalog) : originalCatalog;
+        if (experimentalJpegXl) {
+            var values = new LinkedHashMap<>(catalog.values());
+            values.put("SkaldExperimentalJXL", new CosBoolean(true));
+            values.put("Version", new CosName("2.0"));
+            catalog = new CosDictionary(values);
+        }
         var importer = new CanonicalImportContext(source, objects, replacements,
             compressStreamsLosslessly, deduplicateImagesLosslessly,
             deduplicateFontProgramsLosslessly, removeTrueTypeHinting, removeUnusedGlyphs, compression, catalog);
@@ -100,7 +112,7 @@ final class NativePdfWriter {
         });
         objects.trailerEntries = trailer.toString();
         var candidate = new ByteArrayOutputStream();
-        writeObjects(objects, candidate, compression.brotli() ? HEADER : source.canonicalHeader());
+        writeObjects(objects, candidate, compression.brotli() || experimentalJpegXl ? HEADER : source.canonicalHeader());
         var bytes = candidate.toByteArray();
         var expected = source.semanticDigest(replacements, importer.referenceAliases(), catalog);
         var actual = new NativePdfParser(bytes).semanticDigest(new IdentityHashMap<>());
@@ -110,12 +122,16 @@ final class NativePdfWriter {
         target.write(bytes);
     }
 
-    private static CosValue.CosStream replacementImage(CosValue.CosStream source,
+    private CosValue.CosStream replacementImage(CosValue.CosStream source,
                                                         org.skaldpdf.image.ImageData image,
                                                         int preservedColorComponents,
                                                         boolean preserveSoftMask) {
-        if (!image.jpeg() || image.alpha() != null || image.components() != 1 && image.components() != 3) {
-            throw new IllegalArgumentException("Imported image replacements must be opaque DeviceGray or DeviceRGB JPEGs");
+        requireImageEncoding(image);
+        if (image.jpegXl() && preservedColorComponents > 0) {
+            throw new IllegalArgumentException("Experimental JPEG XL replacement does not support ICCBased images");
+        }
+        if ((!image.jpeg() && !image.jpegXl()) || image.alpha() != null || image.components() != 1 && image.components() != 3) {
+            throw new IllegalArgumentException("Imported image replacements must be opaque DeviceGray/DeviceRGB encoded images");
         }
         if (preservedColorComponents > 0 && image.components() != preservedColorComponents) {
             throw new IllegalArgumentException("A replacement JPEG must preserve the ICC color component count");
@@ -133,7 +149,7 @@ final class NativePdfWriter {
             ? source.dictionary().get("ColorSpace")
             : new CosValue.CosName(image.components() == 1 ? "DeviceGray" : "DeviceRGB"));
         values.put("BitsPerComponent", new CosValue.CosNumber("8"));
-        values.put("Filter", new CosValue.CosName("DCTDecode"));
+        values.put("Filter", new CosValue.CosName(image.jpegXl() ? "JXLDecode" : "DCTDecode"));
         return new CosValue.CosStream(new CosValue.CosDictionary(values), image.samples());
     }
 
@@ -231,6 +247,7 @@ final class NativePdfWriter {
                 .append(" /ExtensionRevision ").append(literalString("2026"))
                 .append(" /URL ").append(literalString("https://pdfa.org/resource/extension-brotli")).append(" >> >>");
         }
+        if (experimentalJpegXl) catalog.append(" /SkaldExperimentalJXL true");
         if (!document.language().isEmpty()) {
             catalog.append(" /Lang ").append(literalString(document.language()));
         }
@@ -441,8 +458,9 @@ final class NativePdfWriter {
             dictionary.append(" /SMask ").append(softMask).append(" 0 R");
         }
         int object;
-        if (image.jpeg()) {
-            object = objects.add(stream(dictionary.toString(), image.samples(), false, "/DCTDecode"));
+        requireImageEncoding(image);
+        if (image.jpeg() || image.jpegXl()) {
+            object = objects.add(stream(dictionary.toString(), image.samples(), false, image.jpegXl() ? "/JXLDecode" : "/DCTDecode"));
         } else {
             dictionary.append(" /DecodeParms << /Predictor 15 /Colors ").append(image.components())
                 .append(" /BitsPerComponent 8 /Columns ").append(image.width()).append(" >>");
@@ -451,6 +469,12 @@ final class NativePdfWriter {
         }
         shared.put(image, object);
         return object;
+    }
+
+    private void requireImageEncoding(org.skaldpdf.image.ImageData image) {
+        if (image.jpegXl() && !experimentalJpegXl) {
+            throw new IllegalArgumentException("JPEG XL PDF output needs withExperimentalJpegXl(); /JXLDecode is provisional");
+        }
     }
 
     private static byte[] pngPredictor(byte[] samples, int width, int height, int components) {

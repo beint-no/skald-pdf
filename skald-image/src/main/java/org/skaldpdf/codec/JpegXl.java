@@ -11,11 +11,7 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.util.Objects;
 
-/**
- * Thin FFM binding to libjxl decode. JPEG XL is decoded to packed RGB so Skald
- * can embed a DCT JPEG. The bytes are never written into a PDF as {@code /JXLDecode}:
- * ISO 32000-2 has no such filter, and Acrobat / Preview / PDFBox cannot display it.
- */
+/** Bounded FFM decoding of JPEG XL; PDF decoding uses the restricted static RGB8/Gray8 path. */
 final class JpegXl {
     private static final int SUCCESS = 0;
     private static final int ERROR = 1;
@@ -33,7 +29,7 @@ final class JpegXl {
         ValueLayout.JAVA_LONG.withName("align")
     ).withName("JxlPixelFormat");
 
-    private static final Linker LINKER = Linker.nativeLinker();
+    private static final java.util.Optional<SymbolLookup> LIBRARY = NativeLibraries.jxl();
     private static final MethodHandle CREATE;
     private static final MethodHandle DESTROY;
     private static final MethodHandle SUBSCRIBE;
@@ -46,7 +42,7 @@ final class JpegXl {
     static final boolean AVAILABLE;
 
     static {
-        var lookup = NativeLibraries.jxl();
+        var lookup = LIBRARY;
         if (lookup.isEmpty()) {
             CREATE = DESTROY = SUBSCRIBE = SET_INPUT = CLOSE_INPUT = PROCESS = BASIC = BUFFER_SIZE = SET_BUFFER = null;
             AVAILABLE = false;
@@ -75,14 +71,33 @@ final class JpegXl {
     private JpegXl() {
     }
 
+    static boolean pdfAvailable() {
+        if (!AVAILABLE) return false;
+        try {
+            var lib = LIBRARY.orElseThrow();
+            var version = downcall(lib, "JxlDecoderVersion", FunctionDescriptor.of(ValueLayout.JAVA_INT));
+            return (int) version.invokeExact() >= 11000;
+        } catch (Throwable unavailable) { return false; }
+    }
+
     static Raster decode(byte[] jxl) {
+        var image = decodeImage(jxl, false);
+        return new Raster(image.width(), image.height(), image.samples());
+    }
+
+    static org.skaldpdf.image.ImageData decodePdf(byte[] jxl) {
+        return decodeImage(jxl, true);
+    }
+
+    private static org.skaldpdf.image.ImageData decodeImage(byte[] jxl, boolean pdf) {
         requireAvailable();
+        if (pdf && !pdfAvailable()) throw new IllegalStateException("Experimental JPEG XL PDF support requires libjxl 0.11+");
         Objects.requireNonNull(jxl, "jxl");
         if (jxl.length < 2) {
             throw new IllegalArgumentException("JPEG XL buffer is too small");
         }
-        try (var arena = Arena.ofConfined()) {
-            var decoder = (MemorySegment) CREATE.invokeExact(MemorySegment.NULL);
+        try (var arena = Arena.ofConfined(); var memory = new NativeAllocationBudget(arena, (pdf ? 512L : 1024L) * 1024 * 1024)) {
+            var decoder = (MemorySegment) CREATE.invokeExact(memory.manager());
             if (decoder.equals(MemorySegment.NULL)) {
                 throw new IllegalStateException("JxlDecoderCreate failed");
             }
@@ -106,6 +121,7 @@ final class JpegXl {
                 MemorySegment pixels = null;
                 var width = 0;
                 var height = 0;
+                var channels = 3;
                 var sizePtr = arena.allocate(ValueLayout.JAVA_LONG);
 
                 while (true) {
@@ -123,6 +139,16 @@ final class JpegXl {
                         check((int) BASIC.invokeExact(decoder, info));
                         width = info.get(ValueLayout.JAVA_INT, 4);
                         height = info.get(ValueLayout.JAVA_INT, 8);
+                        if (pdf) {
+                            channels = info.get(ValueLayout.JAVA_INT, 52);
+                            if ((long) width * height > 20_000_000L || info.get(ValueLayout.JAVA_INT, 48) != 1
+                                || info.get(ValueLayout.JAVA_INT, 12) != 8 || info.get(ValueLayout.JAVA_INT, 16) != 0
+                                || info.get(ValueLayout.JAVA_INT, 44) != 0 || info.get(ValueLayout.JAVA_INT, 56) != 0
+                                || channels != 1 && channels != 3) {
+                                throw new IllegalArgumentException("Experimental PDF JPEG XL requires static opaque RGB8/Gray8");
+                            }
+                            format.set(ValueLayout.JAVA_INT, 0, channels);
+                        }
                         if (width < 1 || height < 1) {
                             throw new IllegalStateException("JPEG XL image has no dimensions");
                         }
@@ -135,7 +161,7 @@ final class JpegXl {
                         }
                         check((int) BUFFER_SIZE.invokeExact(decoder, format, sizePtr));
                         var size = sizePtr.get(ValueLayout.JAVA_LONG, 0);
-                        var expected = (long) width * height * 3;
+                        var expected = (long) width * height * channels;
                         if (size < expected) {
                             throw new IllegalStateException("JPEG XL output buffer is smaller than RGB");
                         }
@@ -146,8 +172,28 @@ final class JpegXl {
                 if (pixels == null || width < 1 || height < 1) {
                     throw new IllegalStateException("JPEG XL decode produced no pixels");
                 }
-                var expected = Math.multiplyExact(Math.multiplyExact(width, height), 3);
-                return new Raster(width, height, pixels.asSlice(0, expected).toArray(ValueLayout.JAVA_BYTE));
+                if (pdf) {
+                    var profile = arena.allocate(256, 8);
+                    var lib = LIBRARY.orElseThrow();
+                    var color = downcall(lib, "JxlDecoderGetColorAsEncodedProfile", FunctionDescriptor.of(
+                        ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+                    for (int target = 0;
+                            target <= 1;
+                            target++) { // original and decoded pixel profiles
+                        check((int) color.invokeExact(decoder, target, profile));
+                        if (profile.get(ValueLayout.JAVA_INT, 0) != (channels == 1 ? 1 : 0)
+                                || profile.get(ValueLayout.JAVA_INT, 4) != 1
+                                || channels == 3 && profile.get(ValueLayout.JAVA_INT, 24) != 1
+                                || profile.get(ValueLayout.JAVA_INT, 80) != 13) {
+                            throw new IllegalArgumentException(
+                                    "Experimental PDF JPEG XL requires sRGB/D65 pixel encoding");
+                        }
+                    }
+                }
+                var expected = Math.multiplyExact(Math.multiplyExact(width, height), channels);
+                var samples = pixels.asSlice(0, expected).toArray(ValueLayout.JAVA_BYTE);
+                return channels == 1 ? org.skaldpdf.image.ImageData.fromGray(width, height, samples)
+                    : org.skaldpdf.image.ImageData.fromRgb(width, height, samples);
             } finally {
                 DESTROY.invokeExact(decoder);
             }
@@ -173,6 +219,6 @@ final class JpegXl {
     private static MethodHandle downcall(SymbolLookup lookup, String name, FunctionDescriptor descriptor) {
         var symbol = lookup.find(name)
             .orElseThrow(() -> new IllegalStateException("Missing libjxl symbol " + name));
-        return LINKER.downcallHandle(symbol, descriptor);
+        return Linker.nativeLinker().downcallHandle(symbol, descriptor);
     }
 }
