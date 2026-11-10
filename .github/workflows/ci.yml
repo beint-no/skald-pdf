@@ -24,11 +24,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-disabled: true
-      - name: Install independent PDF validator
+      - name: Install PDF validator and JPEG XL decoder
         run: |
           sudo apt-get update
-          sudo apt-get install --yes qpdf
+          sudo apt-get install --yes qpdf libjxl-dev
       - name: Build, test, and verify Maven publications
+        env:
+          SKALD_JXL: /usr/lib/x86_64-linux-gnu/libjxl.so
+          SKALD_REQUIRE_JXL_TESTS: "1"
         run: ./gradlew clean build publishToMavenLocal
       - name: Check PDF syntax
         run: find build/use-case-pdfs -maxdepth 1 -name '*.pdf' -print0 | xargs -0 -n1 qpdf --check
