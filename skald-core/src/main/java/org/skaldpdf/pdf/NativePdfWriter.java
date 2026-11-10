@@ -123,6 +123,9 @@ final class NativePdfWriter {
                                                         int preservedColorComponents,
                                                         boolean preserveSoftMask) {
         requireImageEncoding(image);
+        if (image.jpegXl() && preservedColorComponents > 0) {
+            throw new IllegalArgumentException("Experimental JPEG XL replacement does not support ICCBased images");
+        }
         if ((!image.jpeg() && !image.jpegXl()) || image.alpha() != null || image.components() != 1 && image.components() != 3) {
             throw new IllegalArgumentException("Imported image replacements must be opaque DeviceGray/DeviceRGB encoded images");
         }

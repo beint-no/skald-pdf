@@ -43,8 +43,12 @@ class JpegXlOptimizerTest {
     }
 
     static byte[] pdf(ImageData image, boolean experimental) {
+        return pdf(image, experimental, Compression.BALANCED);
+    }
+
+    static byte[] pdf(ImageData image, boolean experimental, Compression compression) {
         var output = new ByteArrayOutputStream();
-        var properties = WriterProperties.defaults();
+        var properties = new WriterProperties(compression);
         if (experimental) properties = properties.withExperimentalJpegXl();
         try (var document = new PdfDocument(new PdfWriter(output, properties))) {
             var page = document.addNewPage(new PageSize(160, 120));
@@ -121,7 +125,8 @@ class JpegXlOptimizerTest {
         var rgb = pixels(128, 128);
         var alpha = new byte[128 * 128];
         Arrays.fill(alpha, (byte) 128);
-        var source = pdf(ImageData.fromRgb(128, 128, rgb.samples(), alpha), false);
+        var source =
+                pdf(ImageData.fromRgb(128, 128, rgb.samples(), alpha), false, Compression.NONE);
         var output = PdfOptimizer.recompress(source, options(), new JpegXlImageRecompressor());
         try (var document = new PdfDocument(new PdfReader(output))) {
             var image = document.importedImages().getFirst();
@@ -141,7 +146,8 @@ class JpegXlOptimizerTest {
         var rgb = pixels(512, 512);
         var alpha = new byte[512 * 512];
         Arrays.fill(alpha, (byte) 128);
-        var source = pdf(ImageData.fromRgb(512, 512, rgb.samples(), alpha), false);
+        var source =
+                pdf(ImageData.fromRgb(512, 512, rgb.samples(), alpha), false, Compression.NONE);
         var options =
                 OptimizeOptions.builder()
                         .experimentalJpegXl(true)
@@ -227,6 +233,43 @@ class JpegXlOptimizerTest {
             assertArrayEquals(
                     b.getRGB(0, 0, 160, 120, null, 0, 160), a.getRGB(0, 0, 160, 120, null, 0, 160));
         }
+    }
+
+    @Test
+    void rejectsLowLevelIccReplacementInsteadOfEmittingAnUnsupportedColorContract()
+            throws Exception {
+        var pixels = pixels(128, 128);
+        var source = new ByteArrayOutputStream();
+        try (var document = org.apache.pdfbox.Loader.loadPDF(pdf(pixels, false))) {
+            var resources = document.getPage(0).getResources();
+            var image =
+                    (org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject)
+                            resources.getXObject(resources.getXObjectNames().iterator().next());
+            var profile = new org.apache.pdfbox.pdmodel.graphics.color.PDICCBased(document);
+            profile.getPDStream().getCOSObject().setInt(org.apache.pdfbox.cos.COSName.N, 3);
+            try (var output = profile.getPDStream().createOutputStream()) {
+                output.write(
+                        java.awt.color.ICC_Profile.getInstance(java.awt.color.ColorSpace.CS_sRGB)
+                                .getData());
+            }
+            image.setColorSpace(profile);
+            document.save(source);
+        }
+        var encoded = NativeImages.jpegXlEncode(pixels, JpegXlOptions.lossless());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> {
+                    try (var document =
+                            new PdfDocument(
+                                    new PdfReader(source.toByteArray()),
+                                    new PdfWriter(
+                                            new ByteArrayOutputStream(),
+                                            WriterProperties.defaults()
+                                                    .withExperimentalJpegXl()))) {
+                        document.replaceImportedImage(
+                                document.importedImages().getFirst(), encoded);
+                    }
+                });
     }
 
     @Test
