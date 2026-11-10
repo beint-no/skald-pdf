@@ -25,7 +25,6 @@ public final class EmbeddedImage {
     private final boolean safeToRecompress;
     private final boolean requiresOriginalDimensions;
     private final boolean softMaskResampled;
-    private final byte[] encodedBytes;
     private final NativePdfParser parser;
     private final CosValue.CosStream stream;
     private @Nullable ImageData decoded;
@@ -33,15 +32,15 @@ public final class EmbeddedImage {
 
     EmbeddedImage(int pageNumber, String resourceName, int width, int height, String filter,
                   String colorSpace, int bitsPerComponent, boolean jpeg, boolean safeToRecompress,
-                  boolean requiresOriginalDimensions, byte[] encodedBytes,
+                  boolean requiresOriginalDimensions,
                   NativePdfParser parser, CosValue.CosStream stream) {
         this(pageNumber, resourceName, width, height, filter, colorSpace, bitsPerComponent, jpeg, safeToRecompress,
-            requiresOriginalDimensions, false, encodedBytes, parser, stream);
+            requiresOriginalDimensions, false, parser, stream);
     }
 
     private EmbeddedImage(int pageNumber, String resourceName, int width, int height, String filter,
                           String colorSpace, int bitsPerComponent, boolean jpeg, boolean safeToRecompress,
-                          boolean requiresOriginalDimensions, boolean softMaskResampled, byte[] encodedBytes,
+                          boolean requiresOriginalDimensions, boolean softMaskResampled,
                           NativePdfParser parser, CosValue.CosStream stream) {
         this.softMaskResampled = softMaskResampled;
         this.pageNumber = pageNumber;
@@ -54,7 +53,6 @@ public final class EmbeddedImage {
         this.jpeg = jpeg;
         this.safeToRecompress = safeToRecompress;
         this.requiresOriginalDimensions = requiresOriginalDimensions;
-        this.encodedBytes = Objects.requireNonNull(encodedBytes, "encodedBytes");
         this.parser = parser;
         this.stream = stream;
     }
@@ -110,11 +108,11 @@ public final class EmbeddedImage {
     }
 
     public int encodedLength() {
-        return encodedBytes.length;
+        return stream.encodedLength();
     }
 
     public byte[] encodedBytes() {
-        return encodedBytes.clone();
+        return stream.encodedBytes();
     }
 
     /**
@@ -161,7 +159,7 @@ public final class EmbeddedImage {
             return Optional.empty();
         }
         return Optional.of(new EmbeddedImage(pageNumber, resourceName, width, height, filter, colorSpace,
-            bitsPerComponent, jpeg, true, false, true, encodedBytes, parser, stream));
+            bitsPerComponent, jpeg, true, false, true, parser, stream));
     }
 
     /** The soft mask as 8-bit gray samples at its own size, for an image from {@link #withResampledSoftMask()}. */

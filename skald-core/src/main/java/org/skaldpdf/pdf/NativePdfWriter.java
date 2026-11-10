@@ -1234,10 +1234,8 @@ final class NativePdfWriter {
         }
 
         private byte[] rawStream(CosStream stream) {
-            var payload = stream.encodedBytes();
-            if (encryption != null) {
-                payload = encryption.encrypt(payload);
-            }
+            var payload = encryption == null ? null : encryption.encrypt(stream.encodedBytes());
+            var length = payload == null ? stream.encodedLength() : payload.length;
             var dictionary = new StringBuilder("<<");
             stream.dictionary().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
                 if (!entry.getKey().equals("Length")) {
@@ -1245,11 +1243,12 @@ final class NativePdfWriter {
                         .append(direct(entry.getValue()));
                 }
             });
-            dictionary.append(" /Length ").append(payload.length).append(" >>\nstream\n");
-            var output = new ByteArrayOutputStream(dictionary.length() + payload.length + 16);
+            dictionary.append(" /Length ").append(length).append(" >>\nstream\n");
+            var output = new ByteArrayOutputStream(dictionary.length() + length + 16);
             try {
                 output.write(ascii(dictionary.toString()));
-                output.write(payload);
+                if (payload == null) stream.writeEncodedTo(output);
+                else output.write(payload);
                 output.write(ascii("\nendstream"));
             } catch (IOException impossible) {
                 throw new AssertionError(impossible);
@@ -1462,7 +1461,6 @@ final class NativePdfWriter {
         }
 
         private byte[] rawStream(CosValue.CosStream stream) {
-            var payload = stream.encodedBytes();
             var dictionary = new StringBuilder("<<");
             stream.dictionary().values().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
                 if (!entry.getKey().equals("Length")) {
@@ -1470,11 +1468,11 @@ final class NativePdfWriter {
                         .append(direct(entry.getValue()));
                 }
             });
-            dictionary.append(" /Length ").append(payload.length).append(" >>\nstream\n");
-            var output = new ByteArrayOutputStream(dictionary.length() + payload.length + 16);
+            dictionary.append(" /Length ").append(stream.encodedLength()).append(" >>\nstream\n");
+            var output = new ByteArrayOutputStream(dictionary.length() + stream.encodedLength() + 16);
             try {
                 output.write(ascii(dictionary.toString()));
-                output.write(payload);
+                stream.writeEncodedTo(output);
                 output.write(ascii("\nendstream"));
             } catch (IOException impossible) {
                 throw new AssertionError(impossible);

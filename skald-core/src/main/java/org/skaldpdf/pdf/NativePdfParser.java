@@ -248,7 +248,7 @@ final class NativePdfParser {
             pruned[2 * cid + 1] = map[2 * cid + 1];
         }
         var encoded = deflate(pruned, compressionLevel);
-        if (encoded.length >= stream.encodedBytes().length) {
+        if (encoded.length >= stream.encodedLength()) {
             return stream;
         }
         var values = new LinkedHashMap<String, CosValue>(dictionary.values());
@@ -370,7 +370,7 @@ final class NativePdfParser {
             return stream;
         }
         var encoded = deflate(stripped, compressionLevel);
-        if (encoded.length >= stream.encodedBytes().length) {
+        if (encoded.length >= stream.encodedLength()) {
             return stream;
         }
         var values = new LinkedHashMap<String, CosValue>(dictionary.values());
@@ -577,7 +577,7 @@ final class NativePdfParser {
             && !booleanValue(dictionary.get("ImageMask"))
             && !maskStreams().contains(stream);
         return new EmbeddedImage(pageNumber, resourceName, width, height, filter,
-            colorSpace, bits, jpeg, safe, hasSoftMask && safe, stream.encodedBytes(), this, stream);
+            colorSpace, bits, jpeg, safe, hasSoftMask && safe, this, stream);
     }
 
     /**
@@ -1884,7 +1884,9 @@ final class NativePdfParser {
                     var stream = replacements.getOrDefault(original, original);
                     token('M');
                     dictionary(stream.dictionary(), true);
-                    bytes('B', stream.encodedBytes());
+                    token('B');
+                    integer(stream.encodedLength());
+                    stream.updateEncodedDigest(digest);
                 }
                 case CosReference reference -> {
                     token('R');

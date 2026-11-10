@@ -2,6 +2,8 @@ package org.skaldpdf.pdf;
 
 import org.jspecify.annotations.Nullable;
 
+import java.io.ByteArrayOutputStream;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 
@@ -53,6 +55,20 @@ sealed interface CosValue {
         @Override
         public byte[] encodedBytes() {
             return encodedBytes.clone();
+        }
+
+        int encodedLength() {
+            return encodedBytes.length;
+        }
+
+        // Internal sinks consume the immutable payload without an intermediate copy.
+        // Keep encodedBytes() defensive for callers that need a mutable array.
+        void writeEncodedTo(ByteArrayOutputStream output) {
+            output.writeBytes(encodedBytes);
+        }
+
+        void updateEncodedDigest(MessageDigest digest) {
+            digest.update(encodedBytes);
         }
     }
 
