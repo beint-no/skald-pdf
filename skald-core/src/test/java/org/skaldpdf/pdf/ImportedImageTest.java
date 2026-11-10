@@ -11,10 +11,69 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ImportedImageTest {
+    @Test
+    void preservesImportedImageBytesDuringCompositionWithAndWithoutEncryption() throws Exception {
+        var original = jpeg(120, 80, new Color(20, 90, 160));
+        var source = pdfWith(original);
+        for (var encrypted : new boolean[] {false, true}) {
+            var output = new ByteArrayOutputStream();
+            var properties = encrypted
+                ? WriterProperties.defaults().encrypted(PdfEncryption.userPassword("test-password"))
+                : WriterProperties.defaults();
+            try (var document = new PdfDocument(new PdfReader(source), new PdfWriter(output, properties))) {
+                document.addNewPage(PageSize.A4);
+            }
+            try (var independent = org.apache.pdfbox.Loader.loadPDF(output.toByteArray(),
+                encrypted ? "test-password" : "")) {
+                assertEquals(2, independent.getNumberOfPages());
+                var resources = independent.getPage(0).getResources();
+                var image = (org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject)
+                    resources.getXObject(resources.getXObjectNames().iterator().next());
+                try (var input = image.getCOSObject().createRawInputStream()) {
+                    assertArrayEquals(original.samples(), input.readAllBytes());
+                }
+            }
+        }
+    }
+
+    @Test
+    void sharedImageMetadataAndReturnedBytesRemainIndependentOfCallerMutations() throws Exception {
+        var original = jpeg(120, 80, new Color(20, 90, 160));
+        var source = new ByteArrayOutputStream();
+        try (var document = new PdfDocument(new PdfWriter(source))) {
+            for (int page = 0; page < 32; page++) {
+                original.drawOn(document, document.addNewPage(PageSize.A4), 10, 10, 180, 140);
+            }
+        }
+        var rewritten = new ByteArrayOutputStream();
+        try (var document = new PdfDocument(new PdfReader(source.toByteArray()), new PdfWriter(rewritten))) {
+            var images = document.importedImages();
+            assertEquals(1, images.size());
+            var image = images.getFirst();
+            var expected = original.samples();
+            assertEquals(expected.length, image.encodedLength());
+            var copy = image.encodedBytes();
+            java.util.Arrays.fill(copy, (byte) 0);
+            assertArrayEquals(expected, image.encodedBytes());
+            assertArrayEquals(expected, document.importedImages().getFirst().encodedBytes());
+            assertTrue(image.decode().isPresent());
+        }
+        try (var independent = org.apache.pdfbox.Loader.loadPDF(rewritten.toByteArray())) {
+            assertEquals(32, independent.getNumberOfPages());
+            var resources = independent.getPage(0).getResources();
+            var image = (org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject)
+                resources.getXObject(resources.getXObjectNames().iterator().next());
+            try (var input = image.getCOSObject().createRawInputStream()) {
+                assertArrayEquals(original.samples(), input.readAllBytes());
+            }
+        }
+    }
+
     @Test
     void listsAndReplacesAJpegXObject() throws Exception {
         var original = jpeg(120, 80, new Color(20, 90, 160));

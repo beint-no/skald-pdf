@@ -271,6 +271,26 @@ class JpegXlOptimizerTest {
     }
 
     @Test
+    void optimizesUploadedRastersWithExplicitLossyQuality() {
+        var pixels = pixels(256, 192);
+        var source = pdf(pixels, false, Compression.NONE);
+        for (var quality : new JpegXlOptions[] {JpegXlOptions.photos(), JpegXlOptions.compact()}) {
+            var output = PdfOptimizer.recompress(source, options(),
+                new JpegXlImageRecompressor(JpegXlOptions.lossless(), quality));
+            assertTrue(output.length < source.length);
+            try (var document = new PdfDocument(new PdfReader(output))) {
+                var image = document.importedImages().getFirst();
+                assertTrue(image.jpegXl());
+                var decoded = image.decode().orElseThrow();
+                assertEquals(pixels.width(), decoded.width());
+                assertEquals(pixels.height(), decoded.height());
+                assertFalse(Arrays.equals(pixels.samples(), decoded.samples()),
+                    "Positive perceptual distance must exercise lossy encoding on this fixture");
+            }
+        }
+    }
+
+    @Test
     void qualityDistancesProduceValidatedDifferentBitstreams() {
         var source = pixels(256, 192);
         byte[] previous = new byte[0];
@@ -288,6 +308,7 @@ class JpegXlOptimizerTest {
             assertFalse(Arrays.equals(previous, encoded.samples()));
             previous = encoded.samples();
             if (settings.distance() == 0) assertArrayEquals(source.samples(), decoded.samples());
+            else assertFalse(Arrays.equals(source.samples(), decoded.samples()));
             try {
                 Files.createDirectories(Path.of("build/jpeg-xl-pdfs"));
                 Files.write(

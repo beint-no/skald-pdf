@@ -29,6 +29,8 @@ optimizer:
 - per-page font usage keeps one glyph-to-Unicode map whose key set is the
   glyph set, instead of a second set plus defensive copies;
 - repeated image instances and opacity states share indirect objects;
+- imported image metadata shares its immutable stream payload, and graph hashing
+  and unencrypted stream writing avoid temporary payload copies;
 - received PDFs share only byte-identical embedded font program streams while
   retaining separate descriptors, encodings, and font resources;
 - compact CID width ranges reduce font dictionaries;
@@ -80,6 +82,11 @@ the calling Java thread, not native codec memory.
 
 Select individual scenarios with, for example,
 `./gradlew :skald-layout:performanceBenchmark --args="parse-report extract-report"`.
+
+Run `./gradlew :skald-core:importPerformanceBenchmark` to measure inspection,
+graph hashing and canonical rewriting of a synthetic 32-page PDF sharing one
+JPEG. See the [November 2026 stream-copy audit](performance-import-2026-11-10.md)
+for before/after allocation results and limitations.
 
 See the [September 2026 audit](performance-audit-2026-09-05.md) for measurements,
 verification, and remaining opportunities, and the
