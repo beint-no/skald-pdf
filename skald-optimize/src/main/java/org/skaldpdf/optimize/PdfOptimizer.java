@@ -63,9 +63,8 @@ public final class PdfOptimizer {
         }
         var output = new ByteArrayOutputStream(pdf.length);
         try {
-            var properties = new WriterProperties(options.streamCompression());
-            if (options.experimentalJpegXl()) properties = properties.withExperimentalJpegXl();
-            var writer = new PdfWriter(output, properties);
+            var writer = new PdfWriter(output, new WriterProperties(options.streamCompression()));
+            if (options.experimentalJpegXl()) writer = writer.withExperimentalJpegXl();
             try (var document = new PdfDocument(new PdfReader(pdf), writer)) {
                 var constraints = document.canonicalRewriteConstraints();
                 if (!(constraints.isEmpty() || !options.preserveConformanceProfiles()

@@ -5,19 +5,9 @@ import org.jspecify.annotations.Nullable;
 import java.util.Objects;
 
 /** Immutable options for a PDF writer. */
-public record WriterProperties(Compression compression, @Nullable PdfEncryption encryption, boolean experimentalJpegXl) {
+public record WriterProperties(Compression compression, @Nullable PdfEncryption encryption) {
     public WriterProperties {
         Objects.requireNonNull(compression, "compression");
-    }
-
-    /** Compatibility constructor; experimental JPEG XL output is disabled. */
-    public WriterProperties(Compression compression, @Nullable PdfEncryption encryption) {
-        this(compression, encryption, false);
-    }
-
-    /** Explicitly permits provisional /JXLDecode output for interop experiments. */
-    public WriterProperties withExperimentalJpegXl() {
-        return new WriterProperties(compression, encryption, true);
     }
 
     public WriterProperties() {
@@ -33,6 +23,6 @@ public record WriterProperties(Compression compression, @Nullable PdfEncryption 
     }
 
     public WriterProperties encrypted(PdfEncryption value) {
-        return new WriterProperties(compression, Objects.requireNonNull(value, "value"), experimentalJpegXl);
+        return new WriterProperties(compression, Objects.requireNonNull(value, "value"));
     }
 }

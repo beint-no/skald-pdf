@@ -35,9 +35,13 @@ final class NativePdfWriter {
     private final Revision6Encryption encryption;
 
     NativePdfWriter(WriterProperties properties) {
+        this(properties, false);
+    }
+
+    NativePdfWriter(WriterProperties properties, boolean experimentalJpegXl) {
         Objects.requireNonNull(properties, "properties");
         this.compression = properties.compression();
-        this.experimentalJpegXl = properties.experimentalJpegXl();
+        this.experimentalJpegXl = experimentalJpegXl;
         if (!compression.available()) {
             throw new IllegalStateException("Brotli writing requires skald-brotli, libbrotli and native-access permission");
         }

@@ -48,9 +48,9 @@ class JpegXlOptimizerTest {
 
     static byte[] pdf(ImageData image, boolean experimental, Compression compression) {
         var output = new ByteArrayOutputStream();
-        var properties = new WriterProperties(compression);
-        if (experimental) properties = properties.withExperimentalJpegXl();
-        try (var document = new PdfDocument(new PdfWriter(output, properties))) {
+        var writer = new PdfWriter(output, new WriterProperties(compression));
+        if (experimental) writer = writer.withExperimentalJpegXl();
+        try (var document = new PdfDocument(writer)) {
             var page = document.addNewPage(new PageSize(160, 120));
             image.drawOn(document, page, 0, 0, 160, 120);
         }
@@ -207,10 +207,8 @@ class JpegXlOptimizerTest {
         var output = new ByteArrayOutputStream();
         try (var document =
                 new PdfDocument(
-                        new PdfWriter(
-                                output,
-                                new WriterProperties(Compression.BROTLI_BALANCED)
-                                        .withExperimentalJpegXl()))) {
+                        new PdfWriter(output, new WriterProperties(Compression.BROTLI_BALANCED))
+                                .withExperimentalJpegXl())) {
             encoded.drawOn(document, document.addNewPage(new PageSize(160, 120)), 0, 0, 160, 120);
         }
         var input = directory.resolve("combined.pdf");
@@ -263,9 +261,9 @@ class JpegXlOptimizerTest {
                             new PdfDocument(
                                     new PdfReader(source.toByteArray()),
                                     new PdfWriter(
-                                            new ByteArrayOutputStream(),
-                                            WriterProperties.defaults()
-                                                    .withExperimentalJpegXl()))) {
+                                                    new ByteArrayOutputStream(),
+                                                    WriterProperties.defaults())
+                                            .withExperimentalJpegXl())) {
                         document.replaceImportedImage(
                                 document.importedImages().getFirst(), encoded);
                     }

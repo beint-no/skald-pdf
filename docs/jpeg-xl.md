@@ -80,7 +80,7 @@ original image through the optimizer's existing fail-safe behavior.
 
 New output requires both `experimentalJpegXl(true)` and the JXL adapter.
 Low-level creation uses `ImageData.fromExperimentalJpegXl(...)` plus
-`WriterProperties.withExperimentalJpegXl()`. Output is marked with
+`PdfWriter.withExperimentalJpegXl()`. Output is marked with
 `/SkaldExperimentalJXL true`; this is a Skald marker, not a registered standard
 extension declaration. Unvalidated conformance declarations are rejected by
 canonical extended-output rewriting. This does not produce PDF/A or PDF/X.
