@@ -78,7 +78,7 @@ PDF size was 1,819,054 bytes. Default reversible output was 1,488,560 bytes
 results. Distance 2, with per-image reversible fallback, produced 1,402,214 bytes
 (**22.92% smaller**). No private image/PDF files were written or uploaded.
 
-At distance 2, per-image PSNR ranged from 39.23 to 44.75 dB. This is a numerical
+For raw lossy distance-2 candidates, per-image PSNR ranged from 39.23 to 44.75 dB. This is a numerical
 diagnostic, not a substitute for visual approval of text/photos. Reversible JPEG
 output can have finite pixel PSNR against ImageIO because JPEG decoders differ
 in rounding; exact original JPEG byte reconstruction is independently tested

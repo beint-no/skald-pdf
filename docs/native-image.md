@@ -70,3 +70,6 @@ Received-PDF optimization uses the separate `skald-optimize-jpegli` adapter.
 It delegates to Glimt's modular, bundled JPEGli FFM runtime, so consumers do
 not need a system executable or a commonly installed `libjpegli` shared
 library. `skald-image` keeps TurboJPEG for its smaller optional ingest path.
+
+TurboJPEG acceleration requires the 3.2+ API. An older installed TurboJPEG
+library is treated as unavailable; JPEG preparation uses the JDK fallback.

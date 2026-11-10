@@ -9,7 +9,7 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.util.Objects;
 
-/** Thin FFM binding to TurboJPEG 3. */
+/** Thin FFM binding to TurboJPEG 3.2+; older optional libraries are unavailable. */
 final class TurboJpeg {
     private static final int TJINIT_COMPRESS = 0;
     private static final int TJINIT_DECOMPRESS = 1;
@@ -22,7 +22,6 @@ final class TurboJpeg {
     private static final int TJPARAM_JPEGHEIGHT = 6;
     private static final int TURBOJPEG_VERSION = 3_002_000;
 
-    private static final Linker LINKER = Linker.nativeLinker();
     private static final MethodHandle INIT;
     private static final MethodHandle DESTROY;
     private static final MethodHandle SET;
@@ -35,7 +34,9 @@ final class TurboJpeg {
     static final boolean AVAILABLE;
 
     static {
-        var lookup = NativeLibraries.turboJpeg();
+        var lookup = NativeLibraries.turboJpeg().filter(lib -> java.util.List.of(
+            "tj3InitVersion", "tj3Destroy", "tj3Set", "tj3Get", "tj3GetErrorStr", "tj3JPEGBufSize",
+            "tj3Compress8", "tj3DecompressHeader", "tj3Decompress8").stream().allMatch(symbol -> lib.find(symbol).isPresent()));
         if (lookup.isEmpty()) {
             INIT = DESTROY = SET = GET = ERROR = JPEG_BUF_SIZE = COMPRESS = DECOMPRESS_HEADER = DECOMPRESS = null;
             AVAILABLE = false;
@@ -149,6 +150,6 @@ final class TurboJpeg {
     private static MethodHandle downcall(SymbolLookup lookup, String name, FunctionDescriptor descriptor) {
         var symbol = lookup.find(name)
             .orElseThrow(() -> new IllegalStateException("Missing TurboJPEG symbol " + name));
-        return LINKER.downcallHandle(symbol, descriptor);
+        return Linker.nativeLinker().downcallHandle(symbol, descriptor);
     }
 }
