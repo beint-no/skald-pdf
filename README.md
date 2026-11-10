@@ -28,6 +28,7 @@ and other generated documents that do not need historical PDF output modes.
 - Optional `skald-sign` module: PAdES-B-B CMS integrity seals, JDK-only, no BouncyCastle
 - Optional `skald-optimize` module: recompress image XObjects inside received PDFs
 - Optional `skald-optimize-jpegli`: bundled JPEGli quality with no PDFBox or server executable
+- Optional `skald-brotli`: bounded Brotli PDF decoding and explicit opt-in writing; defaults stay Flate (see [Brotli support](docs/brotli.md))
 - Optional `skald-image` module: JDK JPEG/PNG/GIF/BMP processing plus TurboJPEG, libheif, and JPEG XL ingest
 - Independent rendering, extraction, barcode, syntax, signature, and PDF 2.0 validation tests
 
@@ -48,6 +49,7 @@ and other generated documents that do not need historical PDF output modes.
 | `skald-label-sticker` | `org.skaldpdf.labels` | 93×35 mm clothing EAN sticker and A4 n-up sheets |
 | `skald-label-shipping` | `org.skaldpdf.labels.shipping` | 100×150 mm shipping label |
 | `skald-sign` | `org.skaldpdf.sign` | Optional CMS / PAdES-B-B sealing and verification |
+| `skald-brotli` | `org.skaldpdf.brotli` | Optional native Brotli PDF stream codec; explicit opt-in output |
 | `skald-image` | `org.skaldpdf.codec` | Optional JDK raster processing and FFM TurboJPEG / libheif / libjxl ingest |
 | `skald-optimize` | `org.skaldpdf.optimize` | Optional recompression of images already stored in a received PDF |
 | `skald-optimize-jpegli` | `org.skaldpdf.optimize.jpegli` | Optional Glimt/JPEGli encoder for received-PDF optimization |

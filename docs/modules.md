@@ -32,6 +32,7 @@ These are the building blocks. They have stable, spec-shaped jobs.
 | `skald-layout` | Flowing documents: paragraphs, tables, pagination |
 | `skald-barcode` | EAN-13, UPC-A, Code 128, GS1-128, QR as `ImageSource` |
 | `skald-sign` | PAdES-B-B integrity seal |
+| `skald-brotli` | Optional native Brotli service for core PDF streams; no `java.desktop` dependency |
 | `skald-image` | Optional JDK raster processing and native photo ingest; requires `java.desktop` |
 | `skald-optimize` | Recompress images already inside a received PDF using `skald-image` |
 | `skald-optimize-jpegli` | Plug Glimt's bundled JPEGli encoder into `skald-optimize` |

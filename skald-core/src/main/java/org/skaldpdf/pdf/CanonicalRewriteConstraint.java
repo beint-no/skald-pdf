@@ -10,6 +10,6 @@ public enum CanonicalRewriteConstraint {
     CONFORMANCE_PROFILE,
     /** Rewriting any signed byte range would invalidate the document signature. */
     DIGITAL_SIGNATURE,
-    /** At least one reachable Flate stream has truncated or trailing encoded data. */
+    /** At least one reachable supported compressed stream has truncated or trailing encoded data. */
     MALFORMED_STREAM
 }

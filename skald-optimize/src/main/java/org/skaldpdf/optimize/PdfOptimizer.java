@@ -4,7 +4,6 @@ import org.skaldpdf.codec.RasterImages;
 import org.skaldpdf.image.ImageData;
 import org.skaldpdf.pdf.CanonicalRewriteConstraint;
 import org.skaldpdf.pdf.EmbeddedImage;
-import org.skaldpdf.pdf.Compression;
 import org.skaldpdf.pdf.PdfDocument;
 import org.skaldpdf.pdf.PdfReader;
 import org.skaldpdf.pdf.PdfWriter;
@@ -60,7 +59,7 @@ public final class PdfOptimizer {
         Objects.requireNonNull(recompressor, "recompressor");
         var output = new ByteArrayOutputStream(pdf.length);
         try {
-            var writer = new PdfWriter(output, new WriterProperties(Compression.MAXIMUM));
+            var writer = new PdfWriter(output, new WriterProperties(options.streamCompression()));
             try (var document = new PdfDocument(new PdfReader(pdf), writer)) {
                 var constraints = document.canonicalRewriteConstraints();
                 if (!(constraints.isEmpty() || !options.preserveConformanceProfiles()

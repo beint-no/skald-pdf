@@ -24,6 +24,11 @@ Core requires only `java.base`. Standard JDK image decoding and transformation
 live in `skald-image`, so text-only generation and composition do not bring
 `java.desktop` into a linked runtime. There are no third-party production dependencies.
 
+`skald-brotli` supplies the optional `BrotliCodec` service through JPMS and
+class-path service registration. Core has no dependency on that module or a
+native library. The codec uses bounded FFM decoding/encoding; writer policies
+remain explicit and default to Flate. See [Brotli configuration](brotli.md).
+
 ## Fonts
 
 `skald-fonts` owns the bundled Skald Sans resources. Each face is loaded on its

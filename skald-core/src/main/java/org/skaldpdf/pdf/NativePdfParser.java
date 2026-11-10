@@ -121,6 +121,40 @@ final class NativePdfParser {
         return new SemanticDigest(replacements, referenceAliases).digest();
     }
 
+    byte[] semanticDigest(IdentityHashMap<CosStream, CosStream> replacements,
+                          Map<CosReference, CosReference> aliases, CosDictionary catalogOverride) {
+        return new SemanticDigest(replacements, aliases, catalogOverride).digest();
+    }
+
+    boolean usesBrotli() {
+        var references = new HashSet<CosReference>();
+        var direct = java.util.Collections.newSetFromMap(new IdentityHashMap<CosValue, Boolean>());
+        var pending = new ArrayDeque<CosValue>();
+        pending.add(trailer);
+        while (!pending.isEmpty()) {
+            var value = pending.removeLast();
+            if (value instanceof CosReference reference) {
+                if (references.add(reference)) {
+                    pending.add(resolve(reference));
+                }
+            } else if (direct.add(value)) {
+                if (value instanceof CosArray array) {
+                    pending.addAll(array.values());
+                } else {
+                    var dictionary = value instanceof CosStream stream ? stream.dictionary()
+                        : value instanceof CosDictionary item ? item : null;
+                    if (dictionary != null) {
+                        if (value instanceof CosStream && filterNames(dictionary.get("Filter")).contains("BrotliDecode")) {
+                            return true;
+                        }
+                        pending.addAll(dictionary.values().values());
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     boolean isSafeForCanonicalOptimization() {
         return canonicalRewriteConstraints().isEmpty();
     }
@@ -141,7 +175,7 @@ final class NativePdfParser {
         }
         // A declared profile alone may be waived by the optimizer, so it still needs the stream check.
         if ((constraints.isEmpty() || constraints.equals(EnumSet.of(CanonicalRewriteConstraint.CONFORMANCE_PROFILE)))
-            && hasMalformedFlateStream()) {
+            && hasMalformedCompressedStream()) {
             constraints.add(CanonicalRewriteConstraint.MALFORMED_STREAM);
         }
         return Set.copyOf(constraints);
@@ -199,12 +233,12 @@ final class NativePdfParser {
             return stream;
         }
         var filters = filterNames(dictionary.get("Filter"));
-        if (!filters.isEmpty() && (filters.size() != 1 || !Set.of("FlateDecode", "Fl").contains(filters.getFirst()))) {
+        if (!filters.isEmpty() && (filters.size() != 1 || !losslessCompressionFilter(filters.getFirst()))) {
             return stream;
         }
         byte[] map;
         try {
-            map = filters.isEmpty() ? stream.encodedBytes() : inflate(stream.encodedBytes(), "CIDToGIDMap");
+            map = decoded(stream, "CIDToGIDMap");
         } catch (RuntimeException malformed) {
             return stream;
         }
@@ -314,12 +348,12 @@ final class NativePdfParser {
             return stream;
         }
         var filters = filterNames(dictionary.get("Filter"));
-        if (!filters.isEmpty() && (filters.size() != 1 || !Set.of("FlateDecode", "Fl").contains(filters.getFirst()))) {
+        if (!filters.isEmpty() && (filters.size() != 1 || !losslessCompressionFilter(filters.getFirst()))) {
             return stream;
         }
         byte[] program;
         try {
-            program = filters.isEmpty() ? stream.encodedBytes() : inflate(stream.encodedBytes(), "TrueType program");
+            program = decoded(stream, "TrueType program");
         } catch (RuntimeException malformed) {
             return stream;
         }
@@ -398,6 +432,53 @@ final class NativePdfParser {
         return new CosStream(new CosDictionary(values), compressed);
     }
 
+    CosStream compressStreamLosslessly(CosStream stream, Compression compression) {
+        if (!compression.brotli()) {
+            return compressStreamLosslessly(stream, compression.deflateLevel());
+        }
+        var dictionary = stream.dictionary();
+        if (dictionary.get("F") != null || dictionary.get("FFilter") != null || dictionary.get("FDecodeParms") != null) {
+            return stream;
+        }
+        var filters = filterNames(dictionary.get("Filter"));
+        var original = stream.encodedBytes();
+        if (filters.size() > 1 || original.length < 256) {
+            return stream;
+        }
+        var filter = filters.isEmpty() ? "" : filters.getFirst();
+        if (!Set.of("", "FlateDecode", "Fl", "BrotliDecode", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85").contains(filter)) {
+            return stream;
+        }
+        var predicted = Set.of("FlateDecode", "Fl", "BrotliDecode").contains(filter);
+        if (!predicted && !identityDecodeParameters(dictionary.get("DecodeParms"))) {
+            return stream;
+        }
+        byte[] decoded;
+        try {
+            decoded = switch (filter) {
+                case "FlateDecode", "Fl" -> inflate(original, "Brotli recompression");
+                case "BrotliDecode" -> BrotliCodecs.decode(original, MAXIMUM_DECODED_STRUCTURAL_BYTES);
+                case "ASCIIHexDecode", "AHx" -> asciiHex(original, "Brotli recompression");
+                case "ASCII85Decode", "A85" -> ascii85(original, "Brotli recompression");
+                default -> original;
+            };
+        } catch (RuntimeException malformed) {
+            return stream;
+        }
+        var compressed = compression.brotliEncode(decoded);
+        if (compressed.length + 64 >= original.length) {
+            return stream;
+        }
+        require(Arrays.equals(decoded, BrotliCodecs.decode(compressed, MAXIMUM_DECODED_STRUCTURAL_BYTES)),
+            "Brotli recompression verification failed");
+        var values = new LinkedHashMap<>(dictionary.values());
+        values.put("Filter", new CosName("BrotliDecode"));
+        if (!predicted) {
+            values.remove("DecodeParms");
+        }
+        return new CosStream(new CosDictionary(values), compressed);
+    }
+
     private static int deflateLevelHint(byte[] encoded) {
         if (encoded.length < 2) {
             return -1;
@@ -446,21 +527,11 @@ final class NativePdfParser {
         require(width > 0 && height > 0, "Image dimensions must be positive");
         require(bits == 8, "Only 8-bit images can be decoded");
         var filters = filterNames(dictionary.get("Filter"));
-        var data = stream.encodedBytes();
-        var jpeg = false;
-        for (var filter : filters) {
-            switch (filter) {
-                case "FlateDecode", "Fl" -> data = inflate(data, "image");
-                case "ASCIIHexDecode", "AHx" -> data = asciiHex(data, "image");
-                case "ASCII85Decode", "A85" -> data = ascii85(data, "image");
-                case "DCTDecode", "DCT" -> jpeg = true;
-                default -> throw new IllegalArgumentException("Unsupported image filter " + filter);
-            }
-        }
+        var jpeg = !filters.isEmpty() && Set.of("DCTDecode", "DCT").contains(filters.getLast());
+        var data = decodeFilters(stream, "image", jpeg);
         if (jpeg) {
             return ImageData.fromJpeg(data);
         }
-        data = applyPredictor(data, dictionary.get("DecodeParms"), "image");
         var colorSpaceValue = dictionary.get("ColorSpace");
         var colorSpace = colorSpaceName(colorSpaceValue);
         return switch (colorSpace) {
@@ -579,9 +650,15 @@ final class NativePdfParser {
         return false;
     }
 
+    private static boolean losslessCompressionFilter(String filter) {
+        return Set.of("FlateDecode", "Fl").contains(filter) || filter.equals("BrotliDecode") && BrotliCodecs.canDecode();
+    }
+
     private static boolean supportedImageFilters(List<String> filters, boolean jpeg) {
         if (!jpeg) {
-            return filters.size() == 1 && Set.of("FlateDecode", "Fl").contains(filters.getFirst());
+            return !filters.isEmpty() && filters.stream().allMatch(filter ->
+                Set.of("FlateDecode", "Fl", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85").contains(filter)
+                    || filter.equals("BrotliDecode") && BrotliCodecs.canDecode());
         }
         if (filters.isEmpty() || !Set.of("DCTDecode", "DCT").contains(filters.getLast())) {
             return false;
@@ -589,7 +666,7 @@ final class NativePdfParser {
         return filters.subList(0, filters.size() - 1).stream()
             .allMatch(filter -> Set.of(
                 "FlateDecode", "Fl", "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85"
-            ).contains(filter));
+            ).contains(filter) || filter.equals("BrotliDecode") && BrotliCodecs.canDecode());
     }
 
     private boolean identityImageDecode(CosValue value, int components) {
@@ -648,7 +725,7 @@ final class NativePdfParser {
                 return false;
             }
             var filters = filterNames(mask.dictionary().get("Filter"));
-            return filters.isEmpty() || filters.size() == 1 && Set.of("FlateDecode", "Fl").contains(filters.getFirst());
+            return filters.isEmpty() || supportedImageFilters(filters, false);
         } catch (RuntimeException malformed) {
             return false;
         }
@@ -662,11 +739,7 @@ final class NativePdfParser {
         var width = integer(resolve(dictionary.get("Width")), "soft-mask Width");
         var height = integer(resolve(dictionary.get("Height")), "soft-mask Height");
         var bits = integer(resolve(dictionary.get("BitsPerComponent")), "soft-mask BitsPerComponent");
-        var data = mask.encodedBytes();
-        if (!filterNames(dictionary.get("Filter")).isEmpty()) {
-            data = inflate(data, "soft mask");
-        }
-        data = applyPredictor(data, dictionary.get("DecodeParms"), "soft mask");
+        var data = decoded(mask, "soft mask");
         var rowBytes = (Math.multiplyExact(width, bits) + 7) / 8;
         require(data.length >= Math.multiplyExact(rowBytes, height), "Soft mask samples are truncated");
         var gray = new byte[Math.multiplyExact(width, height)];
@@ -1176,18 +1249,44 @@ final class NativePdfParser {
     }
 
     private byte[] decoded(CosStream stream, String description) {
+        return decodeFilters(stream, description, false);
+    }
+
+    private byte[] decodeFilters(CosStream stream, String description, boolean allowJpeg) {
         var result = stream.encodedBytes();
         var filters = filterNames(stream.dictionary().get("Filter"));
-        for (var filter : filters) {
+        require(filters.size() <= MAXIMUM_DEPTH, "Too many stream filters in " + description);
+        for (var index = 0; index < filters.size(); index++) {
+            var filter = filters.get(index);
+            var parameters = filterParameters(stream.dictionary().get("DecodeParms"), index, filters.size());
             result = switch (filter) {
-                case "FlateDecode", "Fl" -> inflate(result, description);
+                case "FlateDecode", "Fl" -> applyPredictor(inflate(result, description), parameters, description);
+                case "BrotliDecode" -> applyPredictor(
+                    BrotliCodecs.decode(result, MAXIMUM_DECODED_STRUCTURAL_BYTES), parameters, description);
                 case "ASCIIHexDecode", "AHx" -> asciiHex(result, description);
                 case "ASCII85Decode", "A85" -> ascii85(result, description);
+                case "DCTDecode", "DCT" -> {
+                    require(allowJpeg && index == filters.size() - 1, "Unsupported DCT filter in " + description);
+                    yield result;
+                }
                 default -> throw new IllegalArgumentException(
-                    "Unsupported structural stream filter " + filter + " in " + description);
+                    "Unsupported stream filter " + filter + " in " + description);
             };
         }
-        return applyPredictor(result, stream.dictionary().get("DecodeParms"), description);
+        return result;
+    }
+
+    private CosValue filterParameters(CosValue value, int index, int filterCount) {
+        if (value == null || resolve(value) instanceof CosNull) {
+            return new CosNull();
+        }
+        var resolved = resolve(value);
+        if (resolved instanceof CosArray array) {
+            require(array.values().size() == filterCount, "DecodeParms must match the filter array");
+            return resolve(array.values().get(index));
+        }
+        require(filterCount == 1, "Multiple stream filters require a DecodeParms array");
+        return resolved;
     }
 
     private List<String> filterNames(CosValue filterValue) {
@@ -1239,7 +1338,7 @@ final class NativePdfParser {
         }
     }
 
-    private boolean hasMalformedFlateStream() {
+    private boolean hasMalformedCompressedStream() {
         var references = new HashSet<CosReference>();
         var direct = java.util.Collections.newSetFromMap(new IdentityHashMap<CosValue, Boolean>());
         var pending = new ArrayDeque<CosValue>();
@@ -1264,7 +1363,7 @@ final class NativePdfParser {
             if (dictionary == null) {
                 continue;
             }
-            if (value instanceof CosStream stream && !validFlateEncoding(stream)) {
+            if (value instanceof CosStream stream && !validCompressionEncoding(stream)) {
                 return true;
             }
             pending.addAll(dictionary.values().values());
@@ -1272,27 +1371,35 @@ final class NativePdfParser {
         return false;
     }
 
-    private boolean validFlateEncoding(CosStream stream) {
+    private boolean validCompressionEncoding(CosStream stream) {
         var filters = filterNames(stream.dictionary().get("Filter"));
-        if (!filters.stream().anyMatch(filter -> Set.of("FlateDecode", "Fl").contains(filter))) {
+        if (filters.stream().noneMatch(filter -> Set.of("FlateDecode", "Fl").contains(filter)
+            || filter.equals("BrotliDecode") && BrotliCodecs.canDecode())) {
             return true;
         }
         var data = stream.encodedBytes();
         try {
+            require(filters.size() <= MAXIMUM_DEPTH, "Too many stream filters");
             for (var index = 0; index < filters.size(); index++) {
                 var filter = filters.get(index);
-                if (index == filters.size() - 1 && Set.of("FlateDecode", "Fl").contains(filter)) {
-                    inflate(data, "Flate preflight", null);
-                    return true;
-                }
-                data = switch (filter) {
-                    case "ASCIIHexDecode", "AHx" -> asciiHex(data, "Flate preflight");
-                    case "ASCII85Decode", "A85" -> ascii85(data, "Flate preflight");
-                    case "FlateDecode", "Fl" -> inflate(data, "Flate preflight");
-                    default -> {
-                        // A preceding unknown filter prevents bounded validation of a later Flate stage.
-                        yield null;
+                if (index == filters.size() - 1) {
+                    if (Set.of("FlateDecode", "Fl").contains(filter)) {
+                        inflate(data, "Flate preflight", null);
+                        return true;
                     }
+                    if (filter.equals("BrotliDecode") && BrotliCodecs.canDecode()) {
+                        BrotliCodecs.validate(data, MAXIMUM_DECODED_STRUCTURAL_BYTES);
+                        return true;
+                    }
+                }
+                var parameters = filterParameters(stream.dictionary().get("DecodeParms"), index, filters.size());
+                data = switch (filter) {
+                    case "ASCIIHexDecode", "AHx" -> asciiHex(data, "compression preflight");
+                    case "ASCII85Decode", "A85" -> ascii85(data, "compression preflight");
+                    case "FlateDecode", "Fl" -> applyPredictor(inflate(data, "Flate preflight"), parameters, "preflight");
+                    case "BrotliDecode" -> BrotliCodecs.canDecode() ? applyPredictor(
+                        BrotliCodecs.decode(data, MAXIMUM_DECODED_STRUCTURAL_BYTES), parameters, "preflight") : null;
+                    default -> null; // An unknown preceding filter prevents validating later stages.
                 };
                 if (data == null) {
                     return true;
@@ -1305,34 +1412,45 @@ final class NativePdfParser {
     }
 
     private byte[] applyPredictor(byte[] decoded, CosValue parametersValue, String description) {
-        if (parametersValue == null) {
+        if (parametersValue == null || resolve(parametersValue) instanceof CosNull) {
             return decoded;
         }
-        var resolved = resolve(parametersValue);
-        if (resolved instanceof CosArray parametersArray) {
-            resolved = parametersArray.values().isEmpty() ? new CosNull() : resolve(parametersArray.values().get(0));
-        }
-        if (resolved instanceof CosNull) {
+        var parameters = dictionary(resolve(parametersValue), description + " DecodeParms");
+        var predictor = optionalInteger(parameters, "Predictor", 1);
+        if (predictor == 1) {
             return decoded;
         }
-        var parameters = dictionary(resolved, description + " DecodeParms");
-        var predictor = parameters.get("Predictor") == null ? 1
-            : integer(resolve(parameters.get("Predictor")), "Predictor");
-        if (predictor <= 1) {
-            return decoded;
-        }
-        require(predictor >= 10 && predictor <= 15, "Unsupported predictor in " + description);
+        require(predictor == 2 || predictor >= 10 && predictor <= 15, "Unsupported predictor in " + description);
         var colors = optionalInteger(parameters, "Colors", 1);
         var bits = optionalInteger(parameters, "BitsPerComponent", 8);
         var columns = optionalInteger(parameters, "Columns", 1);
-        require(colors > 0 && bits == 8 && columns > 0, "Unsupported predictor parameters");
-        var bytesPerPixel = colors;
-        var rowBytes = Math.multiplyExact(colors, columns);
-        require(decoded.length % (rowBytes + 1) == 0, "Predictor rows are truncated");
+        require(colors > 0 && Set.of(1, 2, 4, 8, 16).contains(bits) && columns > 0,
+            "Unsupported predictor parameters");
+        var samples = (long) colors * columns;
+        var rowLength = Math.addExact(Math.multiplyExact(samples, bits), 7) / 8;
+        require(rowLength > 0 && rowLength <= MAXIMUM_DECODED_STRUCTURAL_BYTES, "Predictor row exceeds size limit");
+        var rowBytes = (int) rowLength;
+        if (predictor == 2) {
+            require(decoded.length % rowBytes == 0, "TIFF predictor rows are truncated");
+            var output = decoded.clone();
+            var mask = (1 << bits) - 1;
+            for (int row = 0; row < output.length; row += rowBytes) {
+                for (long sample = colors; sample < samples; sample++) {
+                    var offset = sample * bits;
+                    var value = (sample(output, row, offset, bits)
+                        + sample(output, row, offset - (long) colors * bits, bits)) & mask;
+                    putSample(output, row, offset, bits, value);
+                }
+            }
+            return output;
+        }
+        var bytesPerPixel = Math.toIntExact(((long) colors * bits + 7) / 8);
+        require(decoded.length % (rowBytes + 1) == 0, "PNG predictor rows are truncated");
         var output = new byte[decoded.length / (rowBytes + 1) * rowBytes];
         for (int inputRow = 0, outputRow = 0; inputRow < decoded.length;
              inputRow += rowBytes + 1, outputRow += rowBytes) {
             var filter = decoded[inputRow] & 0xff;
+            require(filter <= 4, "Unknown PNG predictor filter");
             for (int column = 0; column < rowBytes; column++) {
                 var raw = decoded[inputRow + 1 + column] & 0xff;
                 var left = column >= bytesPerPixel ? output[outputRow + column - bytesPerPixel] & 0xff : 0;
@@ -1345,12 +1463,33 @@ final class NativePdfParser {
                     case 2 -> raw + up;
                     case 3 -> raw + ((left + up) >>> 1);
                     case 4 -> raw + paeth(left, up, upperLeft);
-                    default -> throw new IllegalArgumentException("Unknown PNG predictor filter");
+                    default -> throw new AssertionError("PNG filter was checked");
                 };
                 output[outputRow + column] = (byte) value;
             }
         }
         return output;
+    }
+
+    private static int sample(byte[] bytes, int row, long offset, int bits) {
+        var index = row + Math.toIntExact(offset / 8);
+        if (bits == 16) {
+            return (bytes[index] & 0xff) << 8 | bytes[index + 1] & 0xff;
+        }
+        var shift = 8 - bits - (int) (offset % 8);
+        return (bytes[index] & 0xff) >>> shift & (1 << bits) - 1;
+    }
+
+    private static void putSample(byte[] bytes, int row, long offset, int bits, int value) {
+        var index = row + Math.toIntExact(offset / 8);
+        if (bits == 16) {
+            bytes[index] = (byte) (value >>> 8);
+            bytes[index + 1] = (byte) value;
+        } else {
+            var shift = 8 - bits - (int) (offset % 8);
+            var mask = ((1 << bits) - 1) << shift;
+            bytes[index] = (byte) ((bytes[index] & ~mask) | value << shift);
+        }
     }
 
     private static int paeth(int left, int up, int upperLeft) {
@@ -1672,6 +1811,7 @@ final class NativePdfParser {
         );
 
         private final MessageDigest digest;
+        private final @Nullable CosDictionary catalogOverride;
         private final IdentityHashMap<CosStream, CosStream> replacements;
         private final Map<CosReference, CosReference> referenceAliases;
         private final Map<CosReference, Integer> referenceNumbers = new LinkedHashMap<>();
@@ -1679,6 +1819,12 @@ final class NativePdfParser {
 
         SemanticDigest(IdentityHashMap<CosStream, CosStream> replacements,
                        Map<CosReference, CosReference> referenceAliases) {
+            this(replacements, referenceAliases, null);
+        }
+
+        SemanticDigest(IdentityHashMap<CosStream, CosStream> replacements,
+                       Map<CosReference, CosReference> referenceAliases, @Nullable CosDictionary catalogOverride) {
+            this.catalogOverride = catalogOverride;
             this.replacements = new IdentityHashMap<>(replacements);
             this.referenceAliases = Map.copyOf(referenceAliases);
             try {
@@ -1716,7 +1862,8 @@ final class NativePdfParser {
                     integer(array.values().size());
                     array.values().forEach(this::value);
                 }
-                case CosDictionary dictionary -> dictionary(dictionary, false);
+                case CosDictionary dictionary -> dictionary(
+                    catalogOverride != null && dictionary == resolve(root) ? catalogOverride : dictionary, false);
                 case CosStream original -> {
                     var stream = replacements.getOrDefault(original, original);
                     token('M');

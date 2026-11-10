@@ -44,6 +44,12 @@ Generated fixtures are checked at several independent layers:
 PAdES-B-B attributes are documented in [signing.md](signing.md). QES is out of
 scope without a listed QTSP.
 
+The optional `skald-brotli` module implements the PDF Association's
+[Brotli extension](https://pdfa.org/resource/extension-brotli/), including
+large-window decoding and predictor parameters. This is an industry extension
+to PDF 2.0, not part of baseline ISO 32000-2:2020. Writing is explicitly opt-in;
+see [configuration, bounds and compatibility](brotli.md).
+
 JPEG XL (ISO/IEC 18181) is the PDF Association's preferred HDR candidate for a
 *future* PDF edition (Wyatt, PDF Days Europe 2025). It is not in ISO 32000-2:2020.
 Skald decodes JXL as input and embeds `DCTDecode`. It will not write a

@@ -24,14 +24,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-disabled: true
-      - name: Install PDF validator and JPEG XL decoder
+      - name: Install PDF validator and optional codecs
         run: |
           sudo apt-get update
-          sudo apt-get install --yes qpdf libjxl-dev
+          sudo apt-get install --yes qpdf libjxl-dev libbrotli-dev brotli
       - name: Build, test, and verify Maven publications
         env:
           SKALD_JXL: /usr/lib/x86_64-linux-gnu/libjxl.so
           SKALD_REQUIRE_JXL_TESTS: "1"
+          SKALD_REQUIRE_BROTLI_TESTS: "1"
         run: ./gradlew clean build publishToMavenLocal
       - name: Check PDF syntax
         run: find build/use-case-pdfs -maxdepth 1 -name '*.pdf' -print0 | xargs -0 -n1 qpdf --check
@@ -45,4 +46,12 @@ jobs:
           name: use-case-pdfs
           path: build/use-case-pdfs/
           if-no-files-found: error
+          retention-days: 14
+      - name: Upload generated Brotli PDF corpus
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: brotli-pdfs
+          path: build/brotli-pdfs/
+          if-no-files-found: warn
           retention-days: 14
