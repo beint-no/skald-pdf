@@ -486,9 +486,10 @@ public final class LayoutEngine {
                     renderRows(headerRows, headerHeights, columnWidths, tableX, inherited);
                 }
             }
-            var chunkHeight = Math.min(totalHeight - consumed, remainingHeight());
+            var remainingRowHeight = totalHeight - consumed;
+            var chunkHeight = Math.min(remainingRowHeight, remainingHeight());
             var paragraphOnly = row.cells().stream().allMatch(placed -> paragraphOnly(placed.cell()));
-            if (paragraphOnly) {
+            if (paragraphOnly && chunkHeight < remainingRowHeight) {
                 var snapped = snapChunkToLines(row, columnWidths, inherited, consumed, chunkHeight);
                 if (snapped > 0.5f) {
                     chunkHeight = snapped;

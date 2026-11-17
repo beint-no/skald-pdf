@@ -53,6 +53,23 @@ class LayoutPaginationTest {
     }
 
     @Test
+    void keepsTrailingPaddingOnTheLastPageOfASplitRow() throws Exception {
+        var lines = java.util.stream.IntStream.range(0, 111)
+            .mapToObj(i -> "gateway-" + i + "-end").toList();
+        var table = new Table(new float[] {1}).useAllAvailableWidth();
+        table.addHeaderCell("Gateway");
+        table.addCell(new Cell().setPadding(2).add(new Paragraph(String.join("\n", lines))
+            .setFontSize(7.5f).setMultipliedLeading(1)));
+
+        var bytes = render(document -> document.add(table));
+        try (var parsed = PdfTestSupport.load(bytes)) {
+            assertEquals(2, parsed.getNumberOfPages());
+        }
+        var text = PdfTestSupport.text(bytes);
+        assertEquals(lines, text.lines().map(String::strip).filter(line -> line.startsWith("gateway-")).toList());
+    }
+
+    @Test
     void freezesDefaultsOnceStreamingLayoutStarts() {
         var output = new ByteArrayOutputStream();
         try (var pdf = new PdfDocument(new PdfWriter(output));
