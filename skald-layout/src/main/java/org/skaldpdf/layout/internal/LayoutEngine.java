@@ -80,6 +80,14 @@ public final class LayoutEngine {
                         float bottomMargin, float leftMargin, PdfFont defaultFont, float defaultFontSize,
                         float headerHeight, float footerHeight, float firstHeaderHeight,
                         List<PdfFont> fallbacks) {
+        this(document, pageSize, topMargin, rightMargin, bottomMargin, leftMargin,
+            defaultFont, defaultFontSize, ColorConstants.INK, headerHeight, footerHeight, firstHeaderHeight, fallbacks);
+    }
+
+    private LayoutEngine(PdfDocument document, PageSize pageSize, float topMargin, float rightMargin,
+                         float bottomMargin, float leftMargin, PdfFont defaultFont, float defaultFontSize,
+                         Color defaultColor, float headerHeight, float footerHeight, float firstHeaderHeight,
+                         List<PdfFont> fallbacks) {
         this.document = document;
         this.pageSize = pageSize;
         this.topMargin = topMargin;
@@ -90,8 +98,8 @@ public final class LayoutEngine {
         this.firstHeaderHeight = firstHeaderHeight;
         this.footerHeight = footerHeight;
         this.defaultText = new TextContext(
-            defaultFont, defaultFontSize, ColorConstants.INK, TextAlignment.LEFT, DEFAULT_LEADING, false, false,
-            List.copyOf(fallbacks)
+            defaultFont, defaultFontSize, defaultColor, TextAlignment.LEFT, DEFAULT_LEADING, false, false,
+            OverflowWrap.NORMAL, List.copyOf(fallbacks)
         );
     }
 
@@ -175,7 +183,14 @@ public final class LayoutEngine {
 
     public static void renderOverlay(PdfDocument document, PdfPage page, Rectangle bounds, LayoutElement element,
                                      float opacity) {
-        var engine = new LayoutEngine(document, page.getPageSize(), 0, 0, 0, 0);
+        renderOverlay(document, page, bounds, element, opacity, SkaldSans.regular(), DEFAULT_FONT_SIZE,
+            ColorConstants.INK);
+    }
+
+    public static void renderOverlay(PdfDocument document, PdfPage page, Rectangle bounds, LayoutElement element,
+                                     float opacity, PdfFont defaultFont, float defaultFontSize, Color defaultColor) {
+        var engine = new LayoutEngine(document, page.getPageSize(), 0, 0, 0, 0,
+            defaultFont, defaultFontSize, defaultColor, 0, 0, 0, List.of());
         engine.page = page;
         engine.cursorTop = bounds.getTop();
         var fixed = element.style().fixedPosition();
@@ -215,14 +230,15 @@ public final class LayoutEngine {
         var blockHeight = Math.max(floatOr(style.height(), 0),
             layout.height() + style.paddingTop() + style.paddingBottom());
         var required = style.marginTop() + blockHeight + style.marginBottom();
-        if ((style.keepTogether() || required > remainingHeight()) && required <= contentHeight()
-            && required > remainingHeight()
-            && cursorTop < pageSize.getHeight() - topInset()) {
-            newPage();
-        }
-        if (required > remainingHeight() && required > contentHeight()) {
-            renderParagraphFragments(layout, style, blockX, contentWidth, context);
-            return;
+        if (allowPageBreaks && required > remainingHeight()) {
+            if ((style.keepTogether() || layout.lines().size() <= 1) && required <= contentHeight()) {
+                if (cursorTop < pageSize.getHeight() - topInset()) {
+                    newPage();
+                }
+            } else {
+                renderParagraphFragments(layout, style, blockX, contentWidth, context);
+                return;
+            }
         }
         var top = cursorTop - style.marginTop();
         drawBlockDecoration(style, blockX, top - blockHeight, blockWidth, blockHeight, 1f);
@@ -261,7 +277,7 @@ public final class LayoutEngine {
             if (leftover == 1 && fragmentLines >= 2) {
                 end--;
                 lineHeight -= layout.lines().get(end).height();
-                leftover = 1;
+                leftover++;
                 fragmentLines--;
             }
             if (fragmentLines == 1 && leftover >= 1 && firstFragment
@@ -478,47 +494,197 @@ public final class LayoutEngine {
 
     private void renderSplitRow(Row row, float[] columnWidths, float tableX, TextContext inherited,
                                 float totalHeight, List<Row> headerRows, float[] headerHeights) {
+        if (row.cells().stream().allMatch(placed -> paragraphOnly(placed.cell()))) {
+            renderParagraphSplitRow(row, columnWidths, tableX, inherited, headerRows, headerHeights);
+            return;
+        }
         var consumed = 0f;
         while (consumed < totalHeight) {
-            if (remainingHeight() <= 0) {
+            if (allowPageBreaks && remainingHeight() <= 0) {
                 newPage();
                 if (!headerRows.isEmpty()) {
                     renderRows(headerRows, headerHeights, columnWidths, tableX, inherited);
                 }
             }
             var remainingRowHeight = totalHeight - consumed;
-            var chunkHeight = Math.min(remainingRowHeight, remainingHeight());
-            var paragraphOnly = row.cells().stream().allMatch(placed -> paragraphOnly(placed.cell()));
-            if (paragraphOnly && chunkHeight < remainingRowHeight) {
-                var snapped = snapChunkToLines(row, columnWidths, inherited, consumed, chunkHeight);
-                if (snapped > 0.5f) {
-                    chunkHeight = snapped;
-                }
-            }
+            var chunkHeight = allowPageBreaks ? Math.min(remainingRowHeight, remainingHeight()) : remainingRowHeight;
             var bottom = cursorTop - chunkHeight;
             for (var placed : row.cells()) {
                 var cell = placed.cell();
                 var cellX = tableX + sum(columnWidths, 0, placed.column());
                 var cellWidth = sum(columnWidths, placed.column(), placed.column() + cell.columnSpan());
                 renderCellDecoration(cell, cellX, bottom, cellWidth, chunkHeight);
-                if (paragraphOnly) {
-                    renderCellParagraphSlice(cell, cellX, bottom, cellWidth, chunkHeight, consumed, inherited);
-                } else {
-                    PdfDrawing.beginClip(document, page, cellX, bottom, cellWidth, chunkHeight);
-                    renderCellContent(cell, cellX, cursorTop + consumed - totalHeight, cellWidth,
-                        totalHeight, inherited);
-                    PdfDrawing.endGraphicsState(document, page);
-                }
+                PdfDrawing.beginClip(document, page, cellX, bottom, cellWidth, chunkHeight);
+                renderCellContent(cell, cellX, cursorTop + consumed - totalHeight, cellWidth,
+                    totalHeight, inherited);
+                PdfDrawing.endGraphicsState(document, page);
             }
             cursorTop = bottom;
             consumed += chunkHeight;
             if (consumed < totalHeight) {
+                if (!allowPageBreaks) {
+                    break;
+                }
                 newPage();
                 if (!headerRows.isEmpty()) {
                     renderRows(headerRows, headerHeights, columnWidths, tableX, inherited);
                 }
             }
         }
+    }
+
+    private void renderParagraphSplitRow(Row row, float[] columnWidths, float tableX, TextContext inherited,
+                                         List<Row> headerRows, float[] headerHeights) {
+        var cells = new ArrayList<SplitCell>(row.cells().size());
+        for (var placed : row.cells()) {
+            var cell = placed.cell();
+            var cellX = tableX + sum(columnWidths, 0, placed.column());
+            var cellWidth = sum(columnWidths, placed.column(), placed.column() + cell.columnSpan());
+            cells.add(prepareSplitCell(cell, cellX, cellWidth, inherited));
+        }
+        var firstFragment = true;
+        while (firstFragment || hasRemainingLines(cells)) {
+            if (allowPageBreaks && remainingHeight() <= 0) {
+                newPage();
+                if (!headerRows.isEmpty()) {
+                    renderRows(headerRows, headerHeights, columnWidths, tableX, inherited);
+                }
+            }
+            var available = allowPageBreaks ? remainingHeight() : Float.POSITIVE_INFINITY;
+            var endIndices = new int[cells.size()];
+            var usedHeights = new float[cells.size()];
+            var anyRemaining = false;
+            var anyLineFits = false;
+            for (int index = 0; index < cells.size(); index++) {
+                var cell = cells.get(index);
+                var start = cell.nextLine;
+                if (start >= cell.lines.size()) {
+                    endIndices[index] = start;
+                    usedHeights[index] = firstFragment ? cell.trailingSpace : 0f;
+                    continue;
+                }
+                anyRemaining = true;
+                var lineIndex = start;
+                var used = 0f;
+                while (lineIndex < cell.lines.size()) {
+                    var splitLine = cell.lines.get(lineIndex);
+                    var gap = lineIndex == start
+                        ? (start == 0 ? splitLine.gapBefore() : cell.continuationTopPadding)
+                        : splitLine.gapBefore();
+                    var nextUsed = used + gap + splitLine.line().height();
+                    if (nextUsed > available + 0.01f) {
+                        break;
+                    }
+                    used = nextUsed;
+                    lineIndex++;
+                }
+                if (lineIndex > start) {
+                    anyLineFits = true;
+                }
+                endIndices[index] = lineIndex;
+                usedHeights[index] = used;
+            }
+            if (anyRemaining && !anyLineFits) {
+                if (allowPageBreaks && cursorTop < pageSize.getHeight() - topInset()) {
+                    newPage();
+                    if (!headerRows.isEmpty()) {
+                        renderRows(headerRows, headerHeights, columnWidths, tableX, inherited);
+                    }
+                    continue;
+                }
+                for (int index = 0; index < cells.size(); index++) {
+                    var cell = cells.get(index);
+                    if (cell.nextLine < cell.lines.size()) {
+                        var splitLine = cell.lines.get(cell.nextLine);
+                        var gap = cell.nextLine == 0 ? splitLine.gapBefore() : cell.continuationTopPadding;
+                        endIndices[index] = cell.nextLine + 1;
+                        usedHeights[index] = gap + splitLine.line().height();
+                    }
+                }
+            }
+            var chunkHeight = 0f;
+            for (int index = 0; index < cells.size(); index++) {
+                var cell = cells.get(index);
+                var height = usedHeights[index];
+                if (endIndices[index] == cell.lines.size()
+                    && (cell.nextLine < cell.lines.size() || firstFragment)) {
+                    height += cell.trailingSpace;
+                }
+                chunkHeight = Math.max(chunkHeight, height);
+            }
+            if ((anyLineFits || !anyRemaining) && Float.isFinite(available)) {
+                chunkHeight = Math.min(chunkHeight, available);
+            }
+            chunkHeight = Math.max(1f, chunkHeight);
+            var chunkTop = cursorTop;
+            var bottom = chunkTop - chunkHeight;
+            for (int index = 0; index < cells.size(); index++) {
+                var cell = cells.get(index);
+                renderCellDecoration(cell.cell, cell.x, bottom, cell.width, chunkHeight);
+                var y = chunkTop;
+                for (int lineIndex = cell.nextLine; lineIndex < endIndices[index]; lineIndex++) {
+                    var splitLine = cell.lines.get(lineIndex);
+                    var gap = lineIndex == cell.nextLine
+                        ? (cell.nextLine == 0 ? splitLine.gapBefore() : cell.continuationTopPadding)
+                        : splitLine.gapBefore();
+                    y -= gap;
+                    renderLine(splitLine.line(), splitLine.lastLineOfParagraph(),
+                        cell.x + splitLine.leftInset(), y, splitLine.paragraphWidth(),
+                        splitLine.alignment(), 1f, splitLine.underline(), splitLine.strikethrough());
+                    y -= splitLine.line().height();
+                }
+                cell.nextLine = endIndices[index];
+            }
+            cursorTop = bottom;
+            firstFragment = false;
+            if (hasRemainingLines(cells)) {
+                if (!allowPageBreaks) {
+                    break;
+                }
+                newPage();
+                if (!headerRows.isEmpty()) {
+                    renderRows(headerRows, headerHeights, columnWidths, tableX, inherited);
+                }
+            }
+        }
+    }
+
+    private SplitCell prepareSplitCell(Cell cell, float x, float width, TextContext inherited) {
+        var style = cell.style();
+        var context = resolveTextContext(style, inherited);
+        var innerWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight());
+        var lines = new ArrayList<SplitCellLine>();
+        var pendingGap = style.paddingTop();
+        for (var child : cell.children()) {
+            if (!(child instanceof Paragraph paragraph)) {
+                continue;
+            }
+            var childStyle = paragraph.style();
+            pendingGap += childStyle.marginTop();
+            var paragraphContext = resolveTextContext(childStyle, context);
+            var paragraphWidth = Math.max(1f, innerWidth - childStyle.marginLeft() - childStyle.marginRight());
+            var layout = layoutParagraph(paragraph, paragraphWidth, paragraphContext);
+            var leftInset = style.paddingLeft() + childStyle.marginLeft();
+            var paragraphLines = layout.lines();
+            for (int lineIndex = 0; lineIndex < paragraphLines.size(); lineIndex++) {
+                lines.add(new SplitCellLine(paragraphLines.get(lineIndex), lineIndex == paragraphLines.size() - 1,
+                    leftInset, paragraphWidth, paragraphContext.textAlignment(),
+                    paragraphContext.underline(), paragraphContext.strikethrough(), pendingGap));
+                pendingGap = 0f;
+            }
+            pendingGap += childStyle.marginBottom();
+        }
+        var trailingSpace = pendingGap + style.paddingBottom() + verticalBorderSpace(style);
+        return new SplitCell(cell, x, width, style.paddingTop(), trailingSpace, List.copyOf(lines));
+    }
+
+    private static boolean hasRemainingLines(List<SplitCell> cells) {
+        for (var cell : cells) {
+            if (cell.nextLine < cell.lines.size()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void renderCell(Cell cell, float x, float bottom, float width, float height, TextContext inherited) {
@@ -589,97 +755,17 @@ public final class LayoutEngine {
         return true;
     }
 
-    private float snapChunkToLines(Row row, float[] columnWidths, TextContext inherited,
-                                   float consumed, float maxChunk) {
-        var snap = 0f;
-        for (var placed : row.cells()) {
-            var width = sum(columnWidths, placed.column(), placed.column() + placed.cell().columnSpan());
-            var end = lastCompleteLineEnd(placed.cell(), width, inherited, consumed, maxChunk);
-            if (end > 0) {
-                snap = snap == 0f ? end : Math.min(snap, end);
-            }
-        }
-        return snap;
-    }
-
-    private float lastCompleteLineEnd(Cell cell, float width, TextContext inherited,
-                                      float consumed, float maxChunk) {
-        var style = cell.style();
-        var context = resolveTextContext(style, inherited);
-        var innerWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight());
-        var cursor = style.paddingTop();
-        var last = 0f;
-        var limit = consumed + maxChunk;
-        for (var child : cell.children()) {
-            if (!(child instanceof Paragraph paragraph)) {
-                continue;
-            }
-            var childStyle = paragraph.style();
-            cursor += childStyle.marginTop();
-            var paragraphWidth = Math.max(1f, innerWidth - childStyle.marginLeft() - childStyle.marginRight());
-            var layout = layoutParagraph(paragraph, paragraphWidth, resolveTextContext(childStyle, context));
-            for (var line : layout.lines()) {
-                var lineStart = cursor;
-                cursor += line.height();
-                if (lineStart >= consumed - 0.01f && cursor <= limit + 0.01f) {
-                    last = cursor;
-                }
-            }
-            cursor += childStyle.marginBottom();
-        }
-        return last > consumed ? last - consumed : 0f;
-    }
-
-    private void renderCellParagraphSlice(Cell cell, float x, float bottom, float width, float chunkHeight,
-                                          float consumed, TextContext inherited) {
-        var style = cell.style();
-        var context = resolveTextContext(style, inherited);
-        var innerWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight());
-        var chunkTop = bottom + chunkHeight;
-        var cursor = style.paddingTop();
-        var limit = consumed + chunkHeight;
-        for (var child : cell.children()) {
-            if (!(child instanceof Paragraph paragraph)) {
-                continue;
-            }
-            var childStyle = paragraph.style();
-            cursor += childStyle.marginTop();
-            var paragraphContext = resolveTextContext(childStyle, context);
-            var paragraphWidth = Math.max(1f, innerWidth - childStyle.marginLeft() - childStyle.marginRight());
-            var layout = layoutParagraph(paragraph, paragraphWidth, paragraphContext);
-            var visible = new ArrayList<TextLine>();
-            var visibleHeight = 0f;
-            var firstTop = Float.NaN;
-            for (var line : layout.lines()) {
-                var lineStart = cursor;
-                cursor += line.height();
-                if (lineStart >= consumed - 0.01f && cursor <= limit + 0.01f) {
-                    if (Float.isNaN(firstTop)) {
-                        firstTop = lineStart;
-                    }
-                    visible.add(line);
-                    visibleHeight += line.height();
-                }
-            }
-            if (!visible.isEmpty()) {
-                var screenTop = chunkTop - (firstTop - consumed);
-                renderLines(new ParagraphLayout(List.copyOf(visible), visibleHeight),
-                    x + style.paddingLeft() + childStyle.marginLeft(), screenTop, paragraphWidth,
-                    paragraphContext.textAlignment(), 1f, paragraphContext.underline(),
-                    paragraphContext.strikethrough());
-            }
-            cursor += childStyle.marginBottom();
-        }
-    }
-
     private float estimate(LayoutElement element, float width, TextContext inherited) {
         var style = element.style();
         return switch (element) {
             case Paragraph paragraph -> {
-                var innerWidth = Math.max(1f, width - style.marginLeft() - style.marginRight()
-                    - style.paddingLeft() - style.paddingRight());
+                var blockWidth = resolveWidth(style.width(), width, width);
+                blockWidth = Math.min(blockWidth, width - style.marginLeft() - style.marginRight());
+                var innerWidth = Math.max(1f, blockWidth - style.paddingLeft() - style.paddingRight());
                 var layout = layoutParagraph(paragraph, innerWidth, resolveTextContext(style, inherited));
-                yield style.marginTop() + style.paddingTop() + layout.height() + style.paddingBottom() + style.marginBottom();
+                var blockHeight = Math.max(floatOr(style.height(), 0),
+                    layout.height() + style.paddingTop() + style.paddingBottom());
+                yield style.marginTop() + blockHeight + style.marginBottom();
             }
             case Image image -> {
                 var fitted = fittedImageSize(image, width - style.marginLeft() - style.marginRight());
@@ -707,8 +793,8 @@ public final class LayoutEngine {
             }
             case Table table -> {
                 var tableWidth = resolveWidth(style.width(), width, width);
-                var columns = resolvedColumnWidths(table, tableWidth, inherited);
                 var context = resolveTextContext(style, inherited);
+                var columns = resolvedColumnWidths(table, tableWidth, context);
                 yield style.marginTop()
                     + sum(rowHeights(rows(table.headerCells(), table.numberOfColumns()), columns, context))
                     + sum(rowHeights(rows(table.cells(), table.numberOfColumns()), columns, context))
@@ -792,6 +878,7 @@ public final class LayoutEngine {
     }
 
     private ParagraphLayout layoutParagraph(Paragraph paragraph, float width, TextContext inherited) {
+        var overflowWrap = paragraph.style().resolvedOverflowWrap(inherited.overflowWrap());
         var tokens = tokens(paragraph, inherited);
         var lines = new ArrayList<TextLine>();
         var builder = new LineBuilder();
@@ -802,13 +889,13 @@ public final class LayoutEngine {
                 continue;
             }
             var tokenWidth = token.font().getWidth(token.value(), token.fontSize());
-            if (paragraph.style().overflowWrap() == OverflowWrap.ANYWHERE && !token.value().isBlank()) {
-                builder = addByCodePoint(token, width, inherited, lines, builder);
-                continue;
-            }
             if (!builder.empty() && builder.width() + tokenWidth > width && !token.value().isBlank()) {
                 lines.add(builder.finish(inherited, false));
                 builder = new LineBuilder();
+            }
+            if (overflowWrap == OverflowWrap.ANYWHERE && !token.value().isBlank() && tokenWidth > width) {
+                builder = addByCodePoint(token, width, inherited, lines, builder);
+                continue;
             }
             if (!builder.empty() || !token.value().isBlank()) {
                 builder.add(token, tokenWidth);
@@ -826,15 +913,30 @@ public final class LayoutEngine {
 
     private static LineBuilder addByCodePoint(ResolvedText token, float width, TextContext inherited,
                                               List<TextLine> lines, LineBuilder builder) {
-        var codePoints = token.value().codePoints().toArray();
-        for (var codePoint : codePoints) {
-            var character = new String(Character.toChars(codePoint));
+        var value = token.value();
+        var sliceStart = 0;
+        var sliceWidth = 0f;
+        for (int offset = 0; offset < value.length();) {
+            var codePoint = value.codePointAt(offset);
+            var charCount = Character.charCount(codePoint);
+            var character = value.substring(offset, offset + charCount);
             var characterWidth = token.font().getWidth(character, token.fontSize());
-            if (!builder.empty() && builder.width() + characterWidth > width) {
+            if ((!builder.empty() || offset > sliceStart) && builder.width() + sliceWidth + characterWidth > width) {
+                if (offset > sliceStart) {
+                    var slice = value.substring(sliceStart, offset);
+                    builder.add(new ResolvedText(slice, token.font(), token.fontSize(), token.color()), sliceWidth);
+                }
                 lines.add(builder.finish(inherited, false));
                 builder = new LineBuilder();
+                sliceStart = offset;
+                sliceWidth = 0f;
             }
-            builder.add(new ResolvedText(character, token.font(), token.fontSize(), token.color()), characterWidth);
+            sliceWidth += characterWidth;
+            offset += charCount;
+        }
+        if (sliceStart < value.length()) {
+            var slice = value.substring(sliceStart);
+            builder.add(new ResolvedText(slice, token.font(), token.fontSize(), token.color()), sliceWidth);
         }
         return builder;
     }
@@ -851,9 +953,25 @@ public final class LayoutEngine {
             for (int offset = 0; offset < value.length();) {
                 var codePoint = value.codePointAt(offset);
                 offset += Character.charCount(codePoint);
+                if (codePoint == '\r') {
+                    if (offset < value.length() && value.charAt(offset) == '\n') {
+                        offset++;
+                    }
+                    flushToken(result, current, tokenFont, context);
+                    result.add(new ResolvedText("\n", context.font(), context.fontSize(), context.color()));
+                    whitespace = false;
+                    tokenFont = context.font();
+                    continue;
+                }
                 if (codePoint == '\n') {
                     flushToken(result, current, tokenFont, context);
                     result.add(new ResolvedText("\n", context.font(), context.fontSize(), context.color()));
+                    whitespace = false;
+                    tokenFont = context.font();
+                    continue;
+                }
+                if (codePoint == '\u200B') {
+                    flushToken(result, current, tokenFont, context);
                     whitespace = false;
                     tokenFont = context.font();
                     continue;
@@ -884,36 +1002,42 @@ public final class LayoutEngine {
         var lineTop = top;
         for (int lineIndex = 0; lineIndex < layout.lines().size(); lineIndex++) {
             var line = layout.lines().get(lineIndex);
-            var lastLine = lineIndex == layout.lines().size() - 1 || line.hardBreak();
-            var justify = alignment == TextAlignment.JUSTIFY && !lastLine;
-            var leftover = justify ? Math.max(0f, width - line.width()) : 0f;
-            var gaps = justify ? Math.max(1, line.wordGaps()) : 1;
-            var extra = leftover / gaps;
-            var lineX = switch (alignment) {
-                case LEFT, JUSTIFY -> x;
-                case CENTER -> x + (width - line.width()) / 2f;
-                case RIGHT -> x + width - line.width();
-            };
-            var fragmentX = lineX;
-            for (var fragment : line.fragments()) {
-                var baseline = lineTop - fragment.font().ascent(fragment.fontSize());
-                PdfDrawing.text(document, page, fragment.value(), fragment.font(), fragment.fontSize(), fragment.color(),
-                    fragmentX, baseline, fragment.width(), TextAlignment.LEFT, 0, opacity);
-                if (underline && !fragment.value().isBlank()) {
-                    PdfDrawing.line(document, page, fragment.color(), Math.max(0.6f, fragment.fontSize() / 14f),
-                        fragmentX, baseline - 1.2f, fragmentX + fragment.width(), baseline - 1.2f);
-                }
-                if (strikethrough && !fragment.value().isBlank()) {
-                    var mid = baseline + fragment.fontSize() * 0.28f;
-                    PdfDrawing.line(document, page, fragment.color(), Math.max(0.6f, fragment.fontSize() / 16f),
-                        fragmentX, mid, fragmentX + fragment.width(), mid);
-                }
-                fragmentX += fragment.width();
-                if (justify && fragment.value().isBlank()) {
-                    fragmentX += extra;
-                }
-            }
+            renderLine(line, lineIndex == layout.lines().size() - 1, x, lineTop, width,
+                alignment, opacity, underline, strikethrough);
             lineTop -= line.height();
+        }
+    }
+
+    private void renderLine(TextLine line, boolean lastLineOfParagraph, float x, float lineTop, float width,
+                            TextAlignment alignment, float opacity, boolean underline, boolean strikethrough) {
+        var lastLine = lastLineOfParagraph || line.hardBreak();
+        var justify = alignment == TextAlignment.JUSTIFY && !lastLine;
+        var leftover = justify ? Math.max(0f, width - line.width()) : 0f;
+        var gaps = justify ? Math.max(1, line.wordGaps()) : 1;
+        var extra = leftover / gaps;
+        var lineX = switch (alignment) {
+            case LEFT, JUSTIFY -> x;
+            case CENTER -> x + (width - line.width()) / 2f;
+            case RIGHT -> x + width - line.width();
+        };
+        var fragmentX = lineX;
+        for (var fragment : line.fragments()) {
+            var baseline = lineTop - fragment.font().ascent(fragment.fontSize());
+            PdfDrawing.text(document, page, fragment.value(), fragment.font(), fragment.fontSize(), fragment.color(),
+                fragmentX, baseline, fragment.width(), TextAlignment.LEFT, 0, opacity);
+            if (underline && !fragment.value().isBlank()) {
+                PdfDrawing.line(document, page, fragment.color(), Math.max(0.6f, fragment.fontSize() / 14f),
+                    fragmentX, baseline - 1.2f, fragmentX + fragment.width(), baseline - 1.2f);
+            }
+            if (strikethrough && !fragment.value().isBlank()) {
+                var mid = baseline + fragment.fontSize() * 0.28f;
+                PdfDrawing.line(document, page, fragment.color(), Math.max(0.6f, fragment.fontSize() / 16f),
+                    fragmentX, mid, fragmentX + fragment.width(), mid);
+            }
+            fragmentX += fragment.width();
+            if (justify && fragment.value().isBlank()) {
+                fragmentX += extra;
+            }
         }
     }
 
@@ -949,31 +1073,46 @@ public final class LayoutEngine {
                 var previousBreaks = allowPageBreaks;
                 var savedTop = cursorTop;
                 allowPageBreaks = false;
-                cursorTop = y + height - style.paddingTop();
-                var context = resolveTextContext(style, defaultText);
-                var childX = x + style.paddingLeft();
-                var childWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight());
-                for (var child : div.children()) {
-                    renderFlow(child, context, childX, childWidth);
+                try {
+                    cursorTop = y + height - style.paddingTop();
+                    var context = resolveTextContext(style, defaultText);
+                    var childX = x + style.paddingLeft();
+                    var childWidth = Math.max(1f, width - style.paddingLeft() - style.paddingRight());
+                    for (var child : div.children()) {
+                        renderFlow(child, context, childX, childWidth);
+                    }
+                } finally {
+                    cursorTop = savedTop;
+                    allowPageBreaks = previousBreaks;
                 }
-                cursorTop = savedTop;
-                allowPageBreaks = previousBreaks;
             }
             case Image image -> PdfDrawing.image(document, targetPage, image.source(), x, y,
                 image.getImageScaledWidth(), image.getImageScaledHeight());
             case LineSeparator separator -> PdfDrawing.line(document, targetPage, separator.line().color(),
                 separator.line().lineWidth(), x, y, x + width, y);
             case ListBlock list -> {
+                var previousBreaks = allowPageBreaks;
                 var savedTop = cursorTop;
-                cursorTop = y + estimate(list, width, defaultText);
-                renderFlowList(list, defaultText, x, width);
-                cursorTop = savedTop;
+                allowPageBreaks = false;
+                try {
+                    cursorTop = y + estimate(list, width, defaultText);
+                    renderFlowList(list, defaultText, x, width);
+                } finally {
+                    cursorTop = savedTop;
+                    allowPageBreaks = previousBreaks;
+                }
             }
             case Table table -> {
+                var previousBreaks = allowPageBreaks;
                 var savedTop = cursorTop;
-                cursorTop = y + estimate(table, width, defaultText);
-                renderFlowTable(table, defaultText, x, width);
-                cursorTop = savedTop;
+                allowPageBreaks = false;
+                try {
+                    cursorTop = y + estimate(table, width, defaultText);
+                    renderFlowTable(table, defaultText, x, width);
+                } finally {
+                    cursorTop = savedTop;
+                    allowPageBreaks = previousBreaks;
+                }
             }
             default -> throw new IllegalArgumentException("Unsupported fixed element: " + element.getClass().getName());
         }
@@ -1009,6 +1148,7 @@ public final class LayoutEngine {
             style.resolvedLeading(inherited.multipliedLeading()),
             style.underline() || inherited.underline(),
             style.strikethrough() || inherited.strikethrough(),
+            style.resolvedOverflowWrap(inherited.overflowWrap()),
             inherited.fallbacks()
         );
     }
@@ -1151,15 +1291,34 @@ public final class LayoutEngine {
         var content = 0f;
         for (var child : cell.children()) {
             if (child instanceof Paragraph paragraph) {
+                var paragraphContext = resolveTextContext(paragraph.style(), context);
+                var anywhere = paragraphContext.overflowWrap() == OverflowWrap.ANYWHERE;
                 for (var token : tokens(paragraph, context)) {
                     if ("\n".equals(token.value()) || token.value().isBlank()) {
                         continue;
                     }
-                    content = Math.max(content, token.font().getWidth(token.value(), token.fontSize()));
+                    if (anywhere) {
+                        content = Math.max(content, maxCodePointWidth(token));
+                    } else {
+                        content = Math.max(content, token.font().getWidth(token.value(), token.fontSize()));
+                    }
                 }
             }
         }
         return style.paddingLeft() + content + style.paddingRight() + horizontalBorderSpace(style);
+    }
+
+    private static float maxCodePointWidth(ResolvedText token) {
+        var value = token.value();
+        var max = 0f;
+        for (int offset = 0; offset < value.length();) {
+            var codePoint = value.codePointAt(offset);
+            var charCount = Character.charCount(codePoint);
+            var character = value.substring(offset, offset + charCount);
+            max = Math.max(max, token.font().getWidth(character, token.fontSize()));
+            offset += charCount;
+        }
+        return max;
     }
 
     private static float[] honorMinContent(float[] preferred, float[] mins, float tableWidth) {
@@ -1294,7 +1453,31 @@ public final class LayoutEngine {
 
     private record TextContext(PdfFont font, float fontSize, Color color, TextAlignment textAlignment,
                                float multipliedLeading, boolean underline, boolean strikethrough,
-                               List<PdfFont> fallbacks) {
+                               OverflowWrap overflowWrap, List<PdfFont> fallbacks) {
+    }
+
+    private record SplitCellLine(TextLine line, boolean lastLineOfParagraph, float leftInset, float paragraphWidth,
+                                 TextAlignment alignment, boolean underline, boolean strikethrough, float gapBefore) {
+    }
+
+    private static final class SplitCell {
+        private final Cell cell;
+        private final float x;
+        private final float width;
+        private final float continuationTopPadding;
+        private final float trailingSpace;
+        private final List<SplitCellLine> lines;
+        private int nextLine;
+
+        private SplitCell(Cell cell, float x, float width, float continuationTopPadding,
+                          float trailingSpace, List<SplitCellLine> lines) {
+            this.cell = cell;
+            this.x = x;
+            this.width = width;
+            this.continuationTopPadding = continuationTopPadding;
+            this.trailingSpace = trailingSpace;
+            this.lines = lines;
+        }
     }
 
     private record ResolvedText(String value, PdfFont font, float fontSize, Color color) {

@@ -35,7 +35,7 @@ public final class Style {
     private @Nullable UnitValue width;
     private float height = Float.NaN;
     private float multipliedLeading = Float.NaN;
-    private OverflowWrap overflowWrap = OverflowWrap.NORMAL;
+    private @Nullable OverflowWrap overflowWrap;
     private boolean bold;
     private boolean italic;
     private boolean underline;
@@ -314,7 +314,11 @@ public final class Style {
     }
 
     public OverflowWrap overflowWrap() {
-        return overflowWrap;
+        return overflowWrap == null ? OverflowWrap.NORMAL : overflowWrap;
+    }
+
+    public OverflowWrap resolvedOverflowWrap(OverflowWrap fallback) {
+        return overflowWrap == null ? fallback : overflowWrap;
     }
 
     public void overflowWrap(OverflowWrap value) {
