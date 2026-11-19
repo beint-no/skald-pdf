@@ -60,6 +60,23 @@ public final class PdfPage {
         return cropBox;
     }
 
+    /**
+     * Returns the visible crop box in upright page coordinates after applying {@link #rotation()}.
+     * When {@link #rotation()} is 90 or 270, width and height are swapped relative to {@link #getCropBox()}.
+     */
+    public Rectangle visualCropBox() {
+        return switch (rotation()) {
+            case 0 -> cropBox;
+            case 90 -> new Rectangle(cropBox.getBottom(), pageSize.getWidth() - cropBox.getRight(),
+                cropBox.getHeight(), cropBox.getWidth());
+            case 180 -> new Rectangle(pageSize.getWidth() - cropBox.getRight(),
+                pageSize.getHeight() - cropBox.getTop(), cropBox.getWidth(), cropBox.getHeight());
+            case 270 -> new Rectangle(pageSize.getHeight() - cropBox.getTop(), cropBox.getLeft(),
+                cropBox.getHeight(), cropBox.getWidth());
+            default -> throw new AssertionError("Rotation was normalized by the parser");
+        };
+    }
+
     public int rotation() {
         return importedPage == null ? 0 : importedPage.rotation();
     }

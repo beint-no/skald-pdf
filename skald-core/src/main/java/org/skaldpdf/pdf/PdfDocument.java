@@ -59,7 +59,7 @@ public final class PdfDocument implements AutoCloseable {
                 throw new IllegalStateException(
                     "Rewriting a sealed PDF would invalidate its signatures; use PdfSigner.sign to add another seal");
             }
-            sourceParser = new NativePdfParser(bytes);
+            sourceParser = NativePdfParser.fromOwned(bytes);
             sourceParser.pages().forEach(page -> pages.add(new PdfPage(this, page)));
         } catch (RuntimeException exception) {
             reader.close();

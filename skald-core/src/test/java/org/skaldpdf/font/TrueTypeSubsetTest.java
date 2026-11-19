@@ -31,6 +31,10 @@ class TrueTypeSubsetTest {
         assertFalse(tableNames(subset).contains("GDEF"));
         assertFalse(tableNames(subset).contains("DSIG"));
         assertFalse(tableNames(subset).contains("meta"));
+        assertFalse(tableNames(subset).contains("cvt "));
+        assertFalse(tableNames(subset).contains("fpgm"));
+        assertFalse(tableNames(subset).contains("prep"));
+        assertFalse(tableNames(subset).contains("gasp"));
     }
 
     private static Set<String> tableNames(byte[] font) {

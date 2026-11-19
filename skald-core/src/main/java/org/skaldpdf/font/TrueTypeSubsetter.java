@@ -15,9 +15,14 @@ import java.util.Set;
 final class TrueTypeSubsetter {
     private static final long CHECKSUM_MAGIC = 0xB1B0AFBAL;
     private static final Set<String> KEPT_TABLES = Set.of(
-        "head", "hhea", "maxp", "OS/2", "name", "cmap", "hmtx", "loca", "glyf",
-        "cvt ", "fpgm", "prep", "gasp"
+        "head", "hhea", "maxp", "OS/2", "name", "cmap", "hmtx", "loca", "glyf"
     );
+    private static final int ARG_1_AND_2_ARE_WORDS = 0x0001;
+    private static final int WE_HAVE_A_SCALE = 0x0008;
+    private static final int MORE_COMPONENTS = 0x0020;
+    private static final int WE_HAVE_AN_X_AND_Y_SCALE = 0x0040;
+    private static final int WE_HAVE_A_TWO_BY_TWO = 0x0080;
+    private static final int WE_HAVE_INSTRUCTIONS = 0x0100;
     private final byte[] source;
     private final Map<String, TrueTypeFont.Table> tables;
     private final int glyphCount;
@@ -41,7 +46,9 @@ final class TrueTypeSubsetter {
                 var start = loca[glyph];
                 var end = loca[glyph + 1];
                 TrueTypeFont.require(start >= 0 && end >= start && end <= glyf.length(), "Invalid glyph bounds");
-                glyfOutput.write(source, glyf.offset() + start, end - start);
+                var raw = Arrays.copyOfRange(source, glyf.offset() + start, glyf.offset() + end);
+                var outline = raw.length == 0 ? raw : stripInstructions(raw);
+                glyfOutput.writeBytes(outline);
                 while ((glyfOutput.size() & 3) != 0) {
                     glyfOutput.write(0);
                 }
@@ -64,7 +71,126 @@ final class TrueTypeSubsetter {
         var head = replacementTables.get("head").clone();
         ByteBuffer.wrap(head).order(ByteOrder.BIG_ENDIAN).putShort(50, (short) 1).putInt(8, 0);
         replacementTables.put("head", head);
+        var maxp = replacementTables.get("maxp");
+        if (maxp != null && maxp.length >= 32) {
+            var updatedMaxp = maxp.clone();
+            var maxpBuffer = ByteBuffer.wrap(updatedMaxp).order(ByteOrder.BIG_ENDIAN);
+            if (maxpBuffer.getInt(0) == 0x0001_0000) {
+                maxpBuffer.putShort(14, (short) 1);
+                for (var field : new int[] {16, 18, 20, 22, 24, 26}) {
+                    maxpBuffer.putShort(field, (short) 0);
+                }
+                replacementTables.put("maxp", updatedMaxp);
+            }
+        }
         return assemble(replacementTables);
+    }
+
+    private static byte[] stripInstructions(byte[] glyph) {
+        if (glyph.length < 10) {
+            return glyph;
+        }
+        var contours = s16(glyph, 0);
+        if (contours >= 0) {
+            var lengthAt = 10 + 2 * contours;
+            if (lengthAt + 2 > glyph.length) {
+                return glyph;
+            }
+            var instructions = u16(glyph, lengthAt);
+            if (instructions == 0 || lengthAt + 2 + instructions > glyph.length) {
+                return glyph;
+            }
+            var points = contours == 0 ? 0 : u16(glyph, lengthAt - 2) + 1;
+            var dataStart = lengthAt + 2 + instructions;
+            var dataEnd = pointDataEnd(glyph, dataStart, points);
+            if (dataEnd < 0) {
+                return glyph;
+            }
+            var output = new ByteArrayOutputStream(glyph.length - instructions);
+            output.write(glyph, 0, lengthAt);
+            output.write(0);
+            output.write(0);
+            output.write(glyph, dataStart, dataEnd - dataStart);
+            return output.toByteArray();
+        }
+        var copy = glyph.clone();
+        var position = 10;
+        int flags;
+        var withInstructions = false;
+        do {
+            if (position + 4 > copy.length) {
+                return glyph;
+            }
+            flags = u16(copy, position);
+            withInstructions |= (flags & WE_HAVE_INSTRUCTIONS) != 0;
+            put16(copy, position, flags & ~WE_HAVE_INSTRUCTIONS);
+            position += 4 + ((flags & ARG_1_AND_2_ARE_WORDS) != 0 ? 4 : 2);
+            if ((flags & WE_HAVE_A_SCALE) != 0) {
+                position += 2;
+            } else if ((flags & WE_HAVE_AN_X_AND_Y_SCALE) != 0) {
+                position += 4;
+            } else if ((flags & WE_HAVE_A_TWO_BY_TWO) != 0) {
+                position += 8;
+            }
+            if (position > copy.length) {
+                return glyph;
+            }
+        } while ((flags & MORE_COMPONENTS) != 0);
+        if (!withInstructions) {
+            return glyph;
+        }
+        if (position + 2 > copy.length) {
+            return glyph;
+        }
+        var instructions = u16(copy, position);
+        if (position + 2 + instructions > copy.length) {
+            return glyph;
+        }
+        return Arrays.copyOf(copy, position);
+    }
+
+    private static int pointDataEnd(byte[] glyph, int start, int points) {
+        var flags = new int[points];
+        var position = start;
+        for (int point = 0; point < points;) {
+            if (position >= glyph.length) {
+                return -1;
+            }
+            var flag = glyph[position++] & 0xff;
+            var repeat = 0;
+            if ((flag & 0x08) != 0) {
+                if (position >= glyph.length) {
+                    return -1;
+                }
+                repeat = glyph[position++] & 0xff;
+            }
+            for (int copy = 0; copy <= repeat; copy++) {
+                if (point >= points) {
+                    return -1;
+                }
+                flags[point++] = flag;
+            }
+        }
+        for (var flag : flags) {
+            position += (flag & 0x02) != 0 ? 1 : (flag & 0x10) != 0 ? 0 : 2;
+        }
+        for (var flag : flags) {
+            position += (flag & 0x04) != 0 ? 1 : (flag & 0x20) != 0 ? 0 : 2;
+        }
+        return position <= glyph.length ? position : -1;
+    }
+
+    private static int u16(byte[] data, int offset) {
+        return (data[offset] & 0xff) << 8 | data[offset + 1] & 0xff;
+    }
+
+    private static int s16(byte[] data, int offset) {
+        return (short) u16(data, offset);
+    }
+
+    private static void put16(byte[] data, int offset, int value) {
+        data[offset] = (byte) (value >>> 8);
+        data[offset + 1] = (byte) value;
     }
 
     private byte[] format3Post() {
