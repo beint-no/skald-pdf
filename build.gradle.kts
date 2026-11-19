@@ -34,7 +34,7 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
-val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.21.1").get()
+val releaseVersion = providers.gradleProperty("releaseVersion").orElse("1.22.0").get()
 val moduleTitles = mapOf(
     "skald-core" to "Skald Core",
     "skald-brotli" to "Skald Brotli",

@@ -37,7 +37,7 @@ public final class Canvas implements AutoCloseable {
     }
 
     public Canvas add(LayoutElement element) {
-        LayoutEngine.renderOverlay(page.document(), page, bounds, element, opacity);
+        LayoutEngine.renderOverlay(page.document(), page, bounds, element, opacity, font, fontSize, fontColor);
         return this;
     }
 

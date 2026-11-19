@@ -8,6 +8,7 @@ module org.skaldpdf.optimize.jpegli {
     requires no.beint.glimt;
     requires no.beint.glimt.jpegli;
 
+    uses no.beint.glimt.spi.ImageDecoder;
     uses no.beint.glimt.spi.JpegEncoder;
     uses no.beint.glimt.spi.ImageResizer;
 

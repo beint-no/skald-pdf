@@ -115,7 +115,7 @@ final class NativePdfWriter {
         writeObjects(objects, candidate, compression.brotli() || experimentalJpegXl ? HEADER : source.canonicalHeader());
         var bytes = candidate.toByteArray();
         var expected = source.semanticDigest(replacements, importer.referenceAliases(), catalog);
-        var actual = new NativePdfParser(bytes).semanticDigest(new IdentityHashMap<>());
+        var actual = NativePdfParser.fromOwned(bytes).semanticDigest(new IdentityHashMap<>());
         if (!MessageDigest.isEqual(expected, actual)) {
             throw new IllegalStateException("Canonical PDF rewrite changed document semantics");
         }
@@ -203,7 +203,11 @@ final class NativePdfWriter {
 
         for (int index = 0; index < pages.size(); index++) {
             var page = pages.get(index);
-            var contentObject = objects.add(stream("", ascii(page.content()), true));
+            var imported = page.importedPage();
+            var content = page.content();
+            var contentObject = imported != null && content.isBlank()
+                ? -1
+                : objects.add(stream("", ascii(content), true));
             var imageObjects = addImages(objects, page.images(), sharedImages);
             var opacityObjects = addOpacities(objects, page.opacities(), sharedOpacities);
             var shadingObjects = addShadings(objects, page.shadings());
@@ -212,7 +216,6 @@ final class NativePdfWriter {
                 linkObjects = new ArrayList<>(linkObjects);
                 linkObjects.add(signatureWidget);
             }
-            var imported = page.importedPage();
             byte[] pageBody;
             if (imported == null) {
                 var resources = resources(page, fontObjects, imageObjects, opacityObjects, shadingObjects);
@@ -302,7 +305,7 @@ final class NativePdfWriter {
                 imageReplacements));
         var rawContents = dictionary.get("Contents");
         var contents = importer.resolve(rawContents);
-        if (page.content().isBlank()) {
+        if (overlayContentObject < 0) {
             if (rawContents != null) {
                 result.append(" /Contents ").append(importer.direct(rawContents));
             }
@@ -1038,8 +1041,25 @@ final class NativePdfWriter {
     }
 
     private static String xml(String value) {
-        return value.replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;");
+        var result = new StringBuilder(value.length());
+        for (int index = 0; index < value.length();) {
+            var codePoint = value.codePointAt(index);
+            index += Character.charCount(codePoint);
+            if ((codePoint < 0x20 && codePoint != '\t' && codePoint != '\n' && codePoint != '\r')
+                || codePoint == 0xFFFE || codePoint == 0xFFFF
+                || (codePoint >= 0xD800 && codePoint <= 0xDFFF)) {
+                continue;
+            }
+            switch (codePoint) {
+                case '&' -> result.append("&amp;");
+                case '<' -> result.append("&lt;");
+                case '>' -> result.append("&gt;");
+                case '"' -> result.append("&quot;");
+                case '\'' -> result.append("&apos;");
+                default -> result.appendCodePoint(codePoint);
+            }
+        }
+        return result.toString();
     }
 
     private static String references(List<Integer> values) {

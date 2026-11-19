@@ -71,25 +71,25 @@ are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 JDK 27 or newer is required. The latest line is the tip of Oracle's
 tip-and-tail model: it always targets the current JDK feature release,
-compiles with `--release 26`, and uses finalized APIs only when they
+compiles with `--release 27`, and uses finalized APIs only when they
 reduce maintenance or improve generation. Preview and incubator APIs stay
 out of production modules. Published APIs are JSpecify `@NullMarked`: Kotlin
 and other consumers see non-null types by default, and `@Nullable` only where
 absence is a real value (logo, bank, due date, encryption). Optional text is
 empty, never null. Older Skald revisions remain the tail for older JDKs.
-Release `1.21.1` is the current line:
+Release `1.22.0` is the current line:
 
 ```kotlin
 dependencies {
-    implementation("no.beint.skaldpdf:skald-layout:1.21.1")
-    implementation("no.beint.skaldpdf:skald-fonts:1.21.1")         // direct SkaldSans API access
-    implementation("no.beint.skaldpdf:skald-barcode:1.21.1")        // optional symbols
-    implementation("no.beint.skaldpdf:skald-invoice-no:1.21.1")    // optional Norwegian invoice
-    implementation("no.beint.skaldpdf:skald-label-sticker:1.21.1") // optional clothing stickers
-    implementation("no.beint.skaldpdf:skald-sign:1.21.1")          // optional integrity seals
-    implementation("no.beint.skaldpdf:skald-image:1.21.1")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
-    implementation("no.beint.skaldpdf:skald-optimize:1.21.1")      // optional received-PDF recompress
-    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.21.1") // optional bundled JPEGli encoder
+    implementation("no.beint.skaldpdf:skald-layout:1.22.0")
+    implementation("no.beint.skaldpdf:skald-fonts:1.22.0")         // direct SkaldSans API access
+    implementation("no.beint.skaldpdf:skald-barcode:1.22.0")        // optional symbols
+    implementation("no.beint.skaldpdf:skald-invoice-no:1.22.0")    // optional Norwegian invoice
+    implementation("no.beint.skaldpdf:skald-label-sticker:1.22.0") // optional clothing stickers
+    implementation("no.beint.skaldpdf:skald-sign:1.22.0")          // optional integrity seals
+    implementation("no.beint.skaldpdf:skald-image:1.22.0")         // optional JPEG/PNG/GIF/BMP/HEIC/JXL ingest
+    implementation("no.beint.skaldpdf:skald-optimize:1.22.0")      // optional received-PDF recompress
+    implementation("no.beint.skaldpdf:skald-optimize-jpegli:1.22.0") // optional bundled JPEGli encoder
 }
 ```
 

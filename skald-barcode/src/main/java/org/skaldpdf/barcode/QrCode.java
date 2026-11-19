@@ -100,8 +100,51 @@ public final class QrCode implements ImageSource {
         this.modules = encode(payload, this.version, ecc, moduleCount);
     }
 
+    private QrCode(String value, Ecc ecc, int version, int moduleCount, boolean[][] modules, float moduleSize) {
+        this.value = value;
+        this.ecc = ecc;
+        this.version = version;
+        this.moduleCount = moduleCount;
+        this.modules = modules;
+        this.moduleSize = positive(moduleSize, "moduleSize");
+    }
+
     public QrCode withModuleSize(float value) {
-        return new QrCode(this.value, ecc, value);
+        return new QrCode(this.value, ecc, version, moduleCount, modules, value);
+    }
+
+    /** Renders this QR code as a standalone SVG with the standard 4-module quiet zone. */
+    public String toSvg() {
+        return toSvg(QUIET_ZONE);
+    }
+
+    /** Renders this QR code as a standalone SVG with the requested quiet zone in modules. */
+    public String toSvg(int quietZone) {
+        if (quietZone < 0) {
+            throw new IllegalArgumentException("Quiet zone must be non-negative");
+        }
+        var size = moduleCount + 2 * quietZone;
+        var svg = new StringBuilder(moduleCount * moduleCount);
+        svg.append("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ")
+            .append(size).append(' ').append(size)
+            .append("\" shape-rendering=\"crispEdges\">")
+            .append("<rect width=\"100%\" height=\"100%\" fill=\"#fff\"/>")
+            .append("<path fill=\"#000\" d=\"");
+        for (int row = 0; row < moduleCount; row++) {
+            var runStart = -1;
+            for (int column = 0; column <= moduleCount; column++) {
+                var dark = column < moduleCount && modules[row][column];
+                if (dark && runStart < 0) {
+                    runStart = column;
+                } else if (!dark && runStart >= 0) {
+                    var runLength = column - runStart;
+                    svg.append('M').append(runStart + quietZone).append(' ').append(row + quietZone)
+                        .append('h').append(runLength).append("v1h-").append(runLength).append('z');
+                    runStart = -1;
+                }
+            }
+        }
+        return svg.append("\"/></svg>").toString();
     }
 
     public String value() {

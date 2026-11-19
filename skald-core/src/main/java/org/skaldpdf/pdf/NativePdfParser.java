@@ -61,31 +61,124 @@ final class NativePdfParser {
     private FontGlyphUsage.Usage fontUsage;
 
     NativePdfParser(byte[] source) {
+        this(source, true);
+    }
+
+    static NativePdfParser fromOwned(byte[] source) {
+        return new NativePdfParser(source, false);
+    }
+
+    private NativePdfParser(byte[] source, boolean copy) {
         if (source == null || source.length < 8 || source.length > MAXIMUM_SOURCE_BYTES) {
             throw new IllegalArgumentException("PDF input size is outside the supported range");
         }
-        this.source = source.clone();
+        this.source = copy ? source.clone() : source;
         require(startsWith(this.source, 0, "%PDF-"), "Input does not have a PDF header");
         headerVersion = new String(this.source, 5, 3, StandardCharsets.US_ASCII);
         require(headerVersion.matches("(?:1\\.[0-7]|2\\.0)"), "Unsupported PDF header version");
-        startXref = Math.toIntExact(findStartXref());
+        startXref = intExact(findStartXref(), "startxref offset");
         readCrossReferences(startXref);
         require(!encrypted, "Encrypted PDFs are not supported");
         require(root != null, "PDF trailer has no Root reference");
         pages = List.copyOf(readPages());
     }
 
-    private static final java.util.regex.Pattern BYTE_RANGE = java.util.regex.Pattern.compile(
-        "/ByteRange\\s*\\[\\s*(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s*]");
+    private static final byte[] BYTE_RANGE_TOKEN = "/ByteRange".getBytes(StandardCharsets.US_ASCII);
 
     static boolean containsSealedSignature(byte[] pdf) {
-        var matcher = BYTE_RANGE.matcher(new String(pdf, StandardCharsets.ISO_8859_1));
-        while (matcher.find()) {
-            if (Long.parseLong(matcher.group(2)) > 0 && Long.parseLong(matcher.group(4)) > 0) {
+        var limit = pdf.length - BYTE_RANGE_TOKEN.length;
+        for (int index = 0; index <= limit; index++) {
+            if (pdf[index] != '/' || !matchesAscii(pdf, index, BYTE_RANGE_TOKEN)) {
+                continue;
+            }
+            var cursor = skipByteRangeWhitespace(pdf, index + BYTE_RANGE_TOKEN.length);
+            if (cursor >= pdf.length || pdf[cursor] != '[') {
+                continue;
+            }
+            cursor = skipByteRangeWhitespace(pdf, cursor + 1);
+            var end1 = scanAsciiDigits(pdf, cursor);
+            var n1 = parseUnsignedLongOrNegative(pdf, cursor, end1);
+            if (n1 < 0) {
+                continue;
+            }
+            cursor = skipByteRangeWhitespace(pdf, end1);
+            if (cursor == end1) {
+                continue;
+            }
+            var end2 = scanAsciiDigits(pdf, cursor);
+            var n2 = parseUnsignedLongOrNegative(pdf, cursor, end2);
+            if (n2 < 0) {
+                continue;
+            }
+            cursor = skipByteRangeWhitespace(pdf, end2);
+            if (cursor == end2) {
+                continue;
+            }
+            var end3 = scanAsciiDigits(pdf, cursor);
+            var n3 = parseUnsignedLongOrNegative(pdf, cursor, end3);
+            if (n3 < 0) {
+                continue;
+            }
+            cursor = skipByteRangeWhitespace(pdf, end3);
+            if (cursor == end3) {
+                continue;
+            }
+            var end4 = scanAsciiDigits(pdf, cursor);
+            var n4 = parseUnsignedLongOrNegative(pdf, cursor, end4);
+            if (n4 < 0) {
+                continue;
+            }
+            cursor = skipByteRangeWhitespace(pdf, end4);
+            if (cursor < pdf.length && pdf[cursor] == ']' && n2 > 0 && n4 > 0) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static boolean matchesAscii(byte[] data, int offset, byte[] token) {
+        for (int index = 0; index < token.length; index++) {
+            if (data[offset + index] != token[index]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int skipByteRangeWhitespace(byte[] data, int start) {
+        var cursor = start;
+        while (cursor < data.length) {
+            var value = data[cursor];
+            if (value != ' ' && value != '\t' && value != '\n' && value != '\r' && value != '\f'
+                && value != 0x0b && value != 0) {
+                break;
+            }
+            cursor++;
+        }
+        return cursor;
+    }
+
+    private static int scanAsciiDigits(byte[] data, int start) {
+        var cursor = start;
+        while (cursor < data.length && data[cursor] >= '0' && data[cursor] <= '9') {
+            cursor++;
+        }
+        return cursor;
+    }
+
+    private static long parseUnsignedLongOrNegative(byte[] data, int start, int end) {
+        if (start >= end) {
+            return -1;
+        }
+        long value = 0;
+        for (int index = start; index < end; index++) {
+            var digit = data[index] - '0';
+            if (value > (Long.MAX_VALUE - digit) / 10) {
+                return -1;
+            }
+            value = value * 10 + digit;
+        }
+        return value;
     }
 
     int startXref() {
@@ -401,6 +494,9 @@ final class NativePdfParser {
         if (original.length < 256) {
             return stream;
         }
+        if (flate && deflateLevelHint(original) == 3) {
+            return stream;
+        }
         byte[] decoded;
         try {
             decoded = unfiltered ? original : switch (filters.getFirst()) {
@@ -415,9 +511,6 @@ final class NativePdfParser {
         // Every stream, images included, is tried at the writer's level: logos and rendered
         // graphics often shrink a third at level 9 compared with the default producers write,
         // and a sample of the start (often blank margin) does not predict that.
-        if (flate && deflateLevelHint(original) == 3) {
-            return stream;
-        }
         var compressed = deflate(decoded, compressionLevel);
         if (compressed.length + 64 >= original.length
             || !Arrays.equals(decoded, inflate(compressed, "stream recompression verification"))) {
@@ -756,9 +849,10 @@ final class NativePdfParser {
         var height = integer(resolve(dictionary.get("Height")), "soft-mask Height");
         var bits = integer(resolve(dictionary.get("BitsPerComponent")), "soft-mask BitsPerComponent");
         var data = decoded(mask, "soft mask");
-        var rowBytes = (Math.multiplyExact(width, bits) + 7) / 8;
-        require(data.length >= Math.multiplyExact(rowBytes, height), "Soft mask samples are truncated");
-        var gray = new byte[Math.multiplyExact(width, height)];
+        var rowBytes = intExact(((long) width * bits + 7) / 8, "soft-mask row length");
+        require(data.length >= multiplyExactLong(rowBytes, height, "soft-mask sample length"),
+            "Soft mask samples are truncated");
+        var gray = new byte[intExact(multiplyExactLong(width, height, "soft-mask pixel count"), "soft-mask pixel count")];
         var maximum = (1 << Math.min(bits, 8)) - 1;
         for (int y = 0; y < height; y++) {
             var row = y * rowBytes;
@@ -1034,11 +1128,14 @@ final class NativePdfParser {
     private Rectangle rectangle(CosValue value, String description) {
         var values = array(resolve(value), description).values();
         require(values.size() == 4, description + " must have four numbers");
-        var left = number(resolve(values.get(0)), description);
-        var bottom = number(resolve(values.get(1)), description);
-        var right = number(resolve(values.get(2)), description);
-        var top = number(resolve(values.get(3)), description);
-        require(right >= left && top >= bottom, description + " has negative dimensions");
+        var x1 = number(resolve(values.get(0)), description);
+        var y1 = number(resolve(values.get(1)), description);
+        var x2 = number(resolve(values.get(2)), description);
+        var y2 = number(resolve(values.get(3)), description);
+        var left = Math.min(x1, x2);
+        var bottom = Math.min(y1, y2);
+        var right = Math.max(x1, x2);
+        var top = Math.max(y1, y2);
         return new Rectangle(left, bottom, right - left, top - bottom);
     }
 
@@ -1052,7 +1149,7 @@ final class NativePdfParser {
                 continue;
             }
             require(offset >= 0 && offset < source.length, "xref offset is outside the PDF");
-            var cursor = new Cursor(source, Math.toIntExact(offset));
+            var cursor = new Cursor(source, intExact(offset, "xref offset"));
             CosDictionary trailer;
             if (cursor.peekKeyword("xref")) {
                 trailer = parseClassicXref(cursor);
@@ -1141,10 +1238,10 @@ final class NativePdfParser {
                     continue;
                 }
                 if (type == 1) {
-                    locations.putIfAbsent(object, new DirectLocation(field2, Math.toIntExact(field3)));
+                    locations.putIfAbsent(object, new DirectLocation(field2, intExact(field3, "xref generation")));
                 } else if (type == 2) {
-                    locations.putIfAbsent(object,
-                        new CompressedLocation(Math.toIntExact(field2), Math.toIntExact(field3)));
+                    locations.putIfAbsent(object, new CompressedLocation(
+                        intExact(field2, "object stream number"), intExact(field3, "object stream index")));
                 } else {
                     require(type == 0, "Unknown xref stream entry type");
                 }
@@ -1156,7 +1253,7 @@ final class NativePdfParser {
 
     private IndirectObject parseIndirect(long offset, Integer expectedObject) {
         require(offset >= 0 && offset < source.length, "Indirect object offset is outside the PDF");
-        var cursor = new Cursor(source, Math.toIntExact(offset));
+        var cursor = new Cursor(source, intExact(offset, "indirect object offset"));
         var object = cursor.readInteger("object number");
         var generation = cursor.readInteger("object generation");
         if (expectedObject != null) {
@@ -1460,7 +1557,7 @@ final class NativePdfParser {
             }
             return output;
         }
-        var bytesPerPixel = Math.toIntExact(((long) colors * bits + 7) / 8);
+        var bytesPerPixel = intExact(((long) colors * bits + 7) / 8, "predictor bytes per pixel");
         require(decoded.length % (rowBytes + 1) == 0, "PNG predictor rows are truncated");
         var output = new byte[decoded.length / (rowBytes + 1) * rowBytes];
         for (int inputRow = 0, outputRow = 0; inputRow < decoded.length;
@@ -1488,7 +1585,7 @@ final class NativePdfParser {
     }
 
     private static int sample(byte[] bytes, int row, long offset, int bits) {
-        var index = row + Math.toIntExact(offset / 8);
+        var index = row + intExact(offset / 8, "TIFF predictor sample offset");
         if (bits == 16) {
             return (bytes[index] & 0xff) << 8 | bytes[index + 1] & 0xff;
         }
@@ -1497,7 +1594,7 @@ final class NativePdfParser {
     }
 
     private static void putSample(byte[] bytes, int row, long offset, int bits, int value) {
-        var index = row + Math.toIntExact(offset / 8);
+        var index = row + intExact(offset / 8, "TIFF predictor sample offset");
         if (bits == 16) {
             bytes[index] = (byte) (value >>> 8);
             bytes[index + 1] = (byte) value;
@@ -1505,6 +1602,22 @@ final class NativePdfParser {
             var shift = 8 - bits - (int) (offset % 8);
             var mask = ((1 << bits) - 1) << shift;
             bytes[index] = (byte) ((bytes[index] & ~mask) | value << shift);
+        }
+    }
+
+    private static int intExact(long value, String description) {
+        try {
+            return Math.toIntExact(value);
+        } catch (ArithmeticException overflow) {
+            throw new IllegalArgumentException(description + " exceeds supported integer range", overflow);
+        }
+    }
+
+    private static long multiplyExactLong(long left, long right, String description) {
+        try {
+            return Math.multiplyExact(left, right);
+        } catch (ArithmeticException overflow) {
+            throw new IllegalArgumentException(description + " overflows integer arithmetic", overflow);
         }
     }
 
