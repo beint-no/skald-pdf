@@ -11,6 +11,7 @@ import java.awt.Color;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.awt.image.SinglePixelPackedSampleModel;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -230,23 +231,30 @@ public final class RasterImages {
     }
 
     /**
-     * Direct ARGB/RGB int storage when the image is already a packed int raster.
-     * Returns {@code null} when a copy via {@code getRGB} is required.
+     * Direct straight ARGB/RGB int storage when the image is a tightly packed int raster.
+     * Excludes {@code TYPE_INT_ARGB_PRE} (so {@code getRGB} un-premultiplies to straight ARGB)
+     * and subimages/strided rasters. Returns {@code null} when a copy via {@code getRGB} is required.
      */
     static int @Nullable [] argbPixels(BufferedImage image, boolean requireWritable) {
         if (image.getType() != BufferedImage.TYPE_INT_ARGB
-            && image.getType() != BufferedImage.TYPE_INT_RGB
-            && image.getType() != BufferedImage.TYPE_INT_ARGB_PRE) {
+            && image.getType() != BufferedImage.TYPE_INT_RGB) {
             return null;
         }
-        if (!(image.getRaster().getDataBuffer() instanceof DataBufferInt buffer)) {
+        var raster = image.getRaster();
+        if (!(raster.getDataBuffer() instanceof DataBufferInt buffer)) {
             return null;
         }
-        if (requireWritable && buffer.getNumBanks() != 1) {
+        if (buffer.getNumBanks() != 1 || buffer.getOffset() != 0) {
+            return null;
+        }
+        if (!(raster.getSampleModel() instanceof SinglePixelPackedSampleModel sampleModel)
+            || sampleModel.getScanlineStride() != image.getWidth()
+            || raster.getSampleModelTranslateX() != 0
+            || raster.getSampleModelTranslateY() != 0) {
             return null;
         }
         var data = buffer.getData();
-        return data.length >= image.getWidth() * image.getHeight() ? data : null;
+        return data.length == Math.multiplyExact(image.getWidth(), image.getHeight()) ? data : null;
     }
 
     /** Unpacks packed ARGB ints into DeviceRGB bytes and an optional alpha plane. */

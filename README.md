@@ -71,7 +71,7 @@ are not QTSPs. See [docs/signing.md](docs/signing.md).
 
 JDK 27 or newer is required. The latest line is the tip of Oracle's
 tip-and-tail model: it always targets the current JDK feature release,
-compiles with `--release 26`, and uses finalized APIs only when they
+compiles with `--release 27`, and uses finalized APIs only when they
 reduce maintenance or improve generation. Preview and incubator APIs stay
 out of production modules. Published APIs are JSpecify `@NullMarked`: Kotlin
 and other consumers see non-null types by default, and `@Nullable` only where
