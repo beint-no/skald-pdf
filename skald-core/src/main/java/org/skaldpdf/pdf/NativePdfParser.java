@@ -301,6 +301,10 @@ final class NativePdfParser {
         return pages;
     }
 
+    CosDictionary catalog() {
+        return dictionary(resolve(root), "catalog");
+    }
+
     /** Drawn glyphs and CIDs of every fully followed composite TrueType font ({@link FontGlyphUsage}), computed once. */
     FontGlyphUsage.Usage fontUsage() {
         if (fontUsage == null) {
@@ -1167,8 +1171,11 @@ final class NativePdfParser {
                 pending.addFirst(numberLong(resolveForTrailer(trailer.get("XRefStm")), "hybrid xref stream"));
             }
             if (trailer.get("Prev") != null) {
-                hasPreviousRevision = true;
-                pending.addLast(numberLong(resolveForTrailer(trailer.get("Prev")), "xref Prev"));
+                var prevOffset = numberLong(resolveForTrailer(trailer.get("Prev")), "xref Prev");
+                if (prevOffset > 0) {
+                    hasPreviousRevision = true;
+                    pending.addLast(prevOffset);
+                }
             }
             require(locations.size() <= MAXIMUM_OBJECTS, "PDF has too many objects");
         }
@@ -1189,6 +1196,12 @@ final class NativePdfParser {
                 var offset = cursor.readLong("xref object offset");
                 var generation = cursor.readInteger("xref generation");
                 var state = cursor.readToken();
+                if (firstObject == 1 && index == 0 && offset == 0 && generation == 65535 && state.equals("f")) {
+                    // Some scanners emit a classic xref subsection starting at 1 instead of 0
+                    // while still including the free head entry for object 0.
+                    firstObject = 0;
+                    continue;
+                }
                 if (state.equals("n")) {
                     var object = firstObject + index;
                     if (object > 0) {
