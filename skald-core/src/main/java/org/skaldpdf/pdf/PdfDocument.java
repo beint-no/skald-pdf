@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -166,6 +167,28 @@ public final class PdfDocument implements AutoCloseable {
             }
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * Returns the sole raster image of a single-page imported document when the
+     * page draws nothing else (no extra pages, text, fonts, vector graphics,
+     * annotations, forms, signatures, embedded files, or cropping clip paths).
+     *
+     * <p>The returned {@link SinglePageImage} includes the exact EXIF
+     * orientation ({@code 1}–{@code 8}) required to turn the image's raw stored
+     * pixels upright to match the PDF page.
+     */
+    public Optional<SinglePageImage> singlePageImage() {
+        ensureOpen();
+        if (sourceParser == null
+            || pages.size() != 1
+            || !pages.getFirst().isUnmodifiedImportedPage()
+            || signatureField != null
+            || !outlines.isEmpty()
+            || !namedDestinations.isEmpty()) {
+            return Optional.empty();
+        }
+        return SinglePageImageAnalysis.analyze(sourceParser);
     }
 
     /**
